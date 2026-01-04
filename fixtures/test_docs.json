@@ -1,0 +1,38 @@
+{
+  "docs": [
+    {
+      "id": 0,
+      "title": "Introduction to Rust",
+      "excerpt": "Learn the basics of Rust programming language",
+      "href": "/posts/rust-intro",
+      "type": "post"
+    },
+    {
+      "id": 1,
+      "title": "Advanced Rust Patterns",
+      "excerpt": "Deep dive into ownership and lifetimes",
+      "href": "/posts/rust-advanced",
+      "type": "post"
+    },
+    {
+      "id": 2,
+      "title": "Search Algorithms",
+      "excerpt": "Binary search and suffix arrays explained",
+      "href": "/posts/search-algos",
+      "type": "post"
+    }
+  ],
+  "texts": [
+    "introduction to rust programming language learn the basics of memory safety and ownership",
+    "advanced rust patterns deep dive into ownership lifetimes and borrowing with practical examples",
+    "search algorithms binary search suffix arrays and efficient text indexing for fast lookups"
+  ],
+  "fieldBoundaries": [
+    { "docId": 0, "start": 0, "end": 20, "fieldType": "title" },
+    { "docId": 0, "start": 21, "end": 89, "fieldType": "content" },
+    { "docId": 1, "start": 0, "end": 22, "fieldType": "title" },
+    { "docId": 1, "start": 23, "end": 97, "fieldType": "content" },
+    { "docId": 2, "start": 0, "end": 17, "fieldType": "title" },
+    { "docId": 2, "start": 18, "end": 88, "fieldType": "content" }
+  ]
+}

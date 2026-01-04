@@ -1,0 +1,17 @@
+{
+  "name": "search-benchmarks",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Benchmarks comparing WASM suffix array search vs JS libraries",
+  "scripts": {
+    "bench": "node --experimental-vm-modules bench-js.mjs",
+    "build:wasm": "cd .. && wasm-pack build --target web --release"
+  },
+  "devDependencies": {
+    "fuse.js": "^7.0.0",
+    "lunr": "^2.3.9",
+    "flexsearch": "^0.7.43",
+    "minisearch": "^7.1.0",
+    "tinybench": "^2.9.0"
+  }
+}

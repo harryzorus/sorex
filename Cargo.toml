@@ -1,0 +1,113 @@
+[workspace]
+members = [".", "macros", "xtask"]
+
+[package]
+name = "sieve"
+version = "0.1.0"
+edition = "2021"
+description = "Formally verified full-text search with suffix arrays"
+repository = "https://github.com/harryzorus/sieve"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "sieve"
+path = "src/main.rs"
+
+[[bench]]
+name = "search_bench"
+harness = false
+
+[dependencies]
+rayon = { version = "1.11.0", optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+sieve-lean-macros = { path = "macros", optional = true }
+crc32fast = "1.4"          # CRC32 checksum for integrity validation
+unicode-normalization = { version = "0.1", optional = true }  # NFD decomposition for diacritic stripping
+# Levenshtein DFA tables implemented in-house (levenshtein_dfa.rs) - Schulz-Mihov 2002
+# FST removed: vocabulary stored directly as Vec<String>, no benefit from automaton for ~150 terms
+
+[dev-dependencies]
+proptest = "1.0"
+criterion = "0.5"
+brotli = "6.0"             # Brotli compression for testing
+
+# Comparison libraries for benchmarking
+tantivy = "0.22"           # Full-text search engine (Lucene-like)
+strsim = "0.11"            # String similarity metrics
+fuzzy-matcher = "0.3"      # FZF-style fuzzy matching
+simsearch = "0.2"          # Simple in-memory fuzzy search
+
+[features]
+default = ["parallel", "unicode-normalization", "serde_json"]
+parallel = ["rayon"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen"]  # No unicode-normalization or serde_json for smaller WASM
+embed-wasm = []  # Embed WASM/JS in binary for --demo flag (requires wasm-pack build first)
+lean = ["sieve-lean-macros"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+# Debian package configuration (cargo-deb)
+# Build with: wasm-pack build --release && cargo deb --profile release-native -- --features embed-wasm
+[package.metadata.deb]
+maintainer = "Harry Tummalachērla <harry@harryzorus.xyz>"
+copyright = "2024, Harry Tummalachērla"
+license-file = ["LICENSE", "0"]
+extended-description = """
+Sieve is a formally verified full-text search engine using suffix arrays.
+It provides fast substring and fuzzy search with mathematical guarantees
+of correctness via Lean 4 proofs.
+
+The binary includes embedded WASM files. Use `sieve --emit-wasm <dir>` to
+extract them for web builds.
+"""
+section = "utils"
+priority = "optional"
+features = ["embed-wasm"]
+assets = [
+    ["target/release-native/sieve", "usr/bin/sieve", "755"],
+]
+
+# Release profile optimized for WASM size
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Link-Time Optimization for dead code elimination
+codegen-units = 1   # Single codegen unit for better LTO
+panic = "abort"     # No unwinding = smaller binary
+strip = true        # Strip symbols
+
+# Native CLI release profile (for deb packages)
+# Use: cargo build --profile release-native
+[profile.release-native]
+inherits = "release"
+opt-level = 3       # Optimize for speed, not size
+panic = "unwind"    # Allow proper error handling
+
+# Lints for code quality
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+# Pedantic lints - allow common patterns
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+items_after_statements = "allow"
+doc_markdown = "allow"
+uninlined_format_args = "allow"
+similar_names = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+manual_midpoint = "allow"
+missing_const_for_fn = "allow"
+needless_range_loop = "allow"

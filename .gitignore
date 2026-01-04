@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# WASM build output (generated, not committed)
+/pkg/
+
+# Lean build artifacts
+/lean/.lake/build/
+/lean/.lake/packages/
+/lean/.elan/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test and fuzzing artifacts
+/proptest-regressions/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+
+# Benchmark node_modules
+/benches/node_modules/
+
+# Coverage reports
+*.profraw
+*.profdata
+/coverage/
+
+# Debug files
+*.pdb

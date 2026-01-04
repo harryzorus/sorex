@@ -1,0 +1,36 @@
+[package]
+name = "sift-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.sift]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "section_boundaries"
+path = "fuzz_targets/section_boundaries.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "heading_id_validation"
+path = "fuzz_targets/heading_id_validation.rs"
+test = false
+doc = false
+bench = false
