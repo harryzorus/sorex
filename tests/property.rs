@@ -562,7 +562,7 @@ proptest! {
         prop_assert_eq!(index.total_docs, corpus.len());
     }
 
-    /// Property: Every word in corpus appears in index.
+    /// Property: Every non-stop word in corpus appears in index.
     #[test]
     fn prop_inverted_index_complete(corpus in corpus_strategy()) {
         let index = sieve::build_inverted_index(&corpus, &[]);
@@ -571,6 +571,11 @@ proptest! {
             for word in text.split_whitespace() {
                 let normalized = sieve::normalize(word);
                 if normalized.is_empty() {
+                    continue;
+                }
+
+                // Stop words are intentionally filtered from the index
+                if sieve::is_stop_word(&normalized) {
                     continue;
                 }
 

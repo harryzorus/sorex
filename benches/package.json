@@ -4,14 +4,21 @@
   "type": "module",
   "description": "Benchmarks comparing WASM suffix array search vs JS libraries",
   "scripts": {
-    "bench": "node --experimental-vm-modules bench-js.mjs",
+    "bench": "bun run bench-js.ts",
+    "bench:eu": "bun run bench-unified.ts",
+    "bench:memory": "bun run --smol bench-memory.ts",
+    "bench:sizes": "bun run bench-sizes.ts",
     "build:wasm": "cd .. && wasm-pack build --target web --release"
   },
   "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "@types/lunr": "^2.3.7",
+    "@types/node": "^22.10.0",
+    "flexsearch": "^0.7.43",
     "fuse.js": "^7.0.0",
     "lunr": "^2.3.9",
-    "flexsearch": "^0.7.43",
     "minisearch": "^7.1.0",
-    "tinybench": "^2.9.0"
+    "tinybench": "^2.9.0",
+    "typescript": "^5.7.0"
   }
 }

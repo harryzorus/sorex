@@ -36,7 +36,7 @@ use crate::inverted::{build_inverted_index, build_inverted_index_parallel};
 use crate::levenshtein::levenshtein_within;
 use crate::sais::build_vocab_suffix_array_sais;
 use crate::scoring::{final_score, get_field_type_from_boundaries};
-use crate::types::{FieldBoundary, HybridIndex, PostingList, SearchDoc, ScoredDoc};
+use crate::types::{FieldBoundary, HybridIndex, PostingList, ScoredDoc, SearchDoc};
 use crate::utils::normalize;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -189,14 +189,22 @@ pub fn search_hybrid(index: &HybridIndex, query: &str) -> Vec<SearchDoc> {
     let mut results: Vec<ScoredDoc> = doc_scores
         .into_iter()
         .filter_map(|(doc_id, score)| {
-            index.docs.iter().find(|d| d.id == doc_id).map(|doc| ScoredDoc {
-                doc: doc.clone(),
-                score,
-            })
+            index
+                .docs
+                .iter()
+                .find(|d| d.id == doc_id)
+                .map(|doc| ScoredDoc {
+                    doc: doc.clone(),
+                    score,
+                })
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results.into_iter().map(|sd| sd.doc).collect()
 }
 
@@ -435,14 +443,22 @@ fn aggregate_and_sort(index: &HybridIndex, score_sets: Vec<Vec<(usize, f64)>>) -
     let mut results: Vec<ScoredDoc> = doc_scores
         .into_iter()
         .filter_map(|(doc_id, score)| {
-            index.docs.iter().find(|d| d.id == doc_id).map(|doc| ScoredDoc {
-                doc: doc.clone(),
-                score,
-            })
+            index
+                .docs
+                .iter()
+                .find(|d| d.id == doc_id)
+                .map(|doc| ScoredDoc {
+                    doc: doc.clone(),
+                    score,
+                })
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results.into_iter().map(|sd| sd.doc).collect()
 }
 
@@ -511,7 +527,8 @@ fn score_posting_list(
         .iter()
         .map(|posting| {
             let text_len = texts.get(posting.doc_id).map(|t| t.len()).unwrap_or(0);
-            let field_type = get_field_type_from_boundaries(posting.doc_id, posting.offset, boundaries);
+            let field_type =
+                get_field_type_from_boundaries(posting.doc_id, posting.offset, boundaries);
             let score = final_score(&field_type, posting.offset, text_len);
             (posting.doc_id, score)
         })
@@ -689,7 +706,11 @@ mod tests {
 
     #[test]
     fn test_multi_word_and() {
-        let docs = vec![make_doc(0, "Both"), make_doc(1, "Rust Only"), make_doc(2, "Lang Only")];
+        let docs = vec![
+            make_doc(0, "Both"),
+            make_doc(1, "Rust Only"),
+            make_doc(2, "Lang Only"),
+        ];
         let texts = vec![
             "rust programming language".to_string(),
             "rust code".to_string(),
@@ -724,10 +745,7 @@ mod tests {
     #[test]
     fn test_search_exact_finds_exact_matches() {
         let docs = vec![make_doc(0, "Rust"), make_doc(1, "Rusted")];
-        let texts = vec![
-            "rust programming".to_string(),
-            "rusted metal".to_string(),
-        ];
+        let texts = vec!["rust programming".to_string(), "rusted metal".to_string()];
         let index = build_hybrid_index(docs, texts, vec![]);
 
         // Exact search for "rust" should only find doc 0 (exact word match)
@@ -739,10 +757,7 @@ mod tests {
     #[test]
     fn test_search_expanded_finds_substring_matches() {
         let docs = vec![make_doc(0, "TypeScript"), make_doc(1, "JavaScript")];
-        let texts = vec![
-            "typescript code".to_string(),
-            "javascript code".to_string(),
-        ];
+        let texts = vec!["typescript code".to_string(), "javascript code".to_string()];
         let index = build_hybrid_index(docs, texts, vec![]);
 
         // Expanded search for "script" should find both via suffix array
@@ -754,10 +769,7 @@ mod tests {
     fn test_streaming_exact_subset_full() {
         // Invariant: exact results ⊆ full results
         let docs = vec![make_doc(0, "Rust"), make_doc(1, "Rusted")];
-        let texts = vec![
-            "rust programming".to_string(),
-            "rusted metal".to_string(),
-        ];
+        let texts = vec!["rust programming".to_string(), "rusted metal".to_string()];
         let index = build_hybrid_index(docs, texts, vec![]);
 
         let exact_results = search_exact(&index, "rust");
@@ -838,17 +850,16 @@ mod tests {
         }
 
         // Streaming finds more: exact (script) + expanded (typescript, javascript)
-        assert!(union_ids.len() >= full_results.len(),
-            "Streaming should find at least as many results as full search");
+        assert!(
+            union_ids.len() >= full_results.len(),
+            "Streaming should find at least as many results as full search"
+        );
     }
 
     #[test]
     fn test_streaming_union_complete_for_prefix() {
         // For prefix-only queries (no exact match), union = full
-        let docs = vec![
-            make_doc(0, "Programming"),
-            make_doc(1, "Programmer"),
-        ];
+        let docs = vec![make_doc(0, "Programming"), make_doc(1, "Programmer")];
         let texts = vec![
             "programming language".to_string(),
             "programmer job".to_string(),
@@ -870,7 +881,10 @@ mod tests {
         let mut full_ids: Vec<usize> = full_results.iter().map(|r| r.id).collect();
         full_ids.sort();
 
-        assert_eq!(union_ids, full_ids, "For prefix queries, union should equal full");
+        assert_eq!(
+            union_ids, full_ids,
+            "For prefix queries, union should equal full"
+        );
     }
 
     #[test]

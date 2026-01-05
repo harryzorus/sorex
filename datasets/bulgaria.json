@@ -1,0 +1,26 @@
+{
+  "id": 2,
+  "slug": "bulgaria",
+  "title": "Bulgaria",
+  "excerpt": "A country on the Balkan Peninsula",
+  "href": "/countries/bulgaria",
+  "type": "page",
+  "category": "geography",
+  "text": "Bulgaria is a country on the Balkan Peninsula in Southeast Europe. Sofia, the capital and largest city, is located in the west-central part of the country. Bulgaria has a rich history spanning over 1,400 years as a nation state. The country is known for its natural beauty, including the Rila Mountains and the Black Sea coast. Bulgaria is famous for its rose oil production, Orthodox Christian heritage, and ancient Thracian culture. The Danube River forms Bulgaria's northern border with Romania. Bulgaria joined the European Union in 2007 and is part of the Schengen Area.",
+  "fieldBoundaries": [
+    {
+      "docId": 2,
+      "start": 0,
+      "end": 8,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 2,
+      "start": 9,
+      "end": 208,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

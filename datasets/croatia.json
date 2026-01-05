@@ -1,0 +1,26 @@
+{
+  "id": 3,
+  "slug": "croatia",
+  "title": "Croatia",
+  "excerpt": "A Mediterranean country in Southeast Europe",
+  "href": "/countries/croatia",
+  "type": "page",
+  "category": "geography",
+  "text": "Croatia is a Mediterranean country in Southeast Europe with a Pannonian plain in the north. Zagreb is the capital and largest city, located in the northwestern part of the country. Croatia has a population of about 4 million and is known for its Adriatic coast and numerous islands. The country is famous for Dubrovnik, a UNESCO World Heritage Site often called the Pearl of the Adriatic. Croatia joined the European Union in 2013 and adopted the Euro in 2023. The country is known for its natural parks, including Plitvice Lakes and Krka National Park. Croatia has a strong tourism industry due to its beautiful coastline and historical sites.",
+  "fieldBoundaries": [
+    {
+      "docId": 3,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 3,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

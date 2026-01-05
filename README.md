@@ -1,6 +1,6 @@
 # Sieve
 
-A full-text search engine built for static sites. Fast enough for real-time search, small enough for browsers, correct enough to prove it.
+A full-text search engine with fuzzy and substring search, built to power search on [harryzorus.xyz](https://harryzorus.xyz). Fast enough for real-time search, small enough for browsers, correct enough to prove it.
 
 ## What This Is
 
@@ -23,7 +23,11 @@ Sieve builds compact binary search indices (`.sieve` format) that load instantly
 
 ## Why This Exists
 
-Most search libraries make you choose: fast indexing or fast queries, fuzzy matching or small size, correctness or performance. Sieve tries to have all of them.
+The client-side search space is crowded—FlexSearch, Lunr.js, Fuse.js, MiniSearch, and others all solve this problem. Sieve makes a deliberate tradeoff: **search capability and correctness over payload size and query syntax**.
+
+Most libraries use inverted indexes that can't find "script" inside "typescript". They're small and fast, but users expect substring matching. Sieve uses suffix arrays and Levenshtein automata to deliver true fuzzy and substring search—at the cost of a larger WASM bundle (153KB gzipped vs 6-25KB for pure JS alternatives).
+
+The other bet: formal verification. Instead of hoping the ranking logic is correct, Sieve proves it in Lean 4.
 
 - **Suffix array** for O(log n) prefix search—find "auth" in "authentication" instantly
 - **Levenshtein automata** (Schulz-Mihov 2002) for typo-tolerant fuzzy matching without per-query DFA construction

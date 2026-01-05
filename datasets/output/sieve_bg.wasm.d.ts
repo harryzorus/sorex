@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_sieveprogressiveindex_free: (a: number, b: number) => void;
+export const __wbg_sievesearcher_free: (a: number, b: number) => void;
+export const sieveprogressiveindex_doc_count: (a: number) => number;
+export const sieveprogressiveindex_has_layer: (a: number, b: number, c: number) => number;
+export const sieveprogressiveindex_is_fully_loaded: (a: number) => number;
+export const sieveprogressiveindex_load_layer_binary: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const sieveprogressiveindex_loaded_layers: (a: number, b: number) => void;
+export const sieveprogressiveindex_new: (a: number, b: number) => void;
+export const sieveprogressiveindex_search: (a: number, b: number, c: number, d: number, e: number) => void;
+export const sieveprogressiveindex_search_exact: (a: number, b: number, c: number, d: number, e: number) => void;
+export const sieveprogressiveindex_search_expanded: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const sieveprogressiveindex_suggest: (a: number, b: number, c: number, d: number, e: number) => void;
+export const sievesearcher_doc_count: (a: number) => number;
+export const sievesearcher_has_docs: (a: number) => number;
+export const sievesearcher_has_vocabulary: (a: number) => number;
+export const sievesearcher_load_docs: (a: number, b: number, c: number) => void;
+export const sievesearcher_new: (a: number, b: number, c: number) => void;
+export const sievesearcher_search: (a: number, b: number, c: number, d: number, e: number) => void;
+export const sievesearcher_search_tier1_exact: (a: number, b: number, c: number, d: number, e: number) => void;
+export const sievesearcher_search_tier2_prefix: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const sievesearcher_search_tier3_fuzzy: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const sievesearcher_vocab_size: (a: number) => number;
+export const __wbindgen_export: (a: number, b: number) => number;
+export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_export3: (a: number) => void;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;
+export const __wbindgen_export4: (a: number, b: number, c: number) => void;

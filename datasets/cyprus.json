@@ -1,0 +1,26 @@
+{
+  "id": 4,
+  "slug": "cyprus",
+  "title": "Cyprus",
+  "excerpt": "An island nation in the Mediterranean Sea",
+  "href": "/countries/cyprus",
+  "type": "page",
+  "category": "geography",
+  "text": "Cyprus is an island nation in the eastern Mediterranean Sea. Nicosia, the capital, is the most populated city on the island. Cyprus has a population of about 1.2 million and is known for its Mediterranean beaches and year-round sunshine. The island has been inhabited since the Neolithic period and has a rich cultural heritage spanning Greek, Roman, Byzantine, and Ottoman periods. Cyprus joined the European Union in 2004 and adopted the Euro in 2008. The island is famous for its copper resources, wine production, and tourist beaches. Cyprus is divided between the Republic of Cyprus in the south and the Turkish Republic of Northern Cyprus in the north.",
+  "fieldBoundaries": [
+    {
+      "docId": 4,
+      "start": 0,
+      "end": 6,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 4,
+      "start": 7,
+      "end": 206,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

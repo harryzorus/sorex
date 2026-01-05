@@ -1,0 +1,706 @@
+{
+  "meta": {
+    "timestamp": "2026-01-05T22:07:25.919Z",
+    "cpu": "Apple M5",
+    "memory": "32GB",
+    "os": "darwin 26.2",
+    "nodeVersion": "v24.3.0",
+    "docCount": 30
+  },
+  "timeToFirst": [
+    {
+      "library": "Sieve (load .sieve)",
+      "opsPerSec": 8962,
+      "meanMs": 0.112,
+      "samples": 44813
+    },
+    {
+      "library": "fuse.js (build)",
+      "opsPerSec": 20257,
+      "meanMs": 0.049,
+      "samples": 101288
+    },
+    {
+      "library": "lunr.js (build)",
+      "opsPerSec": 415,
+      "meanMs": 2.407,
+      "samples": 2077
+    },
+    {
+      "library": "flexsearch (build)",
+      "opsPerSec": 3253,
+      "meanMs": 0.307,
+      "samples": 16264
+    },
+    {
+      "library": "minisearch (build)",
+      "opsPerSec": 1198,
+      "meanMs": 0.835,
+      "samples": 5989
+    }
+  ],
+  "queryLatency": {
+    "single_common": {
+      "query": "capital",
+      "category": "exact",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 93302,
+          "meanUs": 10.7,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 3510,
+          "meanUs": 284.9,
+          "resultsFound": 30
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 97385,
+          "meanUs": 10.3,
+          "resultsFound": 30
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 2856942,
+          "meanUs": 0.4,
+          "resultsFound": 30
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 98394,
+          "meanUs": 10.2,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "single_proper": {
+      "query": "European",
+      "category": "exact",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 95362,
+          "meanUs": 10.5,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 3208,
+          "meanUs": 311.7,
+          "resultsFound": 30
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 80713,
+          "meanUs": 12.4,
+          "resultsFound": 29
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 2008282,
+          "meanUs": 0.5,
+          "resultsFound": 31
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 36399,
+          "meanUs": 27.5,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "single_topic": {
+      "query": "history",
+      "category": "exact",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 158984,
+          "meanUs": 6.3,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 1859,
+          "meanUs": 537.8,
+          "resultsFound": 14
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 155071,
+          "meanUs": 6.4,
+          "resultsFound": 11
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 2386915,
+          "meanUs": 0.4,
+          "resultsFound": 15
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 129988,
+          "meanUs": 7.7,
+          "resultsFound": 11
+        }
+      ]
+    },
+    "single_rare": {
+      "query": "fjords",
+      "category": "exact",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 15318,
+          "meanUs": 65.3,
+          "resultsFound": 1
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 1904,
+          "meanUs": 525.1,
+          "resultsFound": 0
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 865652,
+          "meanUs": 1.2,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3496145,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 194029,
+          "meanUs": 5.2,
+          "resultsFound": 0
+        }
+      ]
+    },
+    "multi_phrase": {
+      "query": "European Union",
+      "category": "multi",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 31956,
+          "meanUs": 31.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 3234,
+          "meanUs": 309.2,
+          "resultsFound": 29
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 58841,
+          "meanUs": 17,
+          "resultsFound": 29
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 976884,
+          "meanUs": 1,
+          "resultsFound": 29
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 27617,
+          "meanUs": 36.2,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "multi_geo": {
+      "query": "Mediterranean Sea",
+      "category": "multi",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 35206,
+          "meanUs": 28.4,
+          "resultsFound": 0
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 948,
+          "meanUs": 1054.8,
+          "resultsFound": 8
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 95770,
+          "meanUs": 10.4,
+          "resultsFound": 13
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 966883,
+          "meanUs": 1,
+          "resultsFound": 4
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 19678,
+          "meanUs": 50.8,
+          "resultsFound": 13
+        }
+      ]
+    },
+    "multi_concept": {
+      "query": "constitutional monarchy",
+      "category": "multi",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 31857,
+          "meanUs": 31.4,
+          "resultsFound": 0
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 794,
+          "meanUs": 1259.1,
+          "resultsFound": 0
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 235353,
+          "meanUs": 4.2,
+          "resultsFound": 1
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 1449564,
+          "meanUs": 0.7,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 15378,
+          "meanUs": 65,
+          "resultsFound": 1
+        }
+      ]
+    },
+    "substring_land": {
+      "query": "land",
+      "category": "substring",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 16696,
+          "meanUs": 59.9,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 2742,
+          "meanUs": 364.6,
+          "resultsFound": 30
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 930698,
+          "meanUs": 1.1,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3487242,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 76963,
+          "meanUs": 13,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "substring_burg": {
+      "query": "burg",
+      "category": "substring",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 17410,
+          "meanUs": 57.4,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 1947,
+          "meanUs": 513.6,
+          "resultsFound": 6
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 959190,
+          "meanUs": 1,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3469714,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 122397,
+          "meanUs": 8.2,
+          "resultsFound": 0
+        }
+      ]
+    },
+    "substring_ian": {
+      "query": "ian",
+      "category": "substring",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 22317,
+          "meanUs": 44.8,
+          "resultsFound": 4
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 4001,
+          "meanUs": 249.9,
+          "resultsFound": 13
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 910907,
+          "meanUs": 1.1,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3502922,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 73237,
+          "meanUs": 13.7,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "typo_population": {
+      "query": "popultion",
+      "category": "typo",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 15185,
+          "meanUs": 65.9,
+          "resultsFound": 10
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 2003,
+          "meanUs": 499.3,
+          "resultsFound": 29
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 684825,
+          "meanUs": 1.5,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3323823,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 22462,
+          "meanUs": 44.5,
+          "resultsFound": 30
+        }
+      ]
+    },
+    "typo_province": {
+      "query": "provnce",
+      "category": "typo",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 14044,
+          "meanUs": 71.2,
+          "resultsFound": 0
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 1299,
+          "meanUs": 769.6,
+          "resultsFound": 0
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 753954,
+          "meanUs": 1.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3424100,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 43824,
+          "meanUs": 22.8,
+          "resultsFound": 0
+        }
+      ]
+    },
+    "typo_mediterranean": {
+      "query": "mediteranean",
+      "category": "typo",
+      "results": [
+        {
+          "library": "Sieve",
+          "opsPerSec": 23937,
+          "meanUs": 41.8,
+          "resultsFound": 8
+        },
+        {
+          "library": "fuse.js",
+          "opsPerSec": 1329,
+          "meanUs": 752.5,
+          "resultsFound": 8
+        },
+        {
+          "library": "lunr.js",
+          "opsPerSec": 614441,
+          "meanUs": 1.6,
+          "resultsFound": 0
+        },
+        {
+          "library": "flexsearch",
+          "opsPerSec": 3307068,
+          "meanUs": 0.3,
+          "resultsFound": 0
+        },
+        {
+          "library": "minisearch",
+          "opsPerSec": 15055,
+          "meanUs": 66.4,
+          "resultsFound": 8
+        }
+      ]
+    }
+  },
+  "resultTiming": {
+    "common_word": {
+      "query": "European",
+      "category": "Many results",
+      "results": [
+        {
+          "library": "Sieve (streaming)",
+          "results": 30,
+          "tier1Us": "8.6",
+          "tier2Us": "19.6",
+          "allUs": "101.0",
+          "p99Us": "136.7",
+          "breakdown": "10+10+10"
+        },
+        {
+          "library": "fuse.js",
+          "results": 30,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "289.6",
+          "p99Us": "383.1",
+          "breakdown": "30"
+        },
+        {
+          "library": "lunr.js",
+          "results": 29,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "11.7",
+          "p99Us": "25.5",
+          "breakdown": "29"
+        },
+        {
+          "library": "flexsearch",
+          "results": 31,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "0.6",
+          "p99Us": "3.1",
+          "breakdown": "31"
+        },
+        {
+          "library": "minisearch",
+          "results": 30,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "30.2",
+          "p99Us": "45.8",
+          "breakdown": "30"
+        }
+      ]
+    },
+    "substring": {
+      "query": "land",
+      "category": "Substring match",
+      "results": [
+        {
+          "library": "Sieve (streaming)",
+          "results": 18,
+          "tier1Us": "0.5",
+          "tier2Us": "5.1",
+          "allUs": "64.8",
+          "p99Us": "82.7",
+          "breakdown": "0+8+10"
+        },
+        {
+          "library": "fuse.js",
+          "results": 30,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "366.7",
+          "p99Us": "414.3",
+          "breakdown": "30"
+        },
+        {
+          "library": "lunr.js",
+          "results": 0,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "1.3",
+          "p99Us": "3.8",
+          "breakdown": "0"
+        },
+        {
+          "library": "flexsearch",
+          "results": 0,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "0.3",
+          "p99Us": "1.0",
+          "breakdown": "0"
+        },
+        {
+          "library": "minisearch",
+          "results": 30,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "13.4",
+          "p99Us": "20.0",
+          "breakdown": "30"
+        }
+      ]
+    },
+    "typo": {
+      "query": "mediteranean",
+      "category": "Fuzzy match",
+      "results": [
+        {
+          "library": "Sieve (streaming)",
+          "results": 8,
+          "tier1Us": "0.4",
+          "tier2Us": "0.9",
+          "allUs": "42.8",
+          "p99Us": "57.0",
+          "breakdown": "0+0+8"
+        },
+        {
+          "library": "fuse.js",
+          "results": 8,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "737.3",
+          "p99Us": "868.0",
+          "breakdown": "8"
+        },
+        {
+          "library": "lunr.js",
+          "results": 0,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "1.9",
+          "p99Us": "4.8",
+          "breakdown": "0"
+        },
+        {
+          "library": "flexsearch",
+          "results": 0,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "0.3",
+          "p99Us": "0.7",
+          "breakdown": "0"
+        },
+        {
+          "library": "minisearch",
+          "results": 8,
+          "tier1Us": "-",
+          "tier2Us": "-",
+          "allUs": "68.9",
+          "p99Us": "96.6",
+          "breakdown": "8"
+        }
+      ]
+    }
+  },
+  "memory": null,
+  "indexSizes": [
+    {
+      "library": "Raw Data",
+      "rawKB": "23.4",
+      "gzipKB": "6.5",
+      "note": ""
+    },
+    {
+      "library": "Sieve (.sieve)",
+      "rawKB": "29.0",
+      "gzipKB": "15.6",
+      "note": "binary"
+    },
+    {
+      "library": "fuse.js",
+      "rawKB": "23.4",
+      "gzipKB": "6.5",
+      "note": "no index"
+    },
+    {
+      "library": "lunr.js",
+      "rawKB": "68.4",
+      "gzipKB": "12.8",
+      "note": ""
+    },
+    {
+      "library": "flexsearch",
+      "rawKB": "22.4",
+      "gzipKB": "6.8",
+      "note": ""
+    },
+    {
+      "library": "minisearch",
+      "rawKB": "33.4",
+      "gzipKB": "7.8",
+      "note": ""
+    }
+  ]
+}

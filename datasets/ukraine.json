@@ -1,0 +1,26 @@
+{
+  "id": 29,
+  "slug": "ukraine",
+  "title": "Ukraine",
+  "excerpt": "A country in Eastern Europe with ancient cities",
+  "href": "/countries/ukraine",
+  "type": "page",
+  "category": "geography",
+  "text": "Ukraine is a country in Eastern Europe with a long history and ancient cities. Kyiv, the capital, is known as the mother of Ruthenian cities and is located on the Dnieper River. Ukraine has a population of about 41 million (pre-2022) and is known for its wheat production, technology sector, and cultural heritage. The country has experienced significant conflict following Russia's invasion in 2022. Ukraine is known for its Byzantine architecture, including the St. Michael's Golden-Domed Monastery. The country has a rich folk tradition with distinctive embroidery (vyshyvanka) and music. Ukraine's history includes periods under Polish, Ottoman, Russian, and Soviet rule.",
+  "fieldBoundaries": [
+    {
+      "docId": 29,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 29,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

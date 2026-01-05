@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "indexes": {
+    "index": {
+      "file": "index-868342ec.sieve",
+      "docCount": 30,
+      "termCount": 740
+    }
+  },
+  "wasm": {
+    "js": "sieve.js",
+    "wasm": "sieve_bg.wasm",
+    "types": "sieve.d.ts"
+  }
+}

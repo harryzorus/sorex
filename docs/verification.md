@@ -272,6 +272,150 @@ cargo build -r    # Contracts disabled (release)
 **Property Tests**: 10+
 **Type-Level Invariants**: 3 (ValidatedSuffixEntry, SortedSuffixArray, WellFormedIndex)
 
+---
+
+## Limits of Formal Verification
+
+Formal verification provides strong guarantees but has inherent limitations. This section documents what we verify, what we don't, and the pragmatic choices we made.
+
+### What We Prove vs What We Axiomatize
+
+| Property | Status | Rationale |
+|----------|--------|-----------|
+| Field ranking dominance | **Proven** | Critical for search correctness; can be proven algebraically |
+| Levenshtein triangle inequality | **Proven** | Mathematical property; pure computation |
+| Fuzzy score monotonicity | **Proven** | Score decreases with distance; algebraic |
+| Suffix array sortedness | Axiom | Would require verifying Rust's sort implementation |
+| Binary search correctness | Axiom | Would require full verification of the algorithm |
+| LCP computation | Axiom | Complex string manipulation; tested instead |
+
+**Why axioms instead of full proofs?**
+
+1. **Effort vs Value**: Proving Rust's `sort()` is correct would require formalizing the entire standard library. Instead, we test sortedness as a post-condition.
+
+2. **Trusted Computing Base**: Some properties depend on Rust semantics (memory safety, integer overflow) which we trust rather than verify.
+
+3. **Specification Gap**: Even with proofs, there's always a gap between the Lean specification and the Rust implementation. Property tests bridge this gap.
+
+### What Formal Verification Cannot Guarantee
+
+1. **Performance**: Proofs say nothing about latency, throughput, or memory usage. Benchmarks cover this.
+
+2. **Correct Specification**: If the Lean spec is wrong, the implementation will be "correctly wrong." Code review and integration tests catch this.
+
+3. **External Dependencies**: We don't verify wasm-bindgen, serde, or other dependencies.
+
+4. **Concurrency**: Our proofs assume single-threaded execution. Parallel index construction uses separate memory and joins deterministically.
+
+5. **Floating Point**: Score calculations use f64. We avoid edge cases but don't formally verify floating point behavior.
+
+### Pragmatic Choices
+
+The verification framework makes pragmatic tradeoffs for real-world usability:
+
+#### Stop Word Filtering
+
+**Choice**: Filter stop words at index time rather than query time.
+
+**Not Formally Verified**: Stop word membership is a linguistic judgment, not a mathematical property. The stop word list in `data/stop_words.json` is curated for practical relevance, not provable correctness.
+
+**Why It Matters**: Prevents false positives like "land" -> "and". This is a UX improvement, not a correctness guarantee.
+
+#### Edit Distance Limits
+
+**Choice**: Fuzzy matching uses max edit distance 2.
+
+**Pragmatic**: Higher distances would find more matches but:
+- Exponentially more expensive to compute
+- Results become increasingly irrelevant
+- Distance 2 handles most typos in practice
+
+**Not Proven**: The choice of k=2 is empirical, not formally justified.
+
+#### Result Limits
+
+**Choice**: Default limit of 10 results per tier.
+
+**Pragmatic**: Users rarely need more than 10 results. Returning fewer results is faster.
+
+**Not Verified**: The limit is a UX heuristic, not a formal requirement.
+
+#### Scoring Constants
+
+**Proven Property**: Title beats Heading beats Content (with sufficient margin).
+
+**Pragmatic Constants**: The actual values (100, 10, 1) are chosen for:
+- Easy mental arithmetic during debugging
+- Sufficient gaps for position boost without overlap
+- Nice round numbers in benchmark output
+
+The proof only requires the dominance property holds, not specific values.
+
+### The Verification Pyramid
+
+We use a layered approach where each layer catches different classes of bugs:
+
+```
+                    ┌─────────────────────┐
+                    │   Lean Proofs       │  ← Mathematical certainty
+                    │   (5 theorems)      │     for critical properties
+                    ├─────────────────────┤
+                    │   Type-Level        │  ← Compile-time guarantees
+                    │   Invariants        │     via wrapper types
+                    ├─────────────────────┤
+                    │   Runtime Contracts │  ← Debug-build assertions
+                    │   (debug_assert!)   │     catch implementation bugs
+                    ├─────────────────────┤
+                    │   Property Tests    │  ← Randomized testing
+                    │   (proptest)        │     finds edge cases
+                    ├─────────────────────┤
+                    │   Unit Tests        │  ← Known scenarios
+                    │   + Integration     │     and regression tests
+                    └─────────────────────┘
+```
+
+**Insight**: Formal proofs are at the top because they're the hardest to achieve but provide the strongest guarantees. Most bugs are caught by tests long before we need proofs.
+
+### When to Verify vs When to Test
+
+| Situation | Approach |
+|-----------|----------|
+| Mathematical invariant (e.g., ordering) | Prove in Lean |
+| Data structure well-formedness | Type-level wrapper |
+| Algorithm correctness (sort, search) | Axiom + property test |
+| Edge cases and boundaries | Unit tests |
+| Real-world scenarios | Integration tests |
+| Performance | Benchmarks |
+| Linguistic choices (stop words) | Manual curation |
+
+### Known Unverified Behaviors
+
+These behaviors are intentional but not formally verified:
+
+1. **Unicode Normalization**: We normalize diacritics (e.g., "cafe" matches "cafe"). This uses the `unicode-normalization` crate, which we trust but don't verify.
+
+2. **Stop Word Selection**: The 20+ language stop word lists are curated for coverage, not completeness. Missing stop words may cause false positives.
+
+3. **Memory Limits**: We don't verify that indexes fit in WASM linear memory. Very large indexes may fail to load.
+
+4. **Error Messages**: Error strings are not verified for correctness or helpfulness.
+
+5. **JSON Parsing**: The stop words JSON parser is hand-rolled and assumes well-formed input.
+
+### Recommendations for Contributors
+
+1. **New Algorithms**: Write property tests first, then implement. Consider Lean specification for critical invariants.
+
+2. **Performance Changes**: Must not weaken verification. Run `cargo xtask verify` before and after.
+
+3. **New Data Structures**: Add type-level wrappers for invariants that must always hold.
+
+4. **Linguistic Features**: Document in code comments. These are judgment calls, not proofs.
+
+5. **External Dependencies**: Minimize. Each dependency is a trusted component we don't verify.
+
+---
+
 ## Quick Reference
 
 ### Before Any Refactoring
@@ -306,8 +450,8 @@ cargo test proptest -- --test-threads=1
 
 ## Related Documentation
 
-- [Architecture](./architecture.md) — Binary format, system overview
-- [Algorithms](./algorithms.md) — Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md) — Performance comparisons with other libraries
-- [Integration](./integration.md) — WASM setup, browser integration
-- [Contributing](./contributing.md) — How to contribute safely
+- [Architecture](./architecture.md) - Binary format, system overview
+- [Algorithms](./algorithms.md) - Suffix arrays, Levenshtein automata
+- [Benchmarks](./benchmarks.md) - Performance comparisons with other libraries
+- [Integration](./integration.md) - WASM setup, browser integration
+- [Contributing](./contributing.md) - How to contribute safely

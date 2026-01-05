@@ -1,0 +1,26 @@
+{
+  "id": 13,
+  "slug": "iceland",
+  "title": "Iceland",
+  "excerpt": "An island nation in the North Atlantic",
+  "href": "/countries/iceland",
+  "type": "page",
+  "category": "geography",
+  "text": "Iceland is an island nation in the North Atlantic Ocean, located midway between the United States and mainland Europe. Reykjavik, the capital, is one of the world's northernmost capital cities of a sovereign state. Iceland has a population of about 380,000 and is known for its dramatic landscapes, waterfalls, and geysers. The Golden Circle is a popular tourist route featuring geysers, hot springs, and waterfalls. Iceland is famous for its Viking heritage, sagas, and literary culture. The country is powered almost entirely by renewable energy, mostly geothermal and hydroelectric power. Iceland is not a member of the European Union but is part of the European Economic Area.",
+  "fieldBoundaries": [
+    {
+      "docId": 13,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 13,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

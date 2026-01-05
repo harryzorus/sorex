@@ -1,13 +1,19 @@
+use clap::Parser;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::io::{Read, Write};
 
-use sieve::binary::{encode_docs_binary, BinaryLayer, DocMetaInput, PostingEntry, SieveHeader, SieveFooter, VERSION};
+use serde::Deserialize;
+use sieve::binary::{
+    encode_docs_binary, BinaryLayer, DocMetaInput, PostingEntry, SieveFooter, SieveHeader, VERSION,
+};
 use sieve::fst_index::build_fst_index;
 use sieve::levenshtein_dfa::ParametricDFA;
-use sieve::{build_index, FieldBoundary, SearchDoc, SearchIndex};
-use serde::Deserialize;
+use sieve::{build::*, build_index, FieldBoundary, SearchDoc, SearchIndex};
+
+mod cli;
+use cli::{Cli, Commands};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +35,32 @@ struct LayerInput {
 }
 
 fn main() {
+    // Try to parse as clap CLI first
+    let cli = Cli::try_parse();
+
+    if let Ok(cli) = cli {
+        match cli.command {
+            Some(Commands::Build {
+                input,
+                output,
+                indexes,
+                emit_wasm,
+            }) => {
+                if let Err(e) = run_build(&input, &output, indexes, emit_wasm) {
+                    eprintln!("❌ {}", e);
+                    std::process::exit(1);
+                }
+                return;
+            }
+            Some(Commands::Inspect { file }) => {
+                inspect_sieve_file(&file);
+                return;
+            }
+            None => {}
+        }
+    }
+
+    // Fall back to legacy arg parsing for backwards compatibility
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {
@@ -166,7 +198,8 @@ fn build_binary_index() {
     let vocabulary = fst_index.vocabulary;
 
     // Convert vocab_suffix_array to (u32, u32) format
-    let suffix_array: Vec<(u32, u32)> = fst_index.vocab_suffix_array
+    let suffix_array: Vec<(u32, u32)> = fst_index
+        .vocab_suffix_array
         .iter()
         .map(|e| (e.term_idx as u32, e.offset as u32))
         .collect();
@@ -193,20 +226,26 @@ fn build_binary_index() {
     let postings: Vec<Vec<PostingEntry>> = vocabulary
         .iter()
         .map(|term| {
-            fst_index.inverted_index.terms
+            fst_index
+                .inverted_index
+                .terms
                 .get(term)
                 .map(|pl| {
-                    pl.postings.iter().map(|p| {
-                        let section_idx = p.section_id
-                            .as_ref()
-                            .and_then(|id| section_idx_map.get(id.as_str()))
-                            .copied()
-                            .unwrap_or(0);
-                        PostingEntry {
-                            doc_id: p.doc_id as u32,
-                            section_idx,
-                        }
-                    }).collect()
+                    pl.postings
+                        .iter()
+                        .map(|p| {
+                            let section_idx = p
+                                .section_id
+                                .as_ref()
+                                .and_then(|id| section_idx_map.get(id.as_str()))
+                                .copied()
+                                .unwrap_or(0);
+                            PostingEntry {
+                                doc_id: p.doc_id as u32,
+                                section_idx,
+                            }
+                        })
+                        .collect()
                 })
                 .unwrap_or_default()
         })
@@ -217,7 +256,8 @@ fn build_binary_index() {
     let lev_dfa_bytes = lev_dfa.to_bytes();
 
     // Encode docs as binary with section_id support
-    let docs_input: Vec<DocMetaInput> = payload.docs
+    let docs_input: Vec<DocMetaInput> = payload
+        .docs
         .iter()
         .map(|d| DocMetaInput {
             title: d.title.clone(),
@@ -244,9 +284,7 @@ fn build_binary_index() {
     let bytes = layer.to_bytes().expect("failed to serialize binary layer");
 
     // Write binary to stdout (single file contains everything including docs)
-    std::io::stdout()
-        .write_all(&bytes)
-        .expect("write stdout");
+    std::io::stdout().write_all(&bytes).expect("write stdout");
 }
 
 /// Binary layer mode: reads LayerInput JSON, outputs binary .sieve format
@@ -292,15 +330,20 @@ fn encode_binary_layer() {
     let docs_bytes = encode_docs_binary(&[]);
 
     // Build binary layer (vocabulary stored directly, no FST)
-    let layer = BinaryLayer::build(&vocabulary, &suffix_array, &postings, input.doc_count, lev_dfa_bytes, docs_bytes)
-        .expect("failed to build binary layer");
+    let layer = BinaryLayer::build(
+        &vocabulary,
+        &suffix_array,
+        &postings,
+        input.doc_count,
+        lev_dfa_bytes,
+        docs_bytes,
+    )
+    .expect("failed to build binary layer");
 
     let bytes = layer.to_bytes().expect("failed to serialize binary layer");
 
     // Write binary to stdout
-    std::io::stdout()
-        .write_all(&bytes)
-        .expect("write stdout");
+    std::io::stdout().write_all(&bytes).expect("write stdout");
 }
 
 /// Inspect a .sieve file and display its structure diagram
@@ -312,7 +355,10 @@ fn inspect_sieve_file(path: &str) {
     let min_header_size = 36; // v2 header size
     let min_size = min_header_size + SieveFooter::SIZE;
     if total_size < min_size {
-        eprintln!("Error: File too small ({} bytes, minimum {})", total_size, min_size);
+        eprintln!(
+            "Error: File too small ({} bytes, minimum {})",
+            total_size, min_size
+        );
         std::process::exit(1);
     }
 
@@ -321,8 +367,8 @@ fn inspect_sieve_file(path: &str) {
 
     // Read header based on version
     let (header, header_size) = if version >= 3 {
-        let header = SieveHeader::read(&mut std::io::Cursor::new(&bytes))
-            .expect("failed to read header");
+        let header =
+            SieveHeader::read(&mut std::io::Cursor::new(&bytes)).expect("failed to read header");
         (header, SieveHeader::SIZE)
     } else {
         // For v2 and earlier, construct header with lev_dfa_len = 0
@@ -378,27 +424,71 @@ fn inspect_sieve_file(path: &str) {
     }
 
     let mut sections = vec![
-        Section { name: "HEADER", size: header_size, offset: 0 },
-        Section { name: "VOCABULARY", size: header.vocab_len as usize, offset: header_end },
-        Section { name: "SUFFIX ARRAY", size: header.sa_len as usize, offset: vocab_end },
-        Section { name: "POSTINGS", size: header.postings_len as usize, offset: sa_end },
-        Section { name: "SKIP LISTS", size: header.skip_len as usize, offset: postings_end },
-        Section { name: "SECTION TABLE", size: header.section_table_len as usize, offset: skip_end },
+        Section {
+            name: "HEADER",
+            size: header_size,
+            offset: 0,
+        },
+        Section {
+            name: "VOCABULARY",
+            size: header.vocab_len as usize,
+            offset: header_end,
+        },
+        Section {
+            name: "SUFFIX ARRAY",
+            size: header.sa_len as usize,
+            offset: vocab_end,
+        },
+        Section {
+            name: "POSTINGS",
+            size: header.postings_len as usize,
+            offset: sa_end,
+        },
+        Section {
+            name: "SKIP LISTS",
+            size: header.skip_len as usize,
+            offset: postings_end,
+        },
+        Section {
+            name: "SECTION TABLE",
+            size: header.section_table_len as usize,
+            offset: skip_end,
+        },
     ];
 
     // Only add LEV DFA section for v3+
     if header.version >= 3 {
-        sections.push(Section { name: "LEV DFA", size: header.lev_dfa_len as usize, offset: section_table_end });
+        sections.push(Section {
+            name: "LEV DFA",
+            size: header.lev_dfa_len as usize,
+            offset: section_table_end,
+        });
     }
 
     // Only add DOCS section for v5+
     if header.version >= 5 {
-        sections.push(Section { name: "DOCS", size: header.docs_len as usize, offset: lev_dfa_end });
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: docs_end });
+        sections.push(Section {
+            name: "DOCS",
+            size: header.docs_len as usize,
+            offset: lev_dfa_end,
+        });
+        sections.push(Section {
+            name: "FOOTER",
+            size: SieveFooter::SIZE,
+            offset: docs_end,
+        });
     } else if header.version >= 3 {
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: lev_dfa_end });
+        sections.push(Section {
+            name: "FOOTER",
+            size: SieveFooter::SIZE,
+            offset: lev_dfa_end,
+        });
     } else {
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: section_table_end });
+        sections.push(Section {
+            name: "FOOTER",
+            size: SieveFooter::SIZE,
+            offset: section_table_end,
+        });
     }
 
     // Box width constant (inner content width)
@@ -411,21 +501,44 @@ fn inspect_sieve_file(path: &str) {
     println!("╠{}╣", "═".repeat(W));
     println!("║  File:     {:<55}  ║", truncate_path(path, 55));
     println!("║  Size:     {:<55}  ║", format_size(total_size));
-    println!("║  Version:  {:<55}  ║", format!("{} (current: {})", header.version, VERSION));
+    println!(
+        "║  Version:  {:<55}  ║",
+        format!("{} (current: {})", header.version, VERSION)
+    );
     println!("╚{}╝", "═".repeat(W));
     println!();
 
     // Print metadata
     println!("┌─ METADATA {}┐", "─".repeat(W - 12));
-    println!("│  Documents:      {:>10}{:>w$}│", header.doc_count, "", w = W - 30);
-    println!("│  Terms:          {:>10}{:>w$}│", header.term_count, "", w = W - 30);
-    println!("│  CRC32:          {:#010x} {:<7}{:>w$}│",
+    println!(
+        "│  Documents:      {:>10}{:>w$}│",
+        header.doc_count,
+        "",
+        w = W - 30
+    );
+    println!(
+        "│  Terms:          {:>10}{:>w$}│",
+        header.term_count,
+        "",
+        w = W - 30
+    );
+    println!(
+        "│  CRC32:          {:#010x} {:<7}{:>w$}│",
         footer.crc32,
         if crc_valid { "✓ valid" } else { "✗ BAD" },
-        "", w = W - 38);
-    println!("│  Skip Lists:     {:>10}{:>w$}│",
-        if header.flags.has_skip_lists() { "yes" } else { "no" },
-        "", w = W - 30);
+        "",
+        w = W - 38
+    );
+    println!(
+        "│  Skip Lists:     {:>10}{:>w$}│",
+        if header.flags.has_skip_lists() {
+            "yes"
+        } else {
+            "no"
+        },
+        "",
+        w = W - 30
+    );
     println!("└{}┘", "─".repeat(W));
     println!();
 
@@ -448,7 +561,8 @@ fn inspect_sieve_file(path: &str) {
         let bar: String = "█".repeat(bar_len);
         let empty: String = "░".repeat(bar_width - bar_len);
 
-        println!("│  {:<12} │{}{}│ {:>8} {:>6.1}%  │",
+        println!(
+            "│  {:<12} │{}{}│ {:>8} {:>6.1}%  │",
             section.name,
             bar,
             empty,
@@ -460,19 +574,35 @@ fn inspect_sieve_file(path: &str) {
     println!("│{:>w$}│", "", w = W);
     println!("├─ OFFSETS {}┤", "─".repeat(W - 11));
     println!("│{:>w$}│", "", w = W);
-    println!("│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
-        "SECTION", "OFFSET", "LENGTH", "END", "", w = W - 50);
-    println!("│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
-        "────────────", "──────────", "──────────", "──────────", "", w = W - 50);
+    println!(
+        "│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
+        "SECTION",
+        "OFFSET",
+        "LENGTH",
+        "END",
+        "",
+        w = W - 50
+    );
+    println!(
+        "│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
+        "────────────",
+        "──────────",
+        "──────────",
+        "──────────",
+        "",
+        w = W - 50
+    );
 
     for section in &sections {
         let end = section.offset + section.size;
-        println!("│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
+        println!(
+            "│  {:<12} {:>10}  {:>10}  {:>10}{:>w$}│",
             section.name,
             format!("0x{:06X}", section.offset),
             format_size(section.size),
             format!("0x{:06X}", end),
-            "", w = W - 50
+            "",
+            w = W - 50
         );
     }
 
@@ -481,44 +611,69 @@ fn inspect_sieve_file(path: &str) {
     println!();
 
     // Print size breakdown
-    let content_size = header.vocab_len + header.sa_len + header.postings_len +
-                       header.skip_len + header.section_table_len + header.lev_dfa_len + header.docs_len;
+    let content_size = header.vocab_len
+        + header.sa_len
+        + header.postings_len
+        + header.skip_len
+        + header.section_table_len
+        + header.lev_dfa_len
+        + header.docs_len;
     let overhead = header_size + SieveFooter::SIZE;
 
-    let largest_name = sections.iter()
+    let largest_name = sections
+        .iter()
         .filter(|s| s.name != "HEADER" && s.name != "FOOTER")
         .max_by_key(|s| s.size)
         .map(|s| s.name)
         .unwrap_or("N/A");
-    let largest_size = sections.iter()
+    let largest_size = sections
+        .iter()
         .filter(|s| s.name != "HEADER" && s.name != "FOOTER")
         .map(|s| s.size)
         .max()
         .unwrap_or(0);
-    let smallest_name = sections.iter()
+    let smallest_name = sections
+        .iter()
         .filter(|s| s.name != "HEADER" && s.name != "FOOTER" && s.size > 0)
         .min_by_key(|s| s.size)
         .map(|s| s.name)
         .unwrap_or("N/A");
-    let smallest_size = sections.iter()
+    let smallest_size = sections
+        .iter()
         .filter(|s| s.name != "HEADER" && s.name != "FOOTER" && s.size > 0)
         .map(|s| s.size)
         .min()
         .unwrap_or(0);
 
     println!("┌─ SIZE BREAKDOWN {}┐", "─".repeat(W - 17));
-    println!("│  Content:   {:>10}  ({:.1}% of total){:>w$}│",
+    println!(
+        "│  Content:   {:>10}  ({:.1}% of total){:>w$}│",
         format_size(content_size as usize),
         content_size as f64 / total_size as f64 * 100.0,
-        "", w = W - 42);
-    println!("│  Overhead:  {:>10}  (header + footer){:>w$}│",
+        "",
+        w = W - 42
+    );
+    println!(
+        "│  Overhead:  {:>10}  (header + footer){:>w$}│",
         format_size(overhead),
-        "", w = W - 42);
+        "",
+        w = W - 42
+    );
     println!("│{:>w$}│", "", w = W);
-    println!("│  Largest:   {:>10}  {:<12}{:>w$}│",
-        format_size(largest_size), largest_name, "", w = W - 40);
-    println!("│  Smallest:  {:>10}  {:<12}{:>w$}│",
-        format_size(smallest_size), smallest_name, "", w = W - 40);
+    println!(
+        "│  Largest:   {:>10}  {:<12}{:>w$}│",
+        format_size(largest_size),
+        largest_name,
+        "",
+        w = W - 40
+    );
+    println!(
+        "│  Smallest:  {:>10}  {:<12}{:>w$}│",
+        format_size(smallest_size),
+        smallest_name,
+        "",
+        w = W - 40
+    );
     println!("└{}┘", "─".repeat(W));
     println!();
 }
@@ -586,7 +741,8 @@ fn generate_demo_package(output_dir: &str) {
     );
 
     let vocabulary = fst_index.vocabulary;
-    let suffix_array: Vec<(u32, u32)> = fst_index.vocab_suffix_array
+    let suffix_array: Vec<(u32, u32)> = fst_index
+        .vocab_suffix_array
         .iter()
         .map(|e| (e.term_idx as u32, e.offset as u32))
         .collect();
@@ -613,20 +769,26 @@ fn generate_demo_package(output_dir: &str) {
     let postings: Vec<Vec<PostingEntry>> = vocabulary
         .iter()
         .map(|term| {
-            fst_index.inverted_index.terms
+            fst_index
+                .inverted_index
+                .terms
                 .get(term)
                 .map(|pl| {
-                    pl.postings.iter().map(|p| {
-                        let section_idx = p.section_id
-                            .as_ref()
-                            .and_then(|id| section_idx_map.get(id.as_str()))
-                            .copied()
-                            .unwrap_or(0);
-                        PostingEntry {
-                            doc_id: p.doc_id as u32,
-                            section_idx,
-                        }
-                    }).collect()
+                    pl.postings
+                        .iter()
+                        .map(|p| {
+                            let section_idx = p
+                                .section_id
+                                .as_ref()
+                                .and_then(|id| section_idx_map.get(id.as_str()))
+                                .copied()
+                                .unwrap_or(0);
+                            PostingEntry {
+                                doc_id: p.doc_id as u32,
+                                section_idx,
+                            }
+                        })
+                        .collect()
                 })
                 .unwrap_or_default()
         })
@@ -635,7 +797,8 @@ fn generate_demo_package(output_dir: &str) {
     let lev_dfa = ParametricDFA::build(true);
     let lev_dfa_bytes = lev_dfa.to_bytes();
 
-    let docs_input: Vec<DocMetaInput> = payload.docs
+    let docs_input: Vec<DocMetaInput> = payload
+        .docs
         .iter()
         .map(|d| DocMetaInput {
             title: d.title.clone(),
@@ -655,7 +818,8 @@ fn generate_demo_package(output_dir: &str) {
         doc_count,
         lev_dfa_bytes,
         docs_bytes,
-    ).expect("failed to build binary layer");
+    )
+    .expect("failed to build binary layer");
 
     let index_bytes = layer.to_bytes().expect("failed to serialize index");
 
@@ -665,17 +829,29 @@ fn generate_demo_package(output_dir: &str) {
     // 1. Write .sieve index
     let index_path = dir.join("index.sieve");
     fs::write(&index_path, &index_bytes).expect("failed to write index.sieve");
-    eprintln!("  ✓ Created {} ({} bytes)", index_path.display(), index_bytes.len());
+    eprintln!(
+        "  ✓ Created {} ({} bytes)",
+        index_path.display(),
+        index_bytes.len()
+    );
 
     // 2. Write WASM file
     let wasm_path = dir.join("sieve_bg.wasm");
     fs::write(&wasm_path, SIEVE_WASM).expect("failed to write sieve_bg.wasm");
-    eprintln!("  ✓ Created {} ({} bytes)", wasm_path.display(), SIEVE_WASM.len());
+    eprintln!(
+        "  ✓ Created {} ({} bytes)",
+        wasm_path.display(),
+        SIEVE_WASM.len()
+    );
 
     // 3. Write JS file
     let js_path = dir.join("sieve.js");
     fs::write(&js_path, SIEVE_JS).expect("failed to write sieve.js");
-    eprintln!("  ✓ Created {} ({} bytes)", js_path.display(), SIEVE_JS.len());
+    eprintln!(
+        "  ✓ Created {} ({} bytes)",
+        js_path.display(),
+        SIEVE_JS.len()
+    );
 
     // 4. Write demo HTML
     let html_path = dir.join("index.html");
@@ -690,125 +866,212 @@ fn generate_demo_package(output_dir: &str) {
     eprintln!("  open http://localhost:8080");
 }
 
-/// Create sample payload for demo when no input is provided
+/// Create sample payload for demo using European countries dataset
 #[cfg(feature = "embed-wasm")]
 fn create_sample_payload() -> Payload {
+    let countries = vec![
+        ("Austria", "A landlocked country in Central Europe", "Austria is a landlocked country in Central Europe. Vienna, the capital and largest city, is the cultural and political center of the country. Austria is known for its Alpine scenery, classical music heritage, and contributions to European culture. The country is located in the eastern Alps and has a population of about 9 million. Austria joined the European Union in 1995 and is part of the Eurozone since 1999. The Danube River flows through Austria and is an important waterway. Austria is famous for composers like Wolfgang Amadeus Mozart and Ludwig van Beethoven who spent significant time there."),
+        ("Belgium", "A federal monarchy in Western Europe", "Belgium is a federal monarchy in Western Europe known for its beer, chocolate, and waffles. Brussels, the capital, is the de facto capital of the European Union. Belgium has a population of approximately 11.5 million and is divided into three regions: Flanders, Wallonia, and Brussels. The country is famous for its medieval architecture, including the Belfry of Bruges and the Grand Place in Brussels. Belgium shares borders with the Netherlands, Germany, Luxembourg, and France. The Belgian language situation is complex with Dutch, French, and German all being official languages in different regions."),
+        ("Bulgaria", "A country on the Balkan Peninsula", "Bulgaria is a country on the Balkan Peninsula in Southeast Europe. Sofia, the capital and largest city, is located in the west-central part of the country. Bulgaria has a rich history spanning over 1,400 years as a nation state. The country is known for its natural beauty, including the Rila Mountains and the Black Sea coast. Bulgaria is famous for its rose oil production, Orthodox Christian heritage, and ancient Thracian culture. The Danube River forms Bulgaria's northern border with Romania. Bulgaria joined the European Union in 2007 and is part of the Schengen Area."),
+        ("Croatia", "A Mediterranean country in Southeast Europe", "Croatia is a Mediterranean country in Southeast Europe with a Pannonian plain in the north. Zagreb is the capital and largest city, located in the northwestern part of the country. Croatia has a population of about 4 million and is known for its Adriatic coast and numerous islands. The country is famous for Dubrovnik, a UNESCO World Heritage Site often called the Pearl of the Adriatic. Croatia joined the European Union in 2013 and adopted the Euro in 2023. The country is known for its natural parks, including Plitvice Lakes and Krka National Park. Croatia has a strong tourism industry due to its beautiful coastline and historical sites."),
+        ("Cyprus", "An island nation in the Mediterranean Sea", "Cyprus is an island nation in the eastern Mediterranean Sea. Nicosia, the capital, is the most populated city on the island. Cyprus has a population of about 1.2 million and is known for its Mediterranean beaches and year-round sunshine. The island has been inhabited since the Neolithic period and has a rich cultural heritage spanning Greek, Roman, Byzantine, and Ottoman periods. Cyprus joined the European Union in 2004 and adopted the Euro in 2008. The island is famous for its copper resources, wine production, and tourist beaches. Cyprus is divided between the Republic of Cyprus in the south and the Turkish Republic of Northern Cyprus in the north."),
+        ("Czech Republic", "A country in Central Europe with a rich history", "The Czech Republic is a country in Central Europe with a rich medieval history. Prague, the capital, is known as the City of a Hundred Spires and is famous for its architecture and cultural heritage. The country has a population of about 10.5 million and is known for its beer, crystal glass, and automotive industry. Prague Castle is one of the largest castle complexes in the world. The Czech Republic joined the European Union in 2004 and the Schengen Area in 2007. The country is located in the Bohemian and Moravian plateaus. Charles Bridge in Prague is one of the oldest bridges in Europe and a major tourist attraction."),
+        ("Denmark", "A Nordic country in Northern Europe", "Denmark is a Nordic country in Northern Europe consisting of the Jutland Peninsula and numerous islands. Copenhagen, the capital, is the largest city and is located on the eastern coast of Zealand. Denmark has a population of about 5.9 million and is known for its flat landscape, strong winds, and extensive coastline. The country is famous for its design, wind energy, and bicycle culture. Denmark is part of the Nordic countries and joined the European Union in 1973. The Little Mermaid statue in Copenhagen is a famous symbol of the city. Denmark has a strong welfare system and consistently ranks high in quality of life indices."),
+        ("Estonia", "A Baltic country in Northern Europe", "Estonia is a Baltic country in Northern Europe on the eastern shore of the Baltic Sea. Tallinn, the capital, is known for its well-preserved Old Town, a UNESCO World Heritage Site. Estonia has a population of about 1.4 million and is known for its forests, lakes, and digital innovation. The country is famous for being a digital society with e-government, e-banking, and e-services. Estonia joined the European Union in 2004 and adopted the Euro in 2011. The country has a rich cultural heritage with many traditional songs and dances. Estonia is one of the most wired countries in the world with widespread internet access."),
+        ("Finland", "A Nordic country known for lakes and forests", "Finland is a Nordic country in Northern Europe known for its thousands of lakes and vast forests. Helsinki, the capital, is located on the Gulf of Finland and is known for its modern architecture and design. Finland has a population of about 5.5 million and is famous for its education system, Nokia technology, and music industry. The country is known for the Northern Lights (Aurora Borealis) and winter sports. Finland joined the European Union in 1995 and adopted the Euro in 1999. Finland recently joined NATO in 2023. The country is known for its sauna culture with more saunas than any other country in the world."),
+        ("France", "A major Western European nation", "France is a major Western European nation and one of the world's most influential countries. Paris, the capital, is known as the City of Light and is famous for its art, fashion, and architecture. France has a population of about 68 million and is known for its wine, cheese, and culinary traditions. The Eiffel Tower, built for the 1889 World's Fair, is one of the most recognizable landmarks in the world. France joined the European Union (as the European Economic Community) in 1957 and is a founding member. The country is known for its contributions to art, literature, philosophy, and science. France has the largest economy in Europe and is a permanent member of the United Nations Security Council."),
+        ("Germany", "A major central European power", "Germany is a major central European country and one of the world's largest economies. Berlin, the capital, is known for its history, art scene, and nightlife. Germany has a population of about 83 million and is known for its engineering, automotive industry, and beer. The Brandenburg Gate is a famous symbol of German history and reunification. Germany joined the European Union in 1993 (with reunification in 1990) and adopted the Euro in 2002. The country is known for its contributions to philosophy, music (Bach, Beethoven), and science. Germany is a federal republic with a strong welfare system and is Europe's largest economy."),
+        ("Greece", "A Mediterranean country with ancient history", "Greece is a Mediterranean country with an ancient history spanning thousands of years. Athens, the capital, is known as the birthplace of Western democracy and philosophy. Greece has a population of about 10.5 million and is famous for its islands, beaches, and classical ruins. The Acropolis in Athens is one of the most important landmarks of ancient Greek civilization. Greece joined the European Union in 1981 and adopted the Euro in 2001. The country consists of the mainland and over 6,000 islands, of which about 227 are inhabited. Greece is known for its Mediterranean cuisine, Orthodox Christianity, and contributions to Western civilization."),
+        ("Hungary", "A country in Central Europe on the Danube", "Hungary is a country in Central Europe situated along the Danube River. Budapest, the capital, is known as the Pearl of the Danube and is famous for its thermal baths and architecture. Hungary has a population of about 9.7 million and is known for its music, wine, and paprika spice. The Parliament Building in Budapest is one of the largest buildings in Europe and a UNESCO World Heritage Site. Hungary joined the European Union in 2004. The country has a rich musical heritage with famous composers like Ferenc Liszt and Béla Bartók. Lake Balaton is the largest lake in Central Europe and a popular tourist destination."),
+        ("Iceland", "An island nation in the North Atlantic", "Iceland is an island nation in the North Atlantic Ocean, located midway between the United States and mainland Europe. Reykjavik, the capital, is one of the world's northernmost capital cities of a sovereign state. Iceland has a population of about 380,000 and is known for its dramatic landscapes, waterfalls, and geysers. The Golden Circle is a popular tourist route featuring geysers, hot springs, and waterfalls. Iceland is famous for its Viking heritage, sagas, and literary culture. The country is powered almost entirely by renewable energy, mostly geothermal and hydroelectric power. Iceland is not a member of the European Union but is part of the European Economic Area."),
+        ("Ireland", "An island nation in Western Europe", "Ireland is an island nation in Western Europe, consisting of the Irish Free State (independent) and the island of Ireland. Dublin, the capital, is known for its Georgian architecture, literary heritage, and vibrant culture. Ireland has a population of about 5.2 million and is known for its literature, music, and pubs. The Cliffs of Moher are one of Ireland's most visited natural attractions. Ireland joined the European Union in 1973 and adopted the Euro in 2002. The country is known for its contributions to literature with famous writers like James Joyce and Samuel Beckett. Ireland is known for its strong tradition of storytelling, music, and traditional Irish dancing."),
+        ("Italy", "A Mediterranean country with a vast cultural heritage", "Italy is a Mediterranean country in Southern Europe with a vast cultural heritage and history. Rome, the capital, is known as the Eternal City and was the capital of the Roman Empire. Italy has a population of about 57 million and is famous for its art, architecture, and cuisine. The Colosseum in Rome is one of the most recognizable landmarks of ancient Roman civilization. Italy joined the European Union in 1957 (as the European Economic Community) and adopted the Euro in 2002. Italy is known for its fashion industry, fine wines, and iconic cars like Ferrari and Lamborghini. The country consists of the mainland and numerous islands including Sicily and Sardinia."),
+    ];
+
+    let mut docs = Vec::new();
+    let mut texts = Vec::new();
+
+    for (idx, (name, excerpt, text)) in countries.iter().enumerate() {
+        docs.push(SearchDoc {
+            id: idx,
+            title: name.to_string(),
+            excerpt: excerpt.to_string(),
+            href: format!("/countries/{}", name.to_lowercase().replace(' ', "-")),
+            kind: "page".to_string(),
+        });
+        texts.push(text.to_string());
+    }
+
     Payload {
-        docs: vec![
-            SearchDoc {
-                id: 0,
-                title: "Getting Started with Sieve".to_string(),
-                excerpt: "Learn how to use Sieve for fast full-text search.".to_string(),
-                href: "/docs/getting-started".to_string(),
-                kind: "post".to_string(),
-            },
-            SearchDoc {
-                id: 1,
-                title: "Suffix Arrays Explained".to_string(),
-                excerpt: "Deep dive into suffix array data structures.".to_string(),
-                href: "/docs/suffix-arrays".to_string(),
-                kind: "post".to_string(),
-            },
-            SearchDoc {
-                id: 2,
-                title: "Fuzzy Search with Levenshtein".to_string(),
-                excerpt: "How Sieve handles typos using Levenshtein automata.".to_string(),
-                href: "/docs/fuzzy-search".to_string(),
-                kind: "post".to_string(),
-            },
-        ],
-        texts: vec![
-            "Getting Started with Sieve Learn how to use Sieve for fast full-text search".to_string(),
-            "Suffix Arrays Explained Deep dive into suffix array data structures".to_string(),
-            "Fuzzy Search with Levenshtein How Sieve handles typos using Levenshtein automata".to_string(),
-        ],
+        docs,
+        texts,
         field_boundaries: vec![],
     }
 }
 
-/// Generate demo HTML page
+/// Generate demo HTML page with European countries dataset
 #[cfg(feature = "embed-wasm")]
 fn generate_demo_html(doc_count: usize) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sieve Search Demo</title>
+    <title>Sieve Search Demo - European Countries</title>
     <style>
         * {{ box-sizing: border-box; }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 2rem;
-            background: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }}
-        h1 {{ color: #333; }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }}
+        h1 {{ 
+            color: #333;
+            margin: 0 0 0.5rem 0;
+            font-size: 2.5rem;
+        }}
+        .subtitle {{
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }}
         .search-box {{
             display: flex;
             gap: 0.5rem;
-            margin: 1rem 0;
+            margin: 2rem 0;
         }}
         input[type="text"] {{
             flex: 1;
-            padding: 0.75rem 1rem;
-            font-size: 1rem;
+            padding: 1rem;
+            font-size: 1.1rem;
             border: 2px solid #ddd;
             border-radius: 8px;
             outline: none;
+            transition: all 0.3s;
         }}
         input[type="text"]:focus {{
-            border-color: #0066cc;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }}
         .results {{
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             overflow: hidden;
         }}
         .result {{
-            padding: 1rem;
+            padding: 1.5rem;
             border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }}
+        .result:hover {{
+            background: #f9f9f9;
         }}
         .result:last-child {{ border-bottom: none; }}
         .result h3 {{
             margin: 0 0 0.5rem 0;
-            color: #0066cc;
+            color: #667eea;
+            font-size: 1.3rem;
+        }}
+        .result h3 a {{
+            text-decoration: none;
+            color: inherit;
+        }}
+        .result h3 a:hover {{
+            text-decoration: underline;
         }}
         .result p {{
-            margin: 0;
-            color: #666;
+            margin: 0 0 0.5rem 0;
+            color: #555;
+            line-height: 1.6;
         }}
         .result .meta {{
             font-size: 0.85rem;
             color: #999;
-            margin-top: 0.5rem;
+            display: flex;
+            gap: 1rem;
         }}
         .empty {{
-            padding: 2rem;
+            padding: 3rem 2rem;
             text-align: center;
             color: #999;
         }}
         .stats {{
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             color: #666;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
         }}
-        .loading {{ opacity: 0.5; }}
+        .suggestions {{
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+        }}
+        .suggestions h3 {{
+            color: #333;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }}
+        .tags {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }}
+        .tag {{
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: #f0f4ff;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }}
+        .tag:hover {{
+            background: #667eea;
+            color: white;
+        }}
     </style>
 </head>
 <body>
-    <h1>🔍 Sieve Search Demo</h1>
-    <p>Formally verified full-text search with {} documents.</p>
+    <div class="container">
+        <h1>🌍 European Countries Search</h1>
+        <p class="subtitle">Formally verified full-text search with {} documents</p>
 
-    <div class="search-box">
-        <input type="text" id="query" placeholder="Type to search..." autofocus>
-    </div>
+        <div class="search-box">
+            <input type="text" id="query" placeholder="Search countries... (try: Alps, Mediterranean, culture, capital)" autofocus>
+        </div>
 
-    <div class="stats" id="stats"></div>
-    <div class="results" id="results">
-        <div class="empty">Start typing to search...</div>
+        <div class="stats" id="stats"></div>
+        <div class="results" id="results">
+            <div class="empty">Start typing to search for European countries...</div>
+        </div>
+
+        <div class="suggestions">
+            <h3>Try searching for:</h3>
+            <div class="tags">
+                <span class="tag" onclick="document.getElementById('query').value='Alps'; search()">Alps</span>
+                <span class="tag" onclick="document.getElementById('query').value='Mediterranean'; search()">Mediterranean</span>
+                <span class="tag" onclick="document.getElementById('query').value='EU'; search()">European Union</span>
+                <span class="tag" onclick="document.getElementById('query').value='culture'; search()">Culture</span>
+                <span class="tag" onclick="document.getElementById('query').value='capital'; search()">Capital Cities</span>
+                <span class="tag" onclick="document.getElementById('query').value='history'; search()">History</span>
+                <span class="tag" onclick="document.getElementById('query').value='mountains'; search()">Mountains</span>
+                <span class="tag" onclick="document.getElementById('query').value='island'; search()">Islands</span>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -826,7 +1089,7 @@ fn generate_demo_html(doc_count: usize) -> String {
             index = SieveIndex.from_bytes(bytes);
 
             document.getElementById('query').addEventListener('input', debounce(search, 150));
-            console.log('Sieve initialized with', index.doc_count(), 'documents');
+            console.log('Sieve initialized with', index.doc_count(), 'European country documents');
         }}
 
         function debounce(fn, ms) {{
@@ -837,13 +1100,13 @@ fn generate_demo_html(doc_count: usize) -> String {
             }};
         }}
 
-        function search(e) {{
-            const query = e.target.value.trim();
+        window.search = function search(e) {{
+            const query = e?.target?.value?.trim?.() || document.getElementById('query').value?.trim?.() || '';
             const resultsDiv = document.getElementById('results');
             const statsDiv = document.getElementById('stats');
 
             if (!query) {{
-                resultsDiv.innerHTML = '<div class="empty">Start typing to search...</div>';
+                resultsDiv.innerHTML = '<div class="empty">Start typing to search for European countries...</div>';
                 statsDiv.textContent = '';
                 return;
             }}
@@ -852,10 +1115,10 @@ fn generate_demo_html(doc_count: usize) -> String {
             const results = index.search(query, 10);
             const elapsed = (performance.now() - start).toFixed(2);
 
-            statsDiv.textContent = `Found ${{results.length}} results in ${{elapsed}}ms`;
+            statsDiv.textContent = `Found ${{results.length}} result${{results.length !== 1 ? 's' : ''}} in ${{elapsed}}ms`;
 
             if (results.length === 0) {{
-                resultsDiv.innerHTML = '<div class="empty">No results found</div>';
+                resultsDiv.innerHTML = '<div class="empty">No countries found matching "${{escapeHtml(query)}}"</div>';
                 return;
             }}
 
@@ -863,10 +1126,13 @@ fn generate_demo_html(doc_count: usize) -> String {
                 <div class="result">
                     <h3><a href="${{r.href}}">${{escapeHtml(r.title)}}</a></h3>
                     <p>${{escapeHtml(r.excerpt)}}</p>
-                    <div class="meta">Score: ${{r.score.toFixed(1)}} · Type: ${{r.kind}}</div>
+                    <div class="meta">
+                        <span>Relevance: ${{r.score.toFixed(1)}}</span>
+                        <span>Type: ${{r.kind}}</span>
+                    </div>
                 </div>
             `).join('');
-        }}
+        }};
 
         function escapeHtml(text) {{
             const div = document.createElement('div');
@@ -878,7 +1144,9 @@ fn generate_demo_html(doc_count: usize) -> String {
     </script>
 </body>
 </html>
-"#, doc_count)
+"#,
+        doc_count
+    )
 }
 
 /// Emit embedded WASM files to a directory.

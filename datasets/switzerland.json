@@ -1,0 +1,26 @@
+{
+  "id": 28,
+  "slug": "switzerland",
+  "title": "Switzerland",
+  "excerpt": "A landlocked country in the Alps",
+  "href": "/countries/switzerland",
+  "type": "page",
+  "category": "geography",
+  "text": "Switzerland is a landlocked country in central Europe, known for its Alps, neutrality, and high standard of living. Bern, the federal capital, is known for its bear monument and Old Town. Switzerland has a population of about 8.7 million and is famous for its watches, chocolate, cheese, and banks. The country is known for its direct democracy system with frequent referendums. Switzerland is not a member of the European Union but has bilateral agreements with EU countries. The country uses the Swiss Franc as currency. Switzerland is known for its precision manufacturing, pharmaceutical industry, and Alpine scenery. Swiss culture values punctuality, precision, and quality.",
+  "fieldBoundaries": [
+    {
+      "docId": 28,
+      "start": 0,
+      "end": 11,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 28,
+      "start": 12,
+      "end": 211,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

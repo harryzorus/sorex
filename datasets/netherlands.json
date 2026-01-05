@@ -1,0 +1,26 @@
+{
+  "id": 20,
+  "slug": "netherlands",
+  "title": "Netherlands",
+  "excerpt": "A country in Western Europe known for canals and cycling",
+  "href": "/countries/netherlands",
+  "type": "page",
+  "category": "geography",
+  "text": "The Netherlands is a country in Western Europe known for its flat landscape, extensive canal systems, and bicycle culture. Amsterdam, the capital, is famous for its canals, museums, and artistic heritage. The Netherlands has a population of about 17.5 million and is known for its engineering, agriculture, and trade. The country is famous for its tulips, cheese (Edam, Gouda), and wooden shoes. The Netherlands joined the European Union in 1957 (as the European Economic Community) and adopted the Euro in 2002. The country is below sea level in many areas and is protected by an extensive system of dikes and dams. Dutch design and innovation are world-renowned, from architecture to industrial design.",
+  "fieldBoundaries": [
+    {
+      "docId": 20,
+      "start": 0,
+      "end": 11,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 20,
+      "start": 12,
+      "end": 211,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

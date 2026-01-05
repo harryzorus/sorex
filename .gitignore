@@ -27,6 +27,9 @@ Cargo.lock
 # Benchmark node_modules
 /benches/node_modules/
 
+# Generated example data (regenerate with examples/generate-eu-data.sh)
+/examples/eu-countries/*.json
+
 # Coverage reports
 *.profraw
 *.profdata

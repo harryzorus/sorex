@@ -47,7 +47,11 @@ impl CharOffsets {
 
     /// Get the suffix starting at character offset `char_offset`
     fn suffix_at<'a>(&self, text: &'a str, char_offset: usize) -> &'a str {
-        let byte_start = self.char_to_byte.get(char_offset).copied().unwrap_or(text.len());
+        let byte_start = self
+            .char_to_byte
+            .get(char_offset)
+            .copied()
+            .unwrap_or(text.len());
         &text[byte_start..]
     }
 
@@ -90,11 +94,7 @@ pub fn suffix_at(texts: &[String], entry: &SuffixEntry) -> String {
 }
 
 /// Get the suffix using pre-computed character offsets (O(1) lookup).
-fn suffix_at_fast<'a>(
-    text: &'a str,
-    char_offsets: &CharOffsets,
-    char_offset: usize,
-) -> &'a str {
+fn suffix_at_fast<'a>(text: &'a str, char_offsets: &CharOffsets, char_offset: usize) -> &'a str {
     char_offsets.suffix_at(text, char_offset)
 }
 

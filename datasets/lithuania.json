@@ -1,0 +1,26 @@
+{
+  "id": 17,
+  "slug": "lithuania",
+  "title": "Lithuania",
+  "excerpt": "A Baltic country with a rich medieval history",
+  "href": "/countries/lithuania",
+  "type": "page",
+  "category": "geography",
+  "text": "Lithuania is a Baltic country with a rich medieval history located on the southeastern shore of the Baltic Sea. Vilnius, the capital, is known for its Baroque architecture, universities, and cultural institutions. Lithuania has a population of about 2.8 million and is known for its forests, rivers, and cultural traditions. The Old Town of Vilnius is a UNESCO World Heritage Site. Lithuania joined the European Union in 2004 and adopted the Euro in 2015. The country is known for its amber, traditional crafts, and book smuggling history. Lithuania has a strong cultural identity with traditional music, dance, and festivals.",
+  "fieldBoundaries": [
+    {
+      "docId": 17,
+      "start": 0,
+      "end": 9,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 17,
+      "start": 10,
+      "end": 209,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

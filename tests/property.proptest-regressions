@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc a2af39a93f11dd909dfcb1c388a5d83eeb669a87e74ed1b6ead5355110c57456 # shrinks to corpus = ["af"], query = "bf"
+cc 40e1beb8794a541c1f2fa2b2bf46e476f7fd926052e721292bab384a612a9233 # shrinks to corpus = ["if"]

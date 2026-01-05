@@ -1,0 +1,26 @@
+{
+  "id": 15,
+  "slug": "italy",
+  "title": "Italy",
+  "excerpt": "A Mediterranean country with a vast cultural heritage",
+  "href": "/countries/italy",
+  "type": "page",
+  "category": "geography",
+  "text": "Italy is a Mediterranean country in Southern Europe with a vast cultural heritage and history. Rome, the capital, is known as the Eternal City and was the capital of the Roman Empire. Italy has a population of about 57 million and is famous for its art, architecture, and cuisine. The Colosseum in Rome is one of the most recognizable landmarks of ancient Roman civilization. Italy joined the European Union in 1957 (as the European Economic Community) and adopted the Euro in 2002. Italy is known for its fashion industry, fine wines, and iconic cars like Ferrari and Lamborghini. The country consists of the mainland and numerous islands including Sicily and Sardinia.",
+  "fieldBoundaries": [
+    {
+      "docId": 15,
+      "start": 0,
+      "end": 5,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 15,
+      "start": 6,
+      "end": 205,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

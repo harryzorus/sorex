@@ -272,12 +272,10 @@ fn search_inverted_only(
     let mut scored_docs: Vec<ScoredDoc> = doc_scores
         .into_iter()
         .filter_map(|(doc_id, score)| {
-            docs.iter()
-                .find(|d| d.id == doc_id)
-                .map(|doc| ScoredDoc {
-                    doc: doc.clone(),
-                    score,
-                })
+            docs.iter().find(|d| d.id == doc_id).map(|doc| ScoredDoc {
+                doc: doc.clone(),
+                score,
+            })
         })
         .collect();
 

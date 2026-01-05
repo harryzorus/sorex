@@ -1,6 +1,6 @@
 # Algorithms
 
-A detailed look at the data structures and algorithms that make Sieve fast. Skip this if you just want to use the library—read it if you want to understand *why* things work.
+A detailed look at the data structures and algorithms that make Sieve fast. Skip this if you just want to use the library - read it if you want to understand *why* things work.
 
 ---
 
@@ -38,7 +38,7 @@ All suffixes sorted:
 
 ### Vocabulary Suffix Array
 
-Full-text suffix arrays are expensive—O(text_length) entries. Sieve builds suffix arrays over the *vocabulary* instead:
+Full-text suffix arrays are expensive - O(text_length) entries. Sieve builds suffix arrays over the *vocabulary* instead:
 
 ```
 Vocabulary: 10,000 unique terms (~50KB)
@@ -113,7 +113,7 @@ For each term in vocabulary:
   if distance ≤ 2: add to results
 ```
 
-This is O(vocabulary × query_len × avg_term_len)—slow for large vocabularies.
+This is O(vocabulary × query_len × avg_term_len) - slow for large vocabularies.
 
 ### The Insight
 
@@ -509,8 +509,8 @@ If you change the constants, the proofs fail. This prevents accidental ranking b
 
 ## Related Documentation
 
-- [Architecture](./architecture.md) — Binary format, system overview
-- [Benchmarks](./benchmarks.md) — Performance comparisons with other libraries
-- [Integration](./integration.md) — WASM setup, browser integration
-- [Verification](./verification.md) — Formal verification details
-- [Contributing](./contributing.md) — How to contribute safely
+- [Architecture](./architecture.md)  -  Binary format, system overview
+- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
+- [Integration](./integration.md)  -  WASM setup, browser integration
+- [Verification](./verification.md)  -  Formal verification details
+- [Contributing](./contributing.md)  -  How to contribute safely

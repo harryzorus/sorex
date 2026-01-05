@@ -28,6 +28,75 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface BlogPost {
+  id: number;
+  title: string;
+  excerpt: string;
+  content: string;
+  href: string;
+  tags: string[];
+}
+
+interface BlogSizeConfig {
+  posts: number;
+  wordsPerPost: number;
+  name: string;
+}
+
+interface BenchResult {
+  library: string;
+  opsPerSec: number;
+  meanMs: number;
+  samples: number;
+}
+
+interface QueryResult {
+  library: string;
+  opsPerSec: number;
+  meanUs: number;
+  resultsFound: number;
+}
+
+interface FuzzyResult {
+  library: string;
+  opsPerSec: number;
+  meanUs: number;
+  foundResults: number;
+}
+
+interface MemoryMeasurement {
+  library: string;
+  indexKB: number;
+  rawDataKB: number;
+}
+
+interface BenchmarkResults {
+  timestamp: string;
+  system: {
+    node: string;
+    platform: string;
+    arch: string;
+  };
+  indexBuilding: Record<string, BenchResult[]>;
+  searchQueries: Record<string, {
+    query: string;
+    description: string;
+    category: string;
+    results: QueryResult[];
+  }>;
+  fuzzySearch: Record<string, {
+    typo: string;
+    correct: string;
+    editDistance: number;
+    results: FuzzyResult[];
+  }>;
+  memoryUsage: Record<string, MemoryMeasurement[]>;
+}
+
+// ============================================================================
 // BLOG CORPUS SIMULATION
 // ============================================================================
 
@@ -66,7 +135,7 @@ const VOCABULARY = {
 };
 
 // Blog sizes to benchmark (skip large for faster runs)
-const BLOG_SIZES = {
+const BLOG_SIZES: Record<string, BlogSizeConfig> = {
   small: { posts: 20, wordsPerPost: 500, name: 'Small Blog (~20 posts)' },
   medium: { posts: 100, wordsPerPost: 1000, name: 'Medium Blog (~100 posts)' },
   // large: skipped - takes too long
@@ -93,7 +162,7 @@ const TITLE_TEMPLATES = [
   'Optimizing {thing} Performance',
 ];
 
-const TITLE_PARTS = {
+const TITLE_PARTS: Record<string, string[]> = {
   tech: ['Rust', 'TypeScript', 'Go', 'Python', 'React', 'Svelte', 'Docker', 'Kubernetes'],
   tech2: ['Node.js', 'Deno', 'Bun', 'Java', 'C++', 'Ruby', 'Elixir', 'Haskell'],
   concept: ['Async Programming', 'Type Safety', 'Memory Management', 'API Design', 'Testing', 'CI/CD', 'Microservices', 'Serverless'],
@@ -101,7 +170,7 @@ const TITLE_PARTS = {
   number: ['5', '7', '10', '12', '15'],
 };
 
-function generateTitle(index) {
+function generateTitle(index: number): string {
   const template = TITLE_TEMPLATES[index % TITLE_TEMPLATES.length];
   return template
     .replace('{tech}', TITLE_PARTS.tech[index % TITLE_PARTS.tech.length])
@@ -111,8 +180,8 @@ function generateTitle(index) {
     .replace('{number}', TITLE_PARTS.number[index % TITLE_PARTS.number.length]);
 }
 
-function generateContent(wordCount, seed) {
-  const words = [];
+function generateContent(wordCount: number, seed: number): string {
+  const words: string[] = [];
   const allWords = [...VOCABULARY.technical, ...VOCABULARY.general];
 
   for (let i = 0; i < wordCount; i++) {
@@ -126,7 +195,7 @@ function generateContent(wordCount, seed) {
   return words.join(' ');
 }
 
-function generateBlogCorpus(size) {
+function generateBlogCorpus(size: string): BlogPost[] {
   const { posts, wordsPerPost } = BLOG_SIZES[size];
   return Array.from({ length: posts }, (_, i) => ({
     id: i,
@@ -142,7 +211,7 @@ function generateBlogCorpus(size) {
 // BENCHMARK RESULTS COLLECTION
 // ============================================================================
 
-const results = {
+const results: BenchmarkResults = {
   timestamp: new Date().toISOString(),
   system: {
     node: process.version,
@@ -159,7 +228,7 @@ const results = {
 // INDEX BUILDING BENCHMARKS
 // ============================================================================
 
-async function benchIndexBuilding() {
+async function benchIndexBuilding(): Promise<void> {
   console.log('\n=== INDEX BUILDING BENCHMARKS ===\n');
 
   for (const [sizeName, sizeConfig] of Object.entries(BLOG_SIZES)) {
@@ -207,9 +276,9 @@ async function benchIndexBuilding() {
 
     results.indexBuilding[sizeName] = bench.tasks.map((t) => ({
       library: t.name,
-      opsPerSec: Math.round(t.result.hz),
-      meanMs: Number((t.result.mean * 1000).toFixed(3)),
-      samples: t.result.samples.length,
+      opsPerSec: Math.round(t.result!.hz),
+      meanMs: Number(t.result!.mean.toFixed(3)),  // tinybench mean is already in ms
+      samples: t.result!.samples.length,
     }));
 
     console.log(`\n${sizeConfig.name} (${sizeConfig.posts} posts x ${sizeConfig.wordsPerPost} words)`);
@@ -221,7 +290,7 @@ async function benchIndexBuilding() {
 // SEARCH QUERY BENCHMARKS
 // ============================================================================
 
-async function benchSearchQueries() {
+async function benchSearchQueries(): Promise<void> {
   console.log('\n=== SEARCH QUERY BENCHMARKS ===\n');
 
   // Use medium blog for query benchmarks
@@ -317,8 +386,8 @@ async function benchSearchQueries() {
         const resultCounts = [fuseResults.length, lunrResults.length, flexResults.length, miniResults.length];
         return {
           library: t.name,
-          opsPerSec: Math.round(t.result.hz),
-          meanUs: Number((t.result.mean * 1000000).toFixed(1)),
+          opsPerSec: Math.round(t.result!.hz),
+          meanUs: Number((t.result!.mean * 1000).toFixed(1)),  // mean is in ms
           resultsFound: resultCounts[i],
         };
       }),
@@ -333,7 +402,7 @@ async function benchSearchQueries() {
 // FUZZY SEARCH BENCHMARKS
 // ============================================================================
 
-async function benchFuzzySearch() {
+async function benchFuzzySearch(): Promise<void> {
   console.log('\n=== FUZZY SEARCH (TYPO TOLERANCE) ===\n');
 
   const docs = generateBlogCorpus('medium');
@@ -381,8 +450,8 @@ async function benchFuzzySearch() {
       editDistance,
       results: bench.tasks.map((t) => ({
         library: t.name,
-        opsPerSec: Math.round(t.result.hz),
-        meanUs: Number((t.result.mean * 1000000).toFixed(1)),
+        opsPerSec: Math.round(t.result!.hz),
+        meanUs: Number((t.result!.mean * 1000).toFixed(1)),  // mean is in ms
         foundResults: t.name === 'fuse.js' ? fuseResults.length : miniResults.length,
       })),
     };
@@ -396,8 +465,11 @@ async function benchFuzzySearch() {
 // MEMORY USAGE
 // ============================================================================
 
-async function benchMemoryUsage() {
+async function benchMemoryUsage(): Promise<void> {
   console.log('\n=== MEMORY USAGE ===\n');
+
+  // Use Bun.gc() if available, otherwise try global.gc
+  const gc = typeof Bun !== 'undefined' ? Bun.gc : (global as unknown as { gc?: () => void }).gc;
 
   for (const [sizeName, sizeConfig] of Object.entries(BLOG_SIZES)) {
     const docs = generateBlogCorpus(sizeName);
@@ -405,13 +477,13 @@ async function benchMemoryUsage() {
     // Estimate raw data size
     const rawSize = JSON.stringify(docs).length;
 
-    const measurements = [];
+    const measurements: MemoryMeasurement[] = [];
 
     // Fuse.js
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const fuseBefore = process.memoryUsage().heapUsed;
     const fuse = new Fuse(docs, { keys: ['title', 'excerpt', 'content'] });
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const fuseAfter = process.memoryUsage().heapUsed;
     measurements.push({
       library: 'fuse.js',
@@ -420,7 +492,7 @@ async function benchMemoryUsage() {
     });
 
     // Lunr.js
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const lunrBefore = process.memoryUsage().heapUsed;
     const lunrIdx = lunr(function () {
       this.field('title');
@@ -428,7 +500,7 @@ async function benchMemoryUsage() {
       this.field('content');
       docs.forEach((doc) => this.add(doc));
     });
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const lunrAfter = process.memoryUsage().heapUsed;
     measurements.push({
       library: 'lunr.js',
@@ -437,13 +509,13 @@ async function benchMemoryUsage() {
     });
 
     // FlexSearch
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const flexBefore = process.memoryUsage().heapUsed;
     const flex = new FlexSearch.Document({
       document: { id: 'id', index: ['title', 'excerpt', 'content'] },
     });
     docs.forEach((doc) => flex.add(doc));
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const flexAfter = process.memoryUsage().heapUsed;
     measurements.push({
       library: 'flexsearch',
@@ -452,11 +524,11 @@ async function benchMemoryUsage() {
     });
 
     // MiniSearch
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const miniBefore = process.memoryUsage().heapUsed;
     const mini = new MiniSearch({ fields: ['title', 'excerpt', 'content'] });
     mini.addAll(docs);
-    if (global.gc) global.gc();
+    if (gc) gc(true);
     const miniAfter = process.memoryUsage().heapUsed;
     measurements.push({
       library: 'minisearch',
@@ -478,7 +550,7 @@ async function benchMemoryUsage() {
 // RESULTS OUTPUT
 // ============================================================================
 
-function outputResults() {
+function outputResults(): void {
   const outputPath = join(__dirname, 'results-js.json');
   writeFileSync(outputPath, JSON.stringify(results, null, 2));
   console.log(`\nResults saved to: ${outputPath}`);
@@ -490,8 +562,8 @@ function outputResults() {
   console.log(`Markdown summary: ${mdPath}`);
 }
 
-function generateMarkdownSummary() {
-  const lines = [
+function generateMarkdownSummary(): string {
+  const lines: string[] = [
     '# Search Library Benchmark Results',
     '',
     `Generated: ${results.timestamp}`,
@@ -557,7 +629,7 @@ function generateMarkdownSummary() {
 // MAIN
 // ============================================================================
 
-async function main() {
+async function main(): Promise<void> {
   console.log('╔══════════════════════════════════════════════════════════════╗');
   console.log('║        Blog Search Library Benchmarks                        ║');
   console.log('╠══════════════════════════════════════════════════════════════╣');

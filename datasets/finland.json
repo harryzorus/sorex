@@ -1,0 +1,26 @@
+{
+  "id": 8,
+  "slug": "finland",
+  "title": "Finland",
+  "excerpt": "A Nordic country known for lakes and forests",
+  "href": "/countries/finland",
+  "type": "page",
+  "category": "geography",
+  "text": "Finland is a Nordic country in Northern Europe known for its thousands of lakes and vast forests. Helsinki, the capital, is located on the Gulf of Finland and is known for its modern architecture and design. Finland has a population of about 5.5 million and is famous for its education system, Nokia technology, and music industry. The country is known for the Northern Lights (Aurora Borealis) and winter sports. Finland joined the European Union in 1995 and adopted the Euro in 1999. Finland recently joined NATO in 2023. The country is known for its sauna culture with more saunas than any other country in the world.",
+  "fieldBoundaries": [
+    {
+      "docId": 8,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 8,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

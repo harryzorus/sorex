@@ -47,6 +47,7 @@
 
 // Module declarations
 pub mod binary;
+pub mod build;
 pub mod contracts;
 pub mod docs_compression;
 pub mod fst_index;
@@ -67,16 +68,18 @@ pub mod verified;
 mod wasm;
 
 // Re-exports for public API
+pub use fst_index::{build_fst_index, FstIndex};
 pub use hybrid::{
     build_hybrid_index, build_hybrid_index_parallel, search_exact, search_expanded, search_fuzzy,
     search_hybrid,
 };
 pub use index::{build_index, is_suffix_array_sorted, suffix_at};
 pub use inverted::{
-    build_inverted_index, build_inverted_index_parallel, build_unified_index, select_index_mode,
-    IndexThresholds,
+    build_inverted_index, build_inverted_index_parallel, build_unified_index, is_stop_word,
+    select_index_mode, IndexThresholds,
 };
 pub use levenshtein::levenshtein_within;
+pub use levenshtein_dfa::{ParametricDFA, QueryMatcher, MAX_K, NUM_CHAR_CLASSES};
 pub use scoring::{field_type_score, get_field_type};
 pub use search::{search, search_unified};
 pub use types::{
@@ -89,8 +92,6 @@ pub use union::{
     UnionIndexInput,
 };
 pub use utils::normalize;
-pub use fst_index::{build_fst_index, FstIndex};
-pub use levenshtein_dfa::{ParametricDFA, QueryMatcher, MAX_K, NUM_CHAR_CLASSES};
 pub use verified::{
     InvariantError, SortedSuffixArray, ValidatedInvertedIndex, ValidatedPosting,
     ValidatedPostingList, ValidatedSuffixEntry, VerificationReport, WellFormedIndex,
@@ -182,7 +183,9 @@ mod tests {
         build_index(docs, texts, field_boundaries)
     }
 
-    fn build_test_docs_with_fields(docs_data: &[(String, Vec<(String, FieldType)>)]) -> SearchIndex {
+    fn build_test_docs_with_fields(
+        docs_data: &[(String, Vec<(String, FieldType)>)],
+    ) -> SearchIndex {
         let docs: Vec<SearchDoc> = docs_data
             .iter()
             .enumerate()
@@ -299,7 +302,10 @@ mod tests {
                 vec![
                     ("Rust Tutorial".to_string(), FieldType::Title),
                     ("Getting Started".to_string(), FieldType::Heading),
-                    ("This tutorial covers basics".to_string(), FieldType::Content),
+                    (
+                        "This tutorial covers basics".to_string(),
+                        FieldType::Content,
+                    ),
                 ],
             ),
         ];

@@ -5,12 +5,15 @@
 //! - `SieveSearcher`: Direct binary search (loads .sieve file)
 
 use crate::binary::{LoadedLayer, PostingEntry};
-use crate::types::{HybridIndex, InvertedIndex, Posting, PostingList, SearchDoc, SearchResult, SearchSource, VocabSuffixEntry};
 use crate::hybrid::search_hybrid;
+use crate::types::{
+    HybridIndex, InvertedIndex, Posting, PostingList, SearchDoc, SearchResult, SearchSource,
+    VocabSuffixEntry,
+};
+use serde::Serialize;
+use serde_wasm_bindgen::{from_value, to_value};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
-use serde_wasm_bindgen::{from_value, to_value};
-use serde::Serialize;
 
 /// Search result output for TypeScript consumption.
 /// Matches the SearchResult interface in SearchState.svelte.ts
@@ -68,9 +71,15 @@ pub struct BoostOptions {
     pub content: f64,
 }
 
-fn default_title_boost() -> f64 { TITLE_MULTIPLIER }
-fn default_heading_boost() -> f64 { HEADING_MULTIPLIER }
-fn default_content_boost() -> f64 { CONTENT_MULTIPLIER }
+fn default_title_boost() -> f64 {
+    TITLE_MULTIPLIER
+}
+fn default_heading_boost() -> f64 {
+    HEADING_MULTIPLIER
+}
+fn default_content_boost() -> f64 {
+    CONTENT_MULTIPLIER
+}
 
 // CompactLayer JSON format removed - binary-only now (no base64 dependency in WASM)
 
@@ -103,8 +112,7 @@ impl SieveProgressiveIndex {
     /// Layers must be loaded separately via `load_layer()`.
     #[wasm_bindgen(constructor)]
     pub fn new(manifest: JsValue) -> Result<SieveProgressiveIndex, JsValue> {
-        let docs: Vec<SearchDoc> = from_value(manifest)
-            .map_err(|e| e.to_string())?;
+        let docs: Vec<SearchDoc> = from_value(manifest).map_err(|e| e.to_string())?;
         Ok(SieveProgressiveIndex {
             docs,
             titles: None,
@@ -124,7 +132,11 @@ impl SieveProgressiveIndex {
     ///
     /// This method is ~3-5x faster to decode than JSON format.
     #[wasm_bindgen]
-    pub fn load_layer_binary(&mut self, layer_name: &str, layer_bytes: &[u8]) -> Result<(), JsValue> {
+    pub fn load_layer_binary(
+        &mut self,
+        layer_name: &str,
+        layer_bytes: &[u8],
+    ) -> Result<(), JsValue> {
         use crate::types::FieldType;
 
         let field_type = match layer_name {
@@ -240,7 +252,11 @@ impl SieveProgressiveIndex {
 
         // Sort by score descending
         let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         results.truncate(options.limit);
@@ -298,7 +314,11 @@ impl SieveProgressiveIndex {
         }
 
         let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(options.limit);
 
         to_value(&results).map_err(|e| e.to_string().into())
@@ -311,7 +331,12 @@ impl SieveProgressiveIndex {
     ///
     /// Use this for the second phase of streaming search.
     #[wasm_bindgen]
-    pub fn search_expanded(&self, query: &str, exclude_ids: JsValue, options: Option<JsValue>) -> Result<JsValue, JsValue> {
+    pub fn search_expanded(
+        &self,
+        query: &str,
+        exclude_ids: JsValue,
+        options: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
         let options: SearchOptions = match options {
             Some(opts) => from_value(opts).unwrap_or_default(),
             None => SearchOptions::default(),
@@ -347,7 +372,11 @@ impl SieveProgressiveIndex {
         }
 
         let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(options.limit);
 
         to_value(&results).map_err(|e| e.to_string().into())
@@ -369,7 +398,9 @@ impl SieveProgressiveIndex {
         let collect_from_layer = |index: &HybridIndex, freqs: &mut HashMap<String, usize>| {
             for term in &index.vocabulary {
                 if term.starts_with(&partial_lower) {
-                    let freq = index.inverted_index.terms
+                    let freq = index
+                        .inverted_index
+                        .terms
                         .get(term)
                         .map(|pl| pl.doc_freq)
                         .unwrap_or(0);
@@ -390,12 +421,11 @@ impl SieveProgressiveIndex {
 
         // Sort by frequency descending, then alphabetically
         let mut suggestions: Vec<(String, usize)> = term_freqs.into_iter().collect();
-        suggestions.sort_by(|a, b| {
-            b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0))
-        });
+        suggestions.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         // Take top N and extract just the terms
-        let result: Vec<String> = suggestions.into_iter()
+        let result: Vec<String> = suggestions
+            .into_iter()
             .take(limit)
             .map(|(term, _)| term)
             .collect();
@@ -416,7 +446,7 @@ fn update_best_result(
     // when the TypeScript build pipeline sets them
     let section_id = match source {
         SearchSource::Title => None, // Title matches link to top of page
-        _ => None, // Heading/Content section_id to be added via field boundaries
+        _ => None,                   // Heading/Content section_id to be added via field boundaries
     };
     results
         .entry(doc_id)
@@ -427,7 +457,12 @@ fn update_best_result(
                 existing.section_id = section_id.clone();
             }
         })
-        .or_insert(SearchResult { doc, source, score, section_id });
+        .or_insert(SearchResult {
+            doc,
+            source,
+            score,
+            section_id,
+        });
 }
 
 /// Convert a LoadedLayer from binary format to HybridIndex.
@@ -440,7 +475,8 @@ fn loaded_layer_to_hybrid_index(
     let vocabulary = layer.vocabulary.clone();
 
     // Build vocab suffix array from binary format
-    let vocab_suffix_array: Vec<VocabSuffixEntry> = layer.suffix_array
+    let vocab_suffix_array: Vec<VocabSuffixEntry> = layer
+        .suffix_array
         .iter()
         .map(|&(term_idx, offset)| VocabSuffixEntry {
             term_idx: term_idx as usize,
@@ -459,7 +495,10 @@ fn loaded_layer_to_hybrid_index(
                     let section_id = if entry.section_idx == 0 {
                         None
                     } else {
-                        layer.section_table.get((entry.section_idx - 1) as usize).cloned()
+                        layer
+                            .section_table
+                            .get((entry.section_idx - 1) as usize)
+                            .cloned()
                     };
                     Posting {
                         doc_id: entry.doc_id as usize,
@@ -470,10 +509,13 @@ fn loaded_layer_to_hybrid_index(
                 })
                 .collect();
 
-            terms.insert(term.clone(), PostingList {
-                doc_freq: postings.len(),
-                postings,
-            });
+            terms.insert(
+                term.clone(),
+                PostingList {
+                    doc_freq: postings.len(),
+                    postings,
+                },
+            );
         }
     }
 
@@ -554,8 +596,8 @@ impl SieveSearcher {
     /// Since v6, section_ids are stored per-posting for deep linking to specific sections.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> Result<SieveSearcher, JsValue> {
-        let layer = LoadedLayer::from_bytes(bytes)
-            .map_err(|e| format!("Failed to parse binary: {}", e))?;
+        let layer =
+            LoadedLayer::from_bytes(bytes).map_err(|e| format!("Failed to parse binary: {}", e))?;
 
         // Load precomputed Levenshtein DFA from embedded bytes
         let lev_dfa = if !layer.lev_dfa_bytes.is_empty() {
@@ -565,7 +607,8 @@ impl SieveSearcher {
         };
 
         // Convert embedded DocMeta to SearchDoc
-        let docs: Vec<SearchDoc> = layer.docs
+        let docs: Vec<SearchDoc> = layer
+            .docs
             .iter()
             .enumerate()
             .map(|(id, doc)| SearchDoc {
@@ -628,9 +671,7 @@ impl SieveSearcher {
             None // 0 means no section_id (title match)
         } else {
             // 1-indexed into section_table
-            self.section_table
-                .get((section_idx - 1) as usize)
-                .cloned()
+            self.section_table.get((section_idx - 1) as usize).cloned()
         }
     }
 
@@ -655,12 +696,14 @@ impl SieveSearcher {
                     if let Some(doc) = self.docs.get(entry.doc_id as usize) {
                         let score = 100.0; // Exact match = highest score
                         let section_id = self.resolve_section_id(entry.section_idx);
-                        results_by_doc.entry(entry.doc_id as usize).or_insert(SearchResult {
-                            doc: doc.clone(),
-                            source: SearchSource::Title, // Placeholder
-                            score,
-                            section_id,
-                        });
+                        results_by_doc
+                            .entry(entry.doc_id as usize)
+                            .or_insert(SearchResult {
+                                doc: doc.clone(),
+                                source: SearchSource::Title, // Placeholder
+                                score,
+                                section_id,
+                            });
                     }
                 }
             }
@@ -674,12 +717,14 @@ impl SieveSearcher {
                     if let Some(doc) = self.docs.get(entry.doc_id as usize) {
                         let score = 50.0; // Prefix match
                         let section_id = self.resolve_section_id(entry.section_idx);
-                        results_by_doc.entry(entry.doc_id as usize).or_insert(SearchResult {
-                            doc: doc.clone(),
-                            source: SearchSource::Title,
-                            score,
-                            section_id,
-                        });
+                        results_by_doc
+                            .entry(entry.doc_id as usize)
+                            .or_insert(SearchResult {
+                                doc: doc.clone(),
+                                source: SearchSource::Title,
+                                score,
+                                section_id,
+                            });
                     }
                 }
             }
@@ -688,7 +733,10 @@ impl SieveSearcher {
         // Tier 3: Fuzzy match (FST + Levenshtein DFA, zero Levenshtein computation)
         if results_by_doc.len() < limit {
             let fuzzy_matches = self.fuzzy_search(&query_lower, 2);
-            for FuzzyMatch { term_idx, distance, .. } in fuzzy_matches {
+            for FuzzyMatch {
+                term_idx, distance, ..
+            } in fuzzy_matches
+            {
                 if let Some(postings) = self.postings.get(term_idx) {
                     for entry in postings {
                         if let Some(doc) = self.docs.get(entry.doc_id as usize) {
@@ -700,12 +748,14 @@ impl SieveSearcher {
                                 _ => 5.0,
                             };
                             let section_id = self.resolve_section_id(entry.section_idx);
-                            results_by_doc.entry(entry.doc_id as usize).or_insert(SearchResult {
-                                doc: doc.clone(),
-                                source: SearchSource::Title,
-                                score,
-                                section_id,
-                            });
+                            results_by_doc
+                                .entry(entry.doc_id as usize)
+                                .or_insert(SearchResult {
+                                    doc: doc.clone(),
+                                    source: SearchSource::Title,
+                                    score,
+                                    section_id,
+                                });
                         }
                     }
                 }
@@ -714,7 +764,11 @@ impl SieveSearcher {
 
         // Sort by score descending
         let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(limit);
 
         // Convert to SearchResultOutput with section_id for deep linking
@@ -799,5 +853,177 @@ impl SieveSearcher {
         // Sort by distance ascending
         matches.sort_by_key(|m| m.distance);
         matches
+    }
+
+    // =========================================================================
+    // STREAMING SEARCH API
+    // For progressive UX: show exact matches immediately, then prefix, then fuzzy
+    // =========================================================================
+
+    /// Tier 1: Exact word match only (O(1) inverted index lookup).
+    /// Returns results immediately for fast first-result display.
+    #[wasm_bindgen]
+    pub fn search_tier1_exact(&self, query: &str, limit: Option<usize>) -> Result<JsValue, JsValue> {
+        let limit = limit.unwrap_or(10);
+        let query_lower = query.to_lowercase();
+
+        let mut results_by_doc: HashMap<usize, SearchResult> = HashMap::new();
+
+        // Tier 1: Exact match only
+        if let Some(term_idx) = self.vocabulary.iter().position(|t| t == &query_lower) {
+            if let Some(postings) = self.postings.get(term_idx) {
+                for entry in postings {
+                    if let Some(doc) = self.docs.get(entry.doc_id as usize) {
+                        let score = 100.0;
+                        let section_id = self.resolve_section_id(entry.section_idx);
+                        results_by_doc
+                            .entry(entry.doc_id as usize)
+                            .or_insert(SearchResult {
+                                doc: doc.clone(),
+                                source: SearchSource::Title,
+                                score,
+                                section_id,
+                            });
+                    }
+                }
+            }
+        }
+
+        let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+
+        let output: Vec<SearchResultOutput> = results
+            .into_iter()
+            .map(|r| SearchResultOutput {
+                href: r.doc.href,
+                title: r.doc.title,
+                excerpt: r.doc.excerpt,
+                section_id: r.section_id,
+            })
+            .collect();
+
+        to_value(&output).map_err(|e| e.to_string().into())
+    }
+
+    /// Tier 2: Prefix match only (O(log k) binary search).
+    /// Pass doc IDs from tier1 as exclude_ids to avoid duplicates.
+    #[wasm_bindgen]
+    pub fn search_tier2_prefix(
+        &self,
+        query: &str,
+        exclude_ids: JsValue,
+        limit: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
+        let limit = limit.unwrap_or(10);
+        let query_lower = query.to_lowercase();
+        let exclude: std::collections::HashSet<usize> =
+            from_value::<Vec<usize>>(exclude_ids).unwrap_or_default().into_iter().collect();
+
+        let mut results_by_doc: HashMap<usize, SearchResult> = HashMap::new();
+
+        // Tier 2: Prefix match
+        let prefix_matches = self.prefix_search(&query_lower);
+        for term_idx in prefix_matches {
+            if let Some(postings) = self.postings.get(term_idx) {
+                for entry in postings {
+                    let doc_id = entry.doc_id as usize;
+                    if exclude.contains(&doc_id) {
+                        continue;
+                    }
+                    if let Some(doc) = self.docs.get(doc_id) {
+                        let score = 50.0;
+                        let section_id = self.resolve_section_id(entry.section_idx);
+                        results_by_doc
+                            .entry(doc_id)
+                            .or_insert(SearchResult {
+                                doc: doc.clone(),
+                                source: SearchSource::Title,
+                                score,
+                                section_id,
+                            });
+                    }
+                }
+            }
+        }
+
+        let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+
+        let output: Vec<SearchResultOutput> = results
+            .into_iter()
+            .map(|r| SearchResultOutput {
+                href: r.doc.href,
+                title: r.doc.title,
+                excerpt: r.doc.excerpt,
+                section_id: r.section_id,
+            })
+            .collect();
+
+        to_value(&output).map_err(|e| e.to_string().into())
+    }
+
+    /// Tier 3: Fuzzy match only (O(vocabulary) via Levenshtein DFA).
+    /// Pass doc IDs from tier1+tier2 as exclude_ids to avoid duplicates.
+    #[wasm_bindgen]
+    pub fn search_tier3_fuzzy(
+        &self,
+        query: &str,
+        exclude_ids: JsValue,
+        limit: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
+        let limit = limit.unwrap_or(10);
+        let query_lower = query.to_lowercase();
+        let exclude: std::collections::HashSet<usize> =
+            from_value::<Vec<usize>>(exclude_ids).unwrap_or_default().into_iter().collect();
+
+        let mut results_by_doc: HashMap<usize, SearchResult> = HashMap::new();
+
+        // Tier 3: Fuzzy match
+        let fuzzy_matches = self.fuzzy_search(&query_lower, 2);
+        for FuzzyMatch { term_idx, distance, .. } in fuzzy_matches {
+            if let Some(postings) = self.postings.get(term_idx) {
+                for entry in postings {
+                    let doc_id = entry.doc_id as usize;
+                    if exclude.contains(&doc_id) {
+                        continue;
+                    }
+                    if let Some(doc) = self.docs.get(doc_id) {
+                        let score = match distance {
+                            0 => 100.0,
+                            1 => 30.0,
+                            2 => 15.0,
+                            _ => 5.0,
+                        };
+                        let section_id = self.resolve_section_id(entry.section_idx);
+                        results_by_doc
+                            .entry(doc_id)
+                            .or_insert(SearchResult {
+                                doc: doc.clone(),
+                                source: SearchSource::Title,
+                                score,
+                                section_id,
+                            });
+                    }
+                }
+            }
+        }
+
+        let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+
+        let output: Vec<SearchResultOutput> = results
+            .into_iter()
+            .map(|r| SearchResultOutput {
+                href: r.doc.href,
+                title: r.doc.title,
+                excerpt: r.doc.excerpt,
+                section_id: r.section_id,
+            })
+            .collect();
+
+        to_value(&output).map_err(|e| e.to_string().into())
     }
 }

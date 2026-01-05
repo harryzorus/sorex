@@ -39,12 +39,14 @@ If this fails, **stop and fix it first**.
 ## Modifying Code
 
 ### Safe Changes (Low Risk)
+
 - Adding new tests
 - Improving error messages
 - Adding logging/metrics
 - Documentation changes
 
 ### Dangerous Changes (Require Verification)
+
 - ANY change to `types.rs` → Update Lean `Types.lean`
 - ANY change to `scoring.rs` → Verify `Scoring.lean` theorems still hold
 - ANY change to `index.rs` → Run full test suite + contract checks
@@ -52,6 +54,7 @@ If this fails, **stop and fix it first**.
 - ANY change to `levenshtein.rs` → Check edit distance bounds
 
 ### Forbidden Changes (Will Break Everything)
+
 - Changing scoring constants without Lean proof update
 - Bypassing `ValidatedSuffixEntry::new()` validation
 - Creating `SuffixEntry` without bounds checking
@@ -61,59 +64,73 @@ If this fails, **stop and fix it first**.
 ## Invariants You Must Preserve
 
 ### 1. Suffix Entry Well-Formedness
+
 ```
 ∀ entry ∈ suffix_array:
   entry.doc_id < texts.len() ∧
   entry.offset < texts[entry.doc_id].len()
 ```
+
 **Enforced by**: `ValidatedSuffixEntry`, `check_suffix_entry_valid`
 **Note**: Strict inequality (`<`) because suffix arrays index non-empty suffixes
 
 ### 2. Suffix Array Sortedness
+
 ```
 ∀ i < j:
   suffix_at(suffix_array[i]) ≤ suffix_at(suffix_array[j])
 ```
+
 **Enforced by**: `SortedSuffixArray`, `check_suffix_array_sorted`
 **Why it matters**: Binary search correctness depends on this
 
 ### 3. Field Type Dominance
+
 ```
 Title_score - max_boost > Heading_score + max_boost
 Heading_score - max_boost > Content_score + max_boost
 ```
+
 **Enforced by**: `check_field_hierarchy`, Lean `title_beats_heading` theorem
 **Why it matters**: Search ranking must respect field importance
 
 ### 4. LCP Correctness
+
 ```
 lcp[0] = 0
 ∀ i > 0: lcp[i] = common_prefix_len(suffix_array[i-1], suffix_array[i])
 ```
+
 **Enforced by**: `check_lcp_correct`
 
 ### 5. Index Well-Formedness
+
 ```
 docs.len() = texts.len()
 lcp.len() = suffix_array.len()
 ∀ boundary: boundary.doc_id < texts.len()
 ```
+
 **Enforced by**: `WellFormedIndex`, `check_index_well_formed`
 
 ### 6. Section Non-Overlap
+
 ```
 ∀ s1 s2 ∈ sections, s1 ≠ s2:
   s1.end_offset ≤ s2.start_offset ∨
   s2.end_offset ≤ s1.start_offset
 ```
+
 **Enforced by**: `check_sections_non_overlapping`, Lean `offset_maps_to_unique_section`
 **Why it matters**: Each text offset must map to exactly one section for correct deep linking
 
 ### 7. Section ID Validity
+
 ```
 ∀ section_id:
   section_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 ```
+
 **Enforced by**: Property test `prop_section_ids_valid`
 **Why it matters**: Section IDs become URL anchors; invalid chars break navigation
 
@@ -142,21 +159,25 @@ cargo +nightly fuzz run heading_id_validation -- -max_total_time=60
 ## File-by-File Guide
 
 ### `types.rs`
+
 - **Lean spec**: `Types.lean`
 - **Can modify**: Field names, add new fields
 - **Cannot modify**: Core struct shapes without Lean update
 
 ### `index.rs`
+
 - **Lean spec**: `SuffixArray.lean`
 - **Critical function**: `build_index` - creates suffix array
 - **INVARIANT**: Output must be sorted and complete
 
 ### `search.rs`
+
 - **Lean spec**: `BinarySearch.lean`
 - **Critical**: Binary search assumes sorted input
 - **INVARIANT**: Results must contain all prefix matches
 
 ### `scoring.rs`
+
 - **Lean spec**: `Scoring.lean`
 - **CONSTANTS** (DO NOT CHANGE without updating Lean):
   - `Title = 100.0`
@@ -165,25 +186,30 @@ cargo +nightly fuzz run heading_id_validation -- -max_total_time=60
   - `MaxBoost = 0.5`
 
 ### `levenshtein.rs`
+
 - **Lean spec**: `Levenshtein.lean`
 - **INVARIANT**: `|len(a) - len(b)| ≤ distance(a, b)`
 
 ### `verified.rs`
+
 - Type-level invariant wrappers
 - **DO NOT BYPASS** - these prevent bugs at compile time
 
 ### `contracts.rs`
+
 - Runtime debug assertions
 - **DO NOT REMOVE** - these catch bugs in debug builds
 
 ## Common Mistakes
 
 ### ❌ Wrong: Creating unchecked entries
+
 ```rust
 let entry = SuffixEntry { doc_id: 5, offset: 0 }; // NO!
 ```
 
 ### ✅ Right: Use validated wrapper
+
 ```rust
 let entry = ValidatedSuffixEntry::new(
     SuffixEntry { doc_id: 0, offset: 2 },
@@ -192,21 +218,25 @@ let entry = ValidatedSuffixEntry::new(
 ```
 
 ### ❌ Wrong: Modifying suffix array after creation
+
 ```rust
 index.suffix_array.push(new_entry); // NO! Breaks sortedness
 ```
 
 ### ✅ Right: Rebuild the entire index
+
 ```rust
 let index = build_index(docs, texts, boundaries); // Maintains invariants
 ```
 
 ### ❌ Wrong: Changing scoring without proofs
+
 ```rust
 FieldType::Title => 50.0,  // NO! Breaks field_type_dominance
 ```
 
 ### ✅ Right: Update Lean first, then Rust
+
 ```lean
 -- In Scoring.lean, verify: 50 - 5 > 10 + 5
 theorem title_beats_heading : ... := by native_decide
@@ -359,6 +389,7 @@ Step 6: VERIFY - Full verification pass
 ```
 
 **Why this order matters:**
+
 - Proofs catch logical errors before you write any code
 - Property tests ensure implementation matches specification
 - Fuzz tests find edge cases humans miss
@@ -366,12 +397,12 @@ Step 6: VERIFY - Full verification pass
 
 ### Interpreting Verification Failures
 
-| Failure | Meaning | Action |
-|---------|---------|--------|
-| `lake build` fails | Lean proof broken | Your change violated a mathematical property |
-| Contract panic | Runtime invariant violated | Your code produces invalid data |
-| Property test fails | Random input found a bug | Check edge cases in your implementation |
-| Constant alignment fails | Rust/Lean drift | Update the lagging side to match |
+| Failure                  | Meaning                    | Action                                       |
+| ------------------------ | -------------------------- | -------------------------------------------- |
+| `lake build` fails       | Lean proof broken          | Your change violated a mathematical property |
+| Contract panic           | Runtime invariant violated | Your code produces invalid data              |
+| Property test fails      | Random input found a bug   | Check edge cases in your implementation      |
+| Constant alignment fails | Rust/Lean drift            | Update the lagging side to match             |
 
 ### Lean Spec Quick Reference
 
@@ -403,80 +434,158 @@ Stop and check Lean specs if you see yourself:
 - Adding new match arms to scoring
 - Bypassing validation wrappers "just this once"
 
-## WASM-to-Frontend Integration
+## Build System (CLI & Multi-Index)
 
-Sieve is consumed by the frontend via WASM. **Verifying the Rust/WASM layer is not enough**—you must trace data flow through ALL frontend code paths.
+### `sieve build` Command
 
-### The Data Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              SIEVE BOUNDARY                                  │
-│  types.rs → binary.rs → wasm.rs → sieve.js (generated) → sieve.d.ts        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FRONTEND BOUNDARY                                  │
-│  SearchIndexState.svelte.ts → SearchState.svelte.ts → SearchModal.svelte    │
-│                                      ↓                                       │
-│                           SearchResultItem.svelte                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Integration Checklist
-
-When adding a new field to search results (like `section_id`):
-
-```
-□ 1. RUST: Add field to types.rs struct
-□ 2. RUST: Populate field in inverted.rs/index.rs
-□ 3. RUST: Encode field in binary.rs
-□ 4. RUST: Expose field in wasm.rs SearchResultOutput
-□ 5. WASM: Rebuild with wasm-pack build --target web --release
-□ 6. TS TYPES: Update SearchResult interface in SearchState.svelte.ts
-□ 7. TS HELPER: Create/update helper function (e.g., buildResultUrl)
-□ 8. SVELTE: Update ALL components that consume search results
-     - SearchResultItem.svelte (click handler)
-     - SearchModal.svelte (keyboard Enter handler)  ← EASY TO MISS
-     - Any other consumers
-□ 9. E2E TESTS: Test ALL interaction methods (click AND keyboard AND touch)
-□ 10. VERIFY: grep for raw field access, ensure helper is used everywhere
-```
-
-### Post-WASM Verification
-
-After any WASM change that affects the JS interface:
+The new `build` subcommand reads per-document JSON files and constructs search indexes.
 
 ```bash
-# 1. Rebuild WASM
-wasm-pack build --target web --release --features wasm
-
-# 2. Test WASM directly in Node
-node --input-type=module -e "
-import initWasm, { SieveSearcher } from './pkg/sieve.js';
-import { readFileSync } from 'fs';
-const wasmBytes = readFileSync('./pkg/sieve_bg.wasm');
-await initWasm(wasmBytes);
-const indexBytes = readFileSync('/path/to/index.sift');
-const searcher = new SieveSearcher(new Uint8Array(indexBytes));
-console.log(JSON.stringify(searcher.search('test', 3), null, 2));
-"
-
-# 3. Run all tests
-cargo test
+sieve build --input <dir> --output <dir> [--indexes <names>] [--emit-wasm]
 ```
 
-### Common Integration Bugs
+**Flags:**
 
-| Bug Pattern | How It Manifests | Prevention |
-|-------------|------------------|------------|
-| Helper not used everywhere | Click works, keyboard doesn't | grep for raw field access |
-| Field missing from TS interface | TypeScript error or undefined | Check sieve.d.ts matches SearchResult |
-| WASM not rebuilt | Old behavior persists | Always rebuild after wasm.rs changes |
-| E2E tests incomplete | Works in dev, fails in production | Test click AND keyboard AND Enter |
+- `--input <dir>`: Directory containing `manifest.json` and per-document JSON files
+- `--output <dir>`: Output directory for `.sieve` files and optional WASM
+- `--indexes <names>`: Comma-separated list of indexes to build (default: all in manifest)
+- `--emit-wasm`: Also emit WASM/JS/TypeScript files alongside indexes
+
+### Input Format
+
+```
+input/
+├── manifest.json                    # Index definitions & document list
+│   {
+│     "version": 1,
+│     "documents": ["0.json", "1.json", ...],
+│     "indexes": {
+│       "all": {"include": "*"},
+│       "titles": {"include": "*", "fields": ["title"]},
+│       "engineering": {"include": {"category": "engineering"}}
+│     }
+│   }
+├── 0.json                           # Per-document JSON files
+├── 1.json
+└── ...
+```
+
+**Per-document JSON structure:**
+
+```json
+{
+  "id": 0,
+  "slug": "my-post",
+  "title": "Post Title",
+  "excerpt": "Summary",
+  "href": "/posts/2026/01/my-post",
+  "type": "post",
+  "category": "engineering",
+  "text": "normalized searchable content",
+  "fieldBoundaries": [
+    { "start": 0, "end": 10, "fieldType": "title", "sectionId": null },
+    { "start": 11, "end": 50, "fieldType": "content", "sectionId": "intro" }
+  ]
+}
+```
+
+### Output Format
+
+```
+output/
+├── index-{hash}.sieve               # Binary search index (v6 format)
+├── manifest.json                    # Output metadata
+├── sieve.js                         # (if --emit-wasm)
+├── sieve.d.ts
+├── sieve_bg.wasm
+└── sieve_bg.wasm.d.ts
+```
+
+**Output manifest.json:**
+
+```json
+{
+  "version": 1,
+  "indexes": {
+    "all": {
+      "file": "index-a1b2c3d4.sieve",
+      "docCount": 42,
+      "termCount": 1847
+    }
+  },
+  "wasm": {
+    "js": "sieve.js",
+    "wasm": "sieve_bg.wasm",
+    "types": "sieve.d.ts"
+  }
+}
+```
+
+### Parallel Architecture
+
+1. **Phase 1 (Parallel)**: Load documents
+   - Rayon `par_iter` over JSON files
+   - Parse each document independently
+   - Warn and continue on parse errors
+
+2. **Phase 2 (Parallel)**: Build indexes
+   - Rayon `par_iter` over index definitions
+   - Each index constructed independently
+   - Shared Levenshtein DFA (built once, Arc-shared)
+   - Each index uses `build_fst_index()` (verified)
+
+3. **Phase 3 (Sequential)**: Emit files
+   - Write `.sieve` files (binary format v6)
+   - Emit WASM (if `--emit-wasm`)
+   - Write output `manifest.json`
+
+### No New Invariants Required
+
+The build system is a **preprocessing layer** above verified functions:
+
+- ✅ Document filtering/remapping: Not part of search correctness
+- ✅ Each index construction: Uses existing `build_fst_index()` (verified)
+- ✅ WASM emission: Independent of index logic
+- ✅ Runtime validation: Existing `WellFormedIndex` checks catch bugs
+
+**Example: Doc ID Remapping**
+
+```rust
+// When filtering documents, doc_ids are remapped (0, 1, 2, ...)
+// But FieldBoundary doc_ids must stay synchronized
+// This is enforced by existing check_index_well_formed() in build_index()
+```
+
+### Code Organization
+
+- `src/cli.rs` - Clap CLI definitions
+- `src/build/mod.rs` - Main orchestration
+- `src/build/manifest.rs` - Input/output manifest parsing
+- `src/build/document.rs` - Per-document structure
+- `src/build/parallel.rs` - Parallel loading and construction
+
+### Example Usage
+
+```bash
+# Build single index with WASM
+sieve build --input ./search-input --output ./search-output --emit-wasm
+
+# Build multiple indexes
+sieve build \
+  --input ./search-input \
+  --output ./search-output \
+  --indexes all,titles,engineering \
+  --emit-wasm
+
+# Build specific index only
+sieve build \
+  --input ./search-input \
+  --output ./search-output \
+  --indexes titles
+```
 
 ## More Documentation
 
 - **Binary format**: See `docs/architecture.md`
 - **Verification details**: See `docs/verification.md`
+- **Build system**: See this section above

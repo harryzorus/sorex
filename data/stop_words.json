@@ -1,0 +1,196 @@
+{
+  "_comment": "Multilingual stop words for search index filtering. Edit this file to add/remove stop words.",
+  "english": [
+    "a", "an", "the", "and", "or", "but", "nor", "so", "yet",
+    "at", "by", "for", "in", "of", "on", "to", "up",
+    "i", "me", "my", "we", "us", "our", "he", "him", "his", "she", "her",
+    "it", "its", "they", "them", "their", "who", "whom", "what", "which", "that", "this",
+    "is", "am", "are", "was", "were", "be", "been", "being",
+    "has", "have", "had", "do", "does", "did",
+    "will", "would", "could", "should", "may", "might", "must", "can", "shall",
+    "as", "if", "not", "no", "yes", "all", "any", "some", "each", "every",
+    "with", "from", "into", "than", "then", "just", "only", "also", "very", "too"
+  ],
+  "spanish": [
+    "el", "la", "los", "las", "un", "una", "unos", "unas",
+    "y", "o", "pero", "que", "de", "en", "con", "por", "para",
+    "es", "son", "está", "están", "ser", "estar",
+    "yo", "tú", "él", "ella", "nosotros", "ellos", "ellas",
+    "mi", "tu", "su", "nuestro", "este", "esta", "ese", "esa",
+    "como", "más", "muy", "si", "no", "sí"
+  ],
+  "french": [
+    "le", "la", "les", "un", "une", "des",
+    "et", "ou", "mais", "donc", "car",
+    "de", "du", "au", "aux", "en", "dans", "sur", "sous", "avec", "pour", "par",
+    "je", "tu", "il", "elle", "nous", "vous", "ils", "elles",
+    "mon", "ton", "son", "notre", "votre", "leur",
+    "ce", "cette", "ces", "qui", "que", "quoi",
+    "est", "sont", "être", "avoir", "fait",
+    "ne", "pas", "plus", "moins", "très", "bien"
+  ],
+  "german": [
+    "der", "die", "das", "den", "dem", "ein", "eine", "einer", "eines",
+    "und", "oder", "aber", "denn", "weil",
+    "in", "an", "auf", "aus", "bei", "mit", "nach", "von", "zu", "zum", "zur",
+    "ich", "du", "er", "sie", "es", "wir", "ihr",
+    "mein", "dein", "sein", "ihr", "unser", "euer",
+    "dieser", "diese", "dieses", "jener", "welcher",
+    "ist", "sind", "war", "waren", "haben", "hat", "hatte",
+    "nicht", "kein", "keine", "ja", "nein",
+    "als", "wenn", "so", "auch", "noch", "schon", "nur", "sehr"
+  ],
+  "portuguese": [
+    "o", "a", "os", "as", "um", "uma", "uns", "umas",
+    "e", "ou", "mas", "porém",
+    "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
+    "com", "por", "para", "pelo", "pela",
+    "eu", "tu", "ele", "ela", "nós", "vós", "eles", "elas",
+    "meu", "teu", "seu", "nosso", "vosso",
+    "este", "esse", "aquele", "isto", "isso", "aquilo",
+    "é", "são", "foi", "eram", "ser", "estar", "ter", "há",
+    "não", "sim", "mais", "menos", "muito", "bem"
+  ],
+  "italian": [
+    "il", "lo", "la", "i", "gli", "le",
+    "e", "ed", "o", "ma", "però",
+    "di", "del", "dello", "della", "dei", "degli", "delle",
+    "al", "allo", "alla", "ai", "agli", "alle",
+    "da", "dal", "dallo", "dalla", "nel", "nello", "nella",
+    "con", "su", "per", "tra", "fra",
+    "io", "tu", "lui", "lei", "noi", "voi", "loro",
+    "mio", "tuo", "suo", "nostro", "vostro",
+    "questo", "quello", "che", "chi", "quale",
+    "è", "sono", "era", "erano", "essere", "avere", "ha", "hanno",
+    "non", "sì", "più", "molto", "anche", "solo"
+  ],
+  "dutch": [
+    "de", "het", "een",
+    "en", "of", "maar", "want", "dus",
+    "in", "op", "aan", "van", "voor", "met", "bij", "tot", "naar",
+    "ik", "jij", "hij", "zij", "wij", "jullie",
+    "mijn", "jouw", "zijn", "haar", "ons", "hun",
+    "dit", "dat", "deze", "die", "wie", "wat", "welke",
+    "was", "waren", "hebben", "heeft", "had",
+    "niet", "geen", "ja", "nee",
+    "als", "dan", "ook", "nog", "wel", "al", "heel", "erg", "zeer"
+  ],
+  "russian_translit": [
+    "i", "v", "na", "s", "po", "za", "iz", "ot", "do", "u", "k",
+    "ya", "ty", "on", "ona", "ono", "my", "vy", "oni",
+    "moy", "tvoy", "ego", "ee", "nash", "vash", "ih",
+    "eto", "tot", "eta", "te", "kto", "chto", "kotoryy",
+    "est", "byl", "byla", "bylo", "byli", "byt", "imet",
+    "ne", "da", "net",
+    "kak", "tak", "ochen", "uzhe", "eshche", "tolko", "vse"
+  ],
+  "russian_cyrillic": [
+    "и", "в", "на", "с", "по", "за", "из", "от", "до", "у", "к",
+    "я", "ты", "он", "она", "оно", "мы", "вы", "они",
+    "мой", "твой", "его", "её", "наш", "ваш", "их",
+    "это", "тот", "эта", "те", "кто", "что", "который",
+    "есть", "был", "была", "было", "были", "быть", "иметь",
+    "не", "да", "нет",
+    "как", "так", "очень", "уже", "ещё", "только", "все"
+  ],
+  "polish": [
+    "i", "w", "na", "z", "do", "o", "za", "po", "od", "przy",
+    "ja", "ty", "on", "ona", "ono", "my", "wy", "oni", "one",
+    "mój", "twój", "jego", "jej", "nasz", "wasz", "ich",
+    "ten", "ta", "to", "ci", "te", "kto", "co", "który", "która",
+    "jest", "są", "był", "była", "było", "byli", "być", "mieć", "ma",
+    "nie", "tak",
+    "jak", "bardzo", "już", "jeszcze", "tylko", "też", "także"
+  ],
+  "swedish": [
+    "och", "eller", "men", "för", "att", "om", "på", "i", "av", "till", "med", "från",
+    "jag", "du", "han", "hon", "den", "det", "vi", "ni", "de",
+    "min", "din", "sin", "vår", "er", "deras",
+    "denna", "detta", "dessa", "som", "vad", "vilken",
+    "är", "var", "vara", "har", "hade", "ha",
+    "inte", "ja", "nej",
+    "så", "också", "bara", "mycket", "mer", "här", "där"
+  ],
+  "norwegian": [
+    "og", "eller", "men", "for", "at", "om", "på", "i", "av", "til", "med", "fra",
+    "jeg", "du", "han", "hun", "den", "det", "vi", "dere", "de",
+    "min", "din", "sin", "vår", "deres",
+    "denne", "dette", "disse", "som", "hva", "hvilken",
+    "er", "var", "være", "har", "hadde", "ha",
+    "ikke", "ja", "nei",
+    "så", "også", "bare", "mye", "mer", "her", "der"
+  ],
+  "danish": [
+    "og", "eller", "men", "for", "at", "om", "på", "i", "af", "til", "med", "fra",
+    "jeg", "du", "han", "hun", "den", "det", "vi", "i", "de",
+    "min", "din", "sin", "vor", "jeres", "deres",
+    "denne", "dette", "disse", "som", "hvad", "hvilken",
+    "er", "var", "være", "har", "havde", "have",
+    "ikke", "ja", "nej",
+    "så", "også", "kun", "meget", "mere", "her", "der"
+  ],
+  "finnish": [
+    "ja", "tai", "mutta", "että", "kun", "jos",
+    "se", "hän", "me", "te", "he",
+    "minun", "sinun", "hänen", "meidän", "teidän", "heidän",
+    "tämä", "tuo", "nämä", "nuo", "ne", "joka", "mikä",
+    "on", "ovat", "oli", "olivat", "olla",
+    "ei",
+    "niin", "myös", "vain", "hyvin", "paljon"
+  ],
+  "turkish": [
+    "ve", "ile", "için", "bu", "bir", "da", "de",
+    "ben", "sen", "o", "biz", "siz", "onlar",
+    "benim", "senin", "onun", "bizim", "sizin", "onların",
+    "şu", "bunlar", "şunlar", "ne", "kim", "hangi",
+    "var", "yok", "değil",
+    "gibi", "kadar", "daha", "çok", "en", "sadece"
+  ],
+  "indonesian": [
+    "dan", "atau", "tetapi", "yang", "di", "ke", "dari", "pada", "untuk", "dengan",
+    "saya", "aku", "kamu", "dia", "kami", "kita", "mereka",
+    "ini", "itu", "apa", "siapa", "mana",
+    "adalah", "ada", "akan", "sudah", "belum", "bisa",
+    "tidak", "bukan", "ya",
+    "sangat", "lebih", "juga", "hanya"
+  ],
+  "arabic_translit": [
+    "wa", "aw", "lakin", "fa", "thumma",
+    "fi", "min", "ila", "ala", "an", "ma", "bi", "li",
+    "ana", "anta", "anti", "huwa", "hiya", "nahnu", "antum", "hum",
+    "hadha", "hadhihi", "dhalika", "tilka", "alladhi", "allati", "man", "ma",
+    "kana", "yakun", "laysa",
+    "la", "naam", "hal",
+    "jiddan", "akthar", "aydan", "faqat"
+  ],
+  "hindi_translit": [
+    "aur", "ya", "lekin", "par", "to",
+    "mein", "se", "ko", "ke", "ka", "ki", "par", "tak",
+    "main", "tum", "aap", "vah", "yah", "ham", "ve",
+    "yah", "vah", "jo", "kaun", "kya",
+    "hai", "hain", "tha", "thi", "the",
+    "nahin", "haan", "nahi",
+    "bahut", "bhi", "sirf"
+  ],
+  "chinese_pinyin": [
+    "de", "shi", "bu", "le", "zai", "you", "he", "wo", "ta", "ni",
+    "zhe", "na", "ge", "men", "ye", "jiu", "dou", "neng", "hui",
+    "yao", "ke", "yi", "hao", "zhi", "dao", "shuo", "rang"
+  ],
+  "japanese_romaji": [
+    "wa", "ga", "wo", "ni", "de", "to", "no", "ka", "mo", "ne", "yo",
+    "watashi", "anata", "kare", "kanojo", "wareware", "karera",
+    "kono", "sono", "ano", "dono", "kore", "sore", "are", "dore",
+    "desu", "da", "datta", "aru", "iru", "suru", "naru",
+    "nai", "hai", "iie",
+    "totemo", "motto", "dake", "shika"
+  ],
+  "korean_romanized": [
+    "gwa", "wa", "neun", "eun", "i", "ga", "reul", "eul", "eseo", "edo",
+    "na", "neo", "geu", "geunye", "uri", "geudeul",
+    "i", "geu", "jeo", "eotteon", "mwo", "nugu",
+    "ida", "aniyo", "issda", "eopda",
+    "aniyo", "ne",
+    "maeu", "deo", "do", "man"
+  ]
+}

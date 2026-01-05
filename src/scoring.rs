@@ -89,9 +89,9 @@ pub fn field_type_score(field_type: &FieldType) -> f64 {
     // 3. Verifying heading_beats_content theorem builds
     // 4. Running: cd lean && lake build
     match field_type {
-        FieldType::Title => 100.0,   // Lean: baseScore .title = 1000 (×10)
-        FieldType::Heading => 10.0,  // Lean: baseScore .heading = 100 (×10)
-        FieldType::Content => 1.0,   // Lean: baseScore .content = 10 (×10)
+        FieldType::Title => 100.0,  // Lean: baseScore .title = 1000 (×10)
+        FieldType::Heading => 10.0, // Lean: baseScore .heading = 100 (×10)
+        FieldType::Content => 1.0,  // Lean: baseScore .content = 10 (×10)
     }
 }
 

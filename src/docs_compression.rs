@@ -205,7 +205,11 @@ mod tests {
                      for the reader to understand what the article is about.",
                     i
                 ),
-                href: format!("/posts/2024/0{}/{}", (i % 12) + 1, format!("article-slug-{}", i)),
+                href: format!(
+                    "/posts/2024/0{}/{}",
+                    (i % 12) + 1,
+                    format!("article-slug-{}", i)
+                ),
                 doc_type: if i % 3 == 0 { "page" } else { "post" }.to_string(),
             })
             .collect();
@@ -225,20 +229,33 @@ mod tests {
         assert_eq!(docs.len(), decoded.len());
 
         // Binary should be more compact than JSON
-        assert!(binary_size < json_size, "Binary should be smaller than JSON");
+        assert!(
+            binary_size < json_size,
+            "Binary should be smaller than JSON"
+        );
 
         println!("\n=== Compression Comparison ===");
         println!("Documents: {}", docs.len());
         println!();
         println!("              Raw       Brotli");
-        println!("JSON:     {:>6} bytes  {:>5} bytes", json_size, json_brotli.len());
-        println!("Binary:   {:>6} bytes  {:>5} bytes", binary_size, binary_brotli.len());
+        println!(
+            "JSON:     {:>6} bytes  {:>5} bytes",
+            json_size,
+            json_brotli.len()
+        );
+        println!(
+            "Binary:   {:>6} bytes  {:>5} bytes",
+            binary_size,
+            binary_brotli.len()
+        );
         println!();
-        println!("Raw savings:    {} bytes ({:.1}%)",
+        println!(
+            "Raw savings:    {} bytes ({:.1}%)",
             json_size as i64 - binary_size as i64,
             (1.0 - binary_size as f64 / json_size as f64) * 100.0
         );
-        println!("Brotli savings: {} bytes ({:.1}%)",
+        println!(
+            "Brotli savings: {} bytes ({:.1}%)",
             json_brotli.len() as i64 - binary_brotli.len() as i64,
             (1.0 - binary_brotli.len() as f64 / json_brotli.len() as f64) * 100.0
         );

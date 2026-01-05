@@ -1,6 +1,6 @@
 # Contributing to Sieve
 
-Sieve has formal verification. This is both a feature and a constraint—it means certain bugs are impossible, but it also means you can't just change things without updating proofs.
+Sieve has formal verification. This is both a feature and a constraint - it means certain bugs are impossible, but it also means you can't just change things without updating proofs.
 
 This guide explains how to contribute safely.
 
@@ -19,9 +19,9 @@ If verification fails on a clean clone, stop. Something is wrong with the enviro
 
 ### Required Tools
 
-- **Rust** (stable) — `rustup install stable`
-- **Lean 4** — `elan install leanprover/lean4:v4.3.0`
-- **wasm-pack** (optional) — `cargo install wasm-pack`
+- **Rust** (stable)  -  `rustup install stable`
+- **Lean 4**  -  `elan install leanprover/lean4:v4.3.0`
+- **wasm-pack** (optional)  -  `cargo install wasm-pack`
 
 ---
 
@@ -29,7 +29,7 @@ If verification fails on a clean clone, stop. Something is wrong with the enviro
 
 > **Never silence a failing check. The check is right; your code is wrong.**
 
-Verification failures aren't bugs in the verification—they're bugs in your code. If a property test fails, if a Lean proof breaks, if a contract panics, your change violated an invariant.
+Verification failures aren't bugs in the verification - they're bugs in your code. If a property test fails, if a Lean proof breaks, if a contract panics, your change violated an invariant.
 
 ---
 
@@ -97,7 +97,7 @@ If verification fails:
 
 **Rust test failure**: Your code has a bug. Fix it.
 
-**Property test failure**: Your code violated an invariant on a random input. The test will print the failing input—use it to debug.
+**Property test failure**: Your code violated an invariant on a random input. The test will print the failing input - use it to debug.
 
 **Lean proof failure**: You changed something the proofs depend on. Either:
 - Revert your change, or
@@ -351,11 +351,11 @@ When reporting verification failures, include:
 
 ## Related Documentation
 
-- [Architecture](./architecture.md) — Binary format, system overview
-- [Algorithms](./algorithms.md) — Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md) — Performance comparisons with other libraries
-- [Integration](./integration.md) — WASM setup, browser integration
-- [Verification](./verification.md) — Formal verification guide
+- [Architecture](./architecture.md)  -  Binary format, system overview
+- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata
+- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
+- [Integration](./integration.md)  -  WASM setup, browser integration
+- [Verification](./verification.md)  -  Formal verification guide
 
 ---
 

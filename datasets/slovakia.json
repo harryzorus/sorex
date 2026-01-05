@@ -1,0 +1,26 @@
+{
+  "id": 24,
+  "slug": "slovakia",
+  "title": "Slovakia",
+  "excerpt": "A country in Central Europe with mountainous terrain",
+  "href": "/countries/slovakia",
+  "type": "page",
+  "category": "geography",
+  "text": "Slovakia is a country in Central Europe with mountainous terrain and a rich cultural heritage. Bratislava, the capital, is located on the Danube River and is known for its historic Old Town and castle. Slovakia has a population of about 5.5 million and is known for its folk traditions, music, and crafts. The High Tatras are a mountain range on the Polish border and are a popular destination for hiking and skiing. Slovakia joined the European Union in 2004 and adopted the Euro in 2009. The country is known for its wooden churches, traditional costumes, and folk festivals. Slovakia has a strong tradition of folk art, including embroidery, weaving, and carving.",
+  "fieldBoundaries": [
+    {
+      "docId": 24,
+      "start": 0,
+      "end": 8,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 24,
+      "start": 9,
+      "end": 208,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

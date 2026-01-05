@@ -278,10 +278,7 @@ pub enum IndexMode {
 #[cfg_attr(feature = "lean", derive(LeanSpec))]
 #[cfg_attr(
     feature = "lean",
-    lean(
-        name = "UnifiedIndex",
-        invariant = "mode_matches_available_indexes"
-    )
+    lean(name = "UnifiedIndex", invariant = "mode_matches_available_indexes")
 )]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedIndex {
@@ -504,10 +501,7 @@ pub fn validate_sections(sections: &[Section], doc_length: usize) -> Result<(), 
             ));
         }
         if !section.is_valid_id() {
-            return Err(format!(
-                "Section {} has invalid ID: '{}'",
-                i, section.id
-            ));
+            return Err(format!("Section {} has invalid ID: '{}'", i, section.id));
         }
     }
 

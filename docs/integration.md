@@ -1,6 +1,6 @@
 # Integration Guide
 
-This guide covers integrating Sieve into your frontend application. Sieve compiles to WebAssembly, so it runs entirely in the browser—no backend required.
+This guide covers integrating Sieve into your frontend application. Sieve compiles to WebAssembly, so it runs entirely in the browser - no backend required.
 
 ---
 
@@ -14,9 +14,9 @@ wasm-pack build --target web --out-dir pkg --features wasm
 ```
 
 This produces:
-- `pkg/sieve.js` — ES module with WASM loader
-- `pkg/sieve_bg.wasm` — The WASM binary (~50KB gzipped)
-- `pkg/sieve.d.ts` — TypeScript definitions
+- `pkg/sieve.js`  -  ES module with WASM loader
+- `pkg/sieve_bg.wasm`  -  The WASM binary (~50KB gzipped)
+- `pkg/sieve.d.ts`  -  TypeScript definitions
 
 ### 2. Generate a Search Index
 
@@ -124,7 +124,7 @@ await index.load_layer_binary('content', contentBytes);
 | `heading` | 10.0 | Section headings (h2, h3, etc.) |
 | `content` | 1.0 | Body text |
 
-Matches in higher-weighted fields always rank above lower-weighted fields, regardless of position. This is mathematically proven—see [Verification](./verification.md).
+Matches in higher-weighted fields always rank above lower-weighted fields, regardless of position. This is mathematically proven - see [Verification](./verification.md).
 
 ### Section IDs for Deep Linking
 
@@ -230,67 +230,6 @@ interface BoostOptions {
 ---
 
 ## Framework Integration
-
-### Svelte / SvelteKit
-
-```typescript
-// src/lib/search/SearchState.svelte.ts
-import init, { SieveSearcher } from '$lib/wasm/sieve.js';
-
-class SearchState {
-  query = $state('');
-  results = $state<SearchResult[]>([]);
-  isLoading = $state(true);
-
-  private searcher: SieveSearcher | null = null;
-
-  async init() {
-    await init();
-    const response = await fetch('/search/index.sieve');
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    this.searcher = new SieveSearcher(bytes);
-    this.isLoading = false;
-  }
-
-  search(query: string) {
-    if (!this.searcher) return;
-    this.query = query;
-    this.results = this.searcher.search(query, 10);
-  }
-}
-
-export const searchState = new SearchState();
-```
-
-```svelte
-<!-- SearchModal.svelte -->
-<script lang="ts">
-  import { searchState } from '$lib/search/SearchState.svelte';
-  import { onMount } from 'svelte';
-
-  onMount(() => searchState.init());
-
-  function handleInput(e: Event) {
-    const query = (e.target as HTMLInputElement).value;
-    searchState.search(query);
-  }
-
-  function buildResultUrl(result: SearchResult): string {
-    return result.sectionId
-      ? `${result.href}#${result.sectionId}`
-      : result.href;
-  }
-</script>
-
-<input type="search" oninput={handleInput} />
-
-{#each searchState.results as result}
-  <a href={buildResultUrl(result)}>
-    <h3>{result.title}</h3>
-    <p>{result.excerpt}</p>
-  </a>
-{/each}
-```
 
 ### React
 
@@ -589,8 +528,8 @@ onUnmount(() => {
 
 ## Related Documentation
 
-- [Architecture](./architecture.md) — Binary format, algorithm details
-- [Algorithms](./algorithms.md) — Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md) — Performance comparisons with other libraries
-- [Verification](./verification.md) — Formal verification guide
-- [Contributing](./contributing.md) — How to contribute safely
+- [Architecture](./architecture.md)  -  Binary format, algorithm details
+- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata
+- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
+- [Verification](./verification.md)  -  Formal verification guide
+- [Contributing](./contributing.md)  -  How to contribute safely

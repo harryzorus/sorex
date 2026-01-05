@@ -264,10 +264,7 @@ impl SieveFooter {
         if magic != FOOTER_MAGIC {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!(
-                    "Invalid footer magic: expected TFIS, got {:?}",
-                    magic
-                ),
+                format!("Invalid footer magic: expected TFIS, got {:?}", magic),
             ));
         }
 
@@ -572,9 +569,7 @@ pub fn encode_postings_v6(entries: &[PostingEntry], buf: &mut Vec<u8>) {
 
     for block_idx in 0..num_blocks {
         let start = block_idx * BLOCK_SIZE;
-        let block: [u32; BLOCK_SIZE] = deltas[start..start + BLOCK_SIZE]
-            .try_into()
-            .unwrap();
+        let block: [u32; BLOCK_SIZE] = deltas[start..start + BLOCK_SIZE].try_into().unwrap();
         encode_block_pfor(&block, buf);
     }
 
@@ -601,7 +596,10 @@ pub fn decode_postings_v6(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)
     if doc_freq > MAX_POSTING_SIZE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Posting list too large: {} (max {})", doc_freq, MAX_POSTING_SIZE),
+            format!(
+                "Posting list too large: {} (max {})",
+                doc_freq, MAX_POSTING_SIZE
+            ),
         ));
     }
 
@@ -695,9 +693,7 @@ pub fn encode_postings(doc_ids: &[u32], buf: &mut Vec<u8>) {
 
     for block_idx in 0..num_blocks {
         let start = block_idx * BLOCK_SIZE;
-        let block: [u32; BLOCK_SIZE] = deltas[start..start + BLOCK_SIZE]
-            .try_into()
-            .unwrap();
+        let block: [u32; BLOCK_SIZE] = deltas[start..start + BLOCK_SIZE].try_into().unwrap();
         encode_block_pfor(&block, buf);
     }
 
@@ -834,11 +830,7 @@ impl SkipList {
         // Higher levels: every SKIP_INTERVAL entries from previous level
         while levels.last().unwrap().len() >= SKIP_INTERVAL {
             let prev = levels.last().unwrap();
-            let next: Vec<SkipEntry> = prev
-                .iter()
-                .step_by(SKIP_INTERVAL)
-                .cloned()
-                .collect();
+            let next: Vec<SkipEntry> = prev.iter().step_by(SKIP_INTERVAL).cloned().collect();
             if next.len() < 2 {
                 break;
             }
@@ -893,7 +885,10 @@ impl SkipList {
         if num_levels > MAX_SKIP_LEVELS {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Too many skip levels: {} (max {})", num_levels, MAX_SKIP_LEVELS),
+                format!(
+                    "Too many skip levels: {} (max {})",
+                    num_levels, MAX_SKIP_LEVELS
+                ),
             ));
         }
 
@@ -1160,7 +1155,10 @@ impl BinaryLayer {
             .iter()
             .map(|pl| {
                 pl.iter()
-                    .map(|&doc_id| PostingEntry { doc_id, section_idx: 0 })
+                    .map(|&doc_id| PostingEntry {
+                        doc_id,
+                        section_idx: 0,
+                    })
                     .collect()
             })
             .collect();
@@ -1321,58 +1319,95 @@ impl BinaryLayer {
         let vocab_end = pos.checked_add(header.vocab_len as usize).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "Vocabulary length overflow")
         })?;
-        let vocab_bytes = bytes.get(pos..vocab_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Vocabulary section truncated")
-        })?.to_vec();
+        let vocab_bytes = bytes
+            .get(pos..vocab_end)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::UnexpectedEof, "Vocabulary section truncated")
+            })?
+            .to_vec();
         pos = vocab_end;
 
-        let sa_end = pos.checked_add(header.sa_len as usize).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "SA length overflow")
-        })?;
-        let sa_bytes = bytes.get(pos..sa_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Suffix array section truncated")
-        })?.to_vec();
+        let sa_end = pos
+            .checked_add(header.sa_len as usize)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "SA length overflow"))?;
+        let sa_bytes = bytes
+            .get(pos..sa_end)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Suffix array section truncated",
+                )
+            })?
+            .to_vec();
         pos = sa_end;
 
-        let postings_end = pos.checked_add(header.postings_len as usize).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Postings length overflow")
-        })?;
-        let postings_bytes = bytes.get(pos..postings_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Postings section truncated")
-        })?.to_vec();
+        let postings_end = pos
+            .checked_add(header.postings_len as usize)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Postings length overflow")
+            })?;
+        let postings_bytes = bytes
+            .get(pos..postings_end)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::UnexpectedEof, "Postings section truncated")
+            })?
+            .to_vec();
         pos = postings_end;
 
         let skip_end = pos.checked_add(header.skip_len as usize).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "Skip list length overflow")
         })?;
-        let skip_bytes = bytes.get(pos..skip_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Skip list section truncated")
-        })?.to_vec();
+        let skip_bytes = bytes
+            .get(pos..skip_end)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::UnexpectedEof, "Skip list section truncated")
+            })?
+            .to_vec();
         pos = skip_end;
 
         // v6: Section table (deduplicated section_id strings)
-        let section_table_end = pos.checked_add(header.section_table_len as usize).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Section table length overflow")
-        })?;
-        let section_table_bytes = bytes.get(pos..section_table_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Section table section truncated")
-        })?.to_vec();
+        let section_table_end = pos
+            .checked_add(header.section_table_len as usize)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Section table length overflow")
+            })?;
+        let section_table_bytes = bytes
+            .get(pos..section_table_end)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Section table section truncated",
+                )
+            })?
+            .to_vec();
         pos = section_table_end;
 
-        let lev_dfa_end = pos.checked_add(header.lev_dfa_len as usize).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Levenshtein DFA length overflow")
-        })?;
-        let lev_dfa_bytes = bytes.get(pos..lev_dfa_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Levenshtein DFA section truncated")
-        })?.to_vec();
+        let lev_dfa_end = pos
+            .checked_add(header.lev_dfa_len as usize)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Levenshtein DFA length overflow",
+                )
+            })?;
+        let lev_dfa_bytes = bytes
+            .get(pos..lev_dfa_end)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Levenshtein DFA section truncated",
+                )
+            })?
+            .to_vec();
         pos = lev_dfa_end;
 
-        let docs_end = pos.checked_add(header.docs_len as usize).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Docs length overflow")
-        })?;
-        let docs_bytes = bytes.get(pos..docs_end).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, "Docs section truncated")
-        })?.to_vec();
+        let docs_end = pos
+            .checked_add(header.docs_len as usize)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Docs length overflow"))?;
+        let docs_bytes = bytes
+            .get(pos..docs_end)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "Docs section truncated"))?
+            .to_vec();
 
         Ok(Self {
             header,
@@ -1651,7 +1686,10 @@ impl LoadedLayer {
     /// Look up a term and get its posting list (uses binary search over vocabulary)
     pub fn get_postings(&self, term: &str) -> Option<&[PostingEntry]> {
         // Binary search since vocabulary is sorted
-        let term_ord = self.vocabulary.binary_search_by(|t| t.as_str().cmp(term)).ok()?;
+        let term_ord = self
+            .vocabulary
+            .binary_search_by(|t| t.as_str().cmp(term))
+            .ok()?;
         self.postings.get(term_ord).map(|v| v.as_slice())
     }
 
@@ -1667,7 +1705,9 @@ impl LoadedLayer {
             None // 0 means no section_id
         } else {
             // 1-indexed into section_table
-            self.section_table.get((section_idx - 1) as usize).map(|s| s.as_str())
+            self.section_table
+                .get((section_idx - 1) as usize)
+                .map(|s| s.as_str())
         }
     }
 
@@ -1770,13 +1810,13 @@ mod tests {
 
     #[test]
     fn test_binary_layer_roundtrip() {
-        let vocabulary = vec!["apple".to_string(), "banana".to_string(), "cherry".to_string()];
-        let suffix_array = vec![(0, 0), (1, 0), (2, 0)];
-        let postings = vec![
-            vec![0, 5, 10],
-            vec![1, 2, 3, 4],
-            vec![0, 1, 2],
+        let vocabulary = vec![
+            "apple".to_string(),
+            "banana".to_string(),
+            "cherry".to_string(),
         ];
+        let suffix_array = vec![(0, 0), (1, 0), (2, 0)];
+        let postings = vec![vec![0, 5, 10], vec![1, 2, 3, 4], vec![0, 1, 2]];
         let lev_dfa_bytes = build_lev_dfa_bytes();
 
         // Create docs for embedding
@@ -1798,7 +1838,15 @@ mod tests {
         ];
         let docs_bytes = encode_docs_binary(&docs);
 
-        let layer = BinaryLayer::build(&vocabulary, &suffix_array, &postings, 20, lev_dfa_bytes, docs_bytes).unwrap();
+        let layer = BinaryLayer::build(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            20,
+            lev_dfa_bytes,
+            docs_bytes,
+        )
+        .unwrap();
         let bytes = layer.to_bytes().unwrap();
 
         let loaded = LoadedLayer::from_bytes(&bytes).unwrap();
@@ -1810,7 +1858,10 @@ mod tests {
         assert_eq!(loaded.get_doc_ids("banana"), Some(vec![1, 2, 3, 4]));
         assert_eq!(loaded.get_doc_ids("cherry"), Some(vec![0, 1, 2]));
         assert_eq!(loaded.get_doc_ids("nonexistent"), None);
-        assert!(!loaded.lev_dfa_bytes.is_empty(), "Levenshtein DFA bytes should be loaded");
+        assert!(
+            !loaded.lev_dfa_bytes.is_empty(),
+            "Levenshtein DFA bytes should be loaded"
+        );
 
         // Verify docs roundtrip
         assert_eq!(loaded.docs.len(), 2);
@@ -1830,9 +1881,18 @@ mod tests {
 
         // Create postings with section_ids
         let postings = vec![vec![
-            PostingEntry { doc_id: 0, section_idx: 0 }, // No section (title)
-            PostingEntry { doc_id: 0, section_idx: 1 }, // "introduction"
-            PostingEntry { doc_id: 0, section_idx: 2 }, // "conclusion"
+            PostingEntry {
+                doc_id: 0,
+                section_idx: 0,
+            }, // No section (title)
+            PostingEntry {
+                doc_id: 0,
+                section_idx: 1,
+            }, // "introduction"
+            PostingEntry {
+                doc_id: 0,
+                section_idx: 2,
+            }, // "conclusion"
         ]];
 
         let lev_dfa_bytes = build_lev_dfa_bytes();
@@ -1846,7 +1906,8 @@ mod tests {
             1,
             lev_dfa_bytes,
             docs_bytes,
-        ).unwrap();
+        )
+        .unwrap();
         let bytes = layer.to_bytes().unwrap();
 
         let loaded = LoadedLayer::from_bytes(&bytes).unwrap();
@@ -1908,7 +1969,15 @@ mod tests {
         let lev_dfa_bytes = build_lev_dfa_bytes();
         let docs_bytes = encode_docs_binary(&[]);
 
-        let layer = BinaryLayer::build(&vocabulary, &suffix_array, &postings, 10, lev_dfa_bytes, docs_bytes).unwrap();
+        let layer = BinaryLayer::build(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            10,
+            lev_dfa_bytes,
+            docs_bytes,
+        )
+        .unwrap();
         let mut bytes = layer.to_bytes().unwrap();
 
         // Corrupt a byte in the middle (not the CRC itself)
@@ -1931,7 +2000,15 @@ mod tests {
         let lev_dfa_bytes = build_lev_dfa_bytes();
         let docs_bytes = encode_docs_binary(&[]);
 
-        let layer = BinaryLayer::build(&vocabulary, &suffix_array, &postings, 10, lev_dfa_bytes, docs_bytes).unwrap();
+        let layer = BinaryLayer::build(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            10,
+            lev_dfa_bytes,
+            docs_bytes,
+        )
+        .unwrap();
         let bytes = layer.to_bytes().unwrap();
 
         // Truncate the file

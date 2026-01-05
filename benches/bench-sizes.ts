@@ -7,8 +7,28 @@ import Fuse from 'fuse.js';
 import lunr from 'lunr';
 import FlexSearch from 'flexsearch';
 import MiniSearch from 'minisearch';
-import { writeFileSync } from 'fs';
 import { gzipSync } from 'zlib';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface Document {
+  id: number;
+  title: string;
+  content: string;
+}
+
+interface SizeResult {
+  raw: number;
+  gzipped: number;
+}
+
+interface SizeConfig {
+  name: string;
+  posts: number;
+  words: number;
+}
 
 // Technical vocabulary for realistic blog content
 const VOCABULARY = {
@@ -36,12 +56,12 @@ const VOCABULARY = {
   ],
 };
 
-function generateCorpus(numPosts, wordsPerPost) {
+function generateCorpus(numPosts: number, wordsPerPost: number): Document[] {
   const allWords = [...VOCABULARY.technical, ...VOCABULARY.general];
-  const posts = [];
+  const posts: Document[] = [];
 
   for (let i = 0; i < numPosts; i++) {
-    const words = [];
+    const words: string[] = [];
     for (let j = 0; j < wordsPerPost; j++) {
       words.push(allWords[Math.floor(Math.random() * allWords.length)]);
     }
@@ -55,7 +75,7 @@ function generateCorpus(numPosts, wordsPerPost) {
   return posts;
 }
 
-function measureSize(obj) {
+function measureSize(obj: unknown): SizeResult {
   const json = JSON.stringify(obj);
   return {
     raw: Buffer.byteLength(json, 'utf8'),
@@ -63,24 +83,24 @@ function measureSize(obj) {
   };
 }
 
-async function benchmark() {
+async function benchmark(): Promise<void> {
   console.log('=== Index Size Comparison ===\n');
 
-  const sizes = [
+  const sizes: SizeConfig[] = [
     { name: 'Small (20 posts)', posts: 20, words: 500 },
     { name: 'Medium (100 posts)', posts: 100, words: 1000 },
   ];
 
   for (const size of sizes) {
     console.log(`\n${size.name}:`);
-    console.log('─'.repeat(60));
+    console.log('-'.repeat(60));
 
     const corpus = generateCorpus(size.posts, size.words);
     const rawData = measureSize(corpus);
 
-    // Fuse.js - no index built
+    // Fuse.js - no index built, stores raw docs
     const fuseIndex = new Fuse(corpus, { keys: ['title', 'content'] });
-    const fuseSize = measureSize(fuseIndex._docs);
+    const fuseSize = measureSize((fuseIndex as unknown as { _docs: Document[] })._docs);
 
     // Lunr.js
     const lunrIndex = lunr(function () {
@@ -96,7 +116,7 @@ async function benchmark() {
       document: { id: 'id', index: ['title', 'content'] }
     });
     corpus.forEach(doc => flexIndex.add(doc));
-    const flexExport = {};
+    const flexExport: Record<string, unknown> = {};
     await flexIndex.export((key, data) => { flexExport[key] = data; });
     const flexSize = measureSize(flexExport);
 
@@ -109,11 +129,11 @@ async function benchmark() {
     const miniSize = measureSize(miniIndex.toJSON());
 
     const results = [
-      { library: 'Raw Data', raw: rawData.raw, gzip: rawData.gzipped },
+      { library: 'Raw Data', raw: rawData.raw, gzip: rawData.gzipped, note: '' },
       { library: 'Fuse.js', raw: fuseSize.raw, gzip: fuseSize.gzipped, note: '(no index)' },
-      { library: 'Lunr.js', raw: lunrSize.raw, gzip: lunrSize.gzipped },
-      { library: 'FlexSearch', raw: flexSize.raw, gzip: flexSize.gzipped },
-      { library: 'MiniSearch', raw: miniSize.raw, gzip: miniSize.gzipped },
+      { library: 'Lunr.js', raw: lunrSize.raw, gzip: lunrSize.gzipped, note: '' },
+      { library: 'FlexSearch', raw: flexSize.raw, gzip: flexSize.gzipped, note: '' },
+      { library: 'MiniSearch', raw: miniSize.raw, gzip: miniSize.gzipped, note: '' },
     ];
 
     console.log('| Library | Raw Size | Gzipped | Ratio |');

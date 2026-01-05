@@ -40,8 +40,8 @@ pub const NOT_ACCEPTING: u8 = 0xFF;
 /// A position in the NFA: (offset from base, edit distance used)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct NfaPos {
-    offset: i8,  // Relative to current base position
-    edits: u8,   // Edit distance consumed
+    offset: i8, // Relative to current base position
+    edits: u8,  // Edit distance consumed
 }
 
 /// A parametric state: a normalized set of NFA positions
@@ -58,13 +58,18 @@ impl ParametricState {
         // Remove dominated positions (same offset, higher edits)
         let mut filtered = Vec::new();
         for pos in positions {
-            if !filtered.iter().any(|p: &NfaPos| p.offset == pos.offset && p.edits <= pos.edits) {
+            if !filtered
+                .iter()
+                .any(|p: &NfaPos| p.offset == pos.offset && p.edits <= pos.edits)
+            {
                 filtered.retain(|p: &NfaPos| !(p.offset == pos.offset && p.edits > pos.edits));
                 filtered.push(pos);
             }
         }
         filtered.sort();
-        Self { positions: filtered }
+        Self {
+            positions: filtered,
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -160,7 +165,8 @@ impl ParametricState {
             return (Self { positions: vec![] }, 0);
         }
         let min_offset = self.positions.iter().map(|p| p.offset).min().unwrap_or(0);
-        let normalized = self.positions
+        let normalized = self
+            .positions
             .iter()
             .map(|p| NfaPos {
                 offset: p.offset - min_offset,
@@ -195,7 +201,10 @@ impl ParametricDFA {
 
         // Initial state: can be at positions 0, 1, 2 with increasing edits
         let initial_positions: Vec<NfaPos> = (0..=MAX_K)
-            .map(|i| NfaPos { offset: i as i8, edits: i })
+            .map(|i| NfaPos {
+                offset: i as i8,
+                edits: i,
+            })
             .collect();
         let initial = ParametricState::new(initial_positions);
         let (normalized, _) = initial.normalize();
@@ -209,7 +218,8 @@ impl ParametricDFA {
 
             // Compute accept distance
             // A state accepts if any position has offset >= 0 (consumed query)
-            let accept_dist = state.positions
+            let accept_dist = state
+                .positions
                 .iter()
                 .filter(|p| p.offset >= 0)
                 .map(|p| p.edits)
@@ -381,8 +391,8 @@ fn simple_levenshtein(query_chars: &[char], term: &str) -> usize {
         for (j, &tc) in term_chars.iter().enumerate() {
             let cost = if qc == tc { 0 } else { 1 };
             curr_row[j + 1] = (prev_row[j] + cost)
-                .min(prev_row[j + 1] + 1)  // deletion
-                .min(curr_row[j] + 1);     // insertion
+                .min(prev_row[j + 1] + 1) // deletion
+                .min(curr_row[j] + 1); // insertion
             min_in_row = min_in_row.min(curr_row[j + 1]);
         }
 

@@ -22,7 +22,9 @@ name = "search_bench"
 harness = false
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 rayon = { version = "1.11.0", optional = true }
+indicatif = { version = "0.17", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
@@ -46,7 +48,7 @@ simsearch = "0.2"          # Simple in-memory fuzzy search
 
 [features]
 default = ["parallel", "unicode-normalization", "serde_json"]
-parallel = ["rayon"]
+parallel = ["rayon", "indicatif"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen"]  # No unicode-normalization or serde_json for smaller WASM
 embed-wasm = []  # Embed WASM/JS in binary for --demo flag (requires wasm-pack build first)
 lean = ["sieve-lean-macros"]
@@ -58,7 +60,7 @@ wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 # Build with: wasm-pack build --release && cargo deb --profile release-native -- --features embed-wasm
 [package.metadata.deb]
 maintainer = "Harry Tummalachērla <harry@harryzorus.xyz>"
-copyright = "2024, Harry Tummalachērla"
+copyright = "2026, Harry Tummalachērla"
 license-file = ["LICENSE", "0"]
 extended-description = """
 Sieve is a formally verified full-text search engine using suffix arrays.
@@ -67,13 +69,16 @@ of correctness via Lean 4 proofs.
 
 The binary includes embedded WASM files. Use `sieve --emit-wasm <dir>` to
 extract them for web builds.
+
 """
 section = "utils"
 priority = "optional"
 features = ["embed-wasm"]
 assets = [
     ["target/release-native/sieve", "usr/bin/sieve", "755"],
+    ["examples/generate-eu-data.sh", "usr/share/sieve/examples/generate-eu-data.sh", "755"],
 ]
+maintainer-scripts = "debian/"
 
 # Release profile optimized for WASM size
 [profile.release]

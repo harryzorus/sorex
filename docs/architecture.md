@@ -4,9 +4,9 @@
 
 Three ideas shape every technical decision:
 
-1. **Precompute everything possible** — Build-time work is free; query-time work is expensive. If you can compute it once, do it at index time.
-2. **Compact binary format** — Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
-3. **Proven correctness** — Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
+1. **Precompute everything possible**  -  Build-time work is free; query-time work is expensive. If you can compute it once, do it at index time.
+2. **Compact binary format**  -  Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
+3. **Proven correctness**  -  Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
 
 The goal: instant search in browsers without sacrificing accuracy or features. A 50KB WASM bundle shouldn't feel like a compromise.
 
@@ -36,6 +36,101 @@ JSON Payload                              .sieve binary
     (~15% overhead                           with section_ids
      vs raw text)                            for deep linking
 ```
+
+---
+
+## Parallel Build (MapReduce)
+
+The `sieve build` CLI uses a MapReduce-style architecture for maximum throughput on multi-core machines:
+
+```
+INPUT                          MAP PHASE                         REDUCE PHASE
+─────                          ─────────                         ────────────
+
+manifest.json
+     │
+     ├─────┬─────┬─────┐
+     ▼     ▼     ▼     ▼
+┌───────┬───────┬───────┬─────────┐
+│ 0.json│ 1.json│ 2.json│  N.json │  Document files
+└───┬───┴───┬───┴───┬───┴────┬────┘
+    │       │       │        │
+    ▼       ▼       ▼        ▼
+┌───────────────────────────────────────────────────────────────┐
+│ PHASE 1: Parallel Document Loading (Rayon par_iter)           │
+│                                                               │
+│  Thread 1    Thread 2    Thread 3    Thread N                 │
+│  ────────    ────────    ────────    ────────                 │
+│  read JSON   read JSON   read JSON   read JSON                │
+│  parse       parse       parse       parse                    │
+│  validate    validate    validate    validate                 │
+└───────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+                   Vec<Document>
+                   (sorted by ID)
+                          │
+    ┌─────────────────────┼─────────────────────┐
+    ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ PHASE 2: Parallel Index Construction (Rayon par_iter)           │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Shared: Arc<ParametricDFA> (built once, ~1.2KB)         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Index "all"         Index "titles"      Index "engineering"    │
+│  ──────────          ────────────        ──────────────────     │
+│  filter: *           filter: *           filter: category=eng   │
+│  fields: all         fields: [title]     fields: all            │
+│       │                    │                    │                │
+│       ▼                    ▼                    ▼                │
+│  build_fst_index()   build_fst_index()   build_fst_index()      │
+│       │                    │                    │                │
+│       ▼                    ▼                    ▼                │
+│  BinaryLayer::build  BinaryLayer::build  BinaryLayer::build     │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+                Vec<BuiltIndex>
+                          │
+┌─────────────────────────────────────────────────────────────────┐
+│ PHASE 3: Sequential Output (single thread)                      │
+│                                                                 │
+│  for index in built_indexes:                                    │
+│    hash = crc32(index.bytes)                                    │
+│    write "{name}-{hash}.sieve"                                  │
+│                                                                 │
+│  if emit_wasm:                                                  │
+│    write sieve.js, sieve_bg.wasm, sieve.d.ts                    │
+│                                                                 │
+│  write manifest.json                                            │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+OUTPUT
+──────
+output/
+├── index-a1b2c3d4.sieve
+├── titles-e5f6g7h8.sieve
+├── engineering-i9j0k1l2.sieve
+├── manifest.json
+├── sieve.js           (if --emit-wasm)
+├── sieve_bg.wasm
+└── sieve.d.ts
+```
+
+### Why This Architecture
+
+| Phase | Parallelization | Bottleneck |
+|-------|-----------------|------------|
+| Document loading | Per-file | I/O bound (SSD throughput) |
+| Index building | Per-index | CPU bound (suffix array construction) |
+| Output writing | Sequential | I/O bound (negligible) |
+
+The Levenshtein DFA is built once and shared via `Arc` across all parallel index builds. This is the most expensive single computation (~1.2KB precomputed automaton with ~70 states), so sharing it avoids redundant work.
+
+Each index build is completely independent - they filter different documents and may index different fields, but all use the same verified `build_fst_index()` function that guarantees suffix array sortedness and index well-formedness.
 
 ---
 
@@ -177,7 +272,7 @@ Query: "auth"
 
 ### Vocabulary Suffix Array
 
-Rather than a suffix array over the full text (expensive), Sieve uses a suffix array over the vocabulary—the unique terms:
+Rather than a suffix array over the full text (expensive), Sieve uses a suffix array over the vocabulary - the unique terms:
 
 ```
 Vocabulary: ["apple", "application", "apply", "banana"]
@@ -215,7 +310,7 @@ At query time:
 Result: O(term_len) per term, no distance computation
 ```
 
-The DFA is query-independent—the same precomputed structure works for any query. Only character class computation depends on the actual query string.
+The DFA is query-independent - the same precomputed structure works for any query. Only character class computation depends on the actual query string.
 
 ### Scoring and Ranking
 
@@ -427,8 +522,8 @@ Total index overhead: ~15-20% on top of document metadata.
 
 ## Related Documentation
 
-- [Algorithms](./algorithms.md) — Suffix arrays, Levenshtein automata, Block PFOR
-- [Benchmarks](./benchmarks.md) — Performance comparisons with other libraries
-- [Integration](./integration.md) — WASM setup, browser integration, TypeScript
-- [Verification](./verification.md) — Formal verification guide
-- [Contributing](./contributing.md) — How to contribute safely
+- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata, Block PFOR
+- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
+- [Integration](./integration.md)  -  WASM setup, browser integration, TypeScript
+- [Verification](./verification.md)  -  Formal verification guide
+- [Contributing](./contributing.md)  -  How to contribute safely

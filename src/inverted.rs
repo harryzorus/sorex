@@ -26,6 +26,77 @@ fn is_word_boundary(c: char) -> bool {
     !c.is_alphanumeric()
 }
 
+use std::collections::HashSet;
+use std::sync::LazyLock;
+
+/// Multilingual stop words loaded from data/stop_words.json.
+///
+/// These words are:
+/// 1. Too common to be useful for search ranking
+/// 2. Cause false positives in fuzzy matching (e.g., "land" → "and")
+/// 3. Waste index space
+///
+/// The JSON file contains stop words for 20+ languages including:
+/// English, Spanish, French, German, Portuguese, Italian, Dutch, Russian,
+/// Polish, Swedish, Norwegian, Danish, Finnish, Turkish, Indonesian,
+/// Arabic, Hindi, Chinese, Japanese, Korean (romanized forms).
+static STOP_WORDS: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    let json_str = include_str!("../data/stop_words.json");
+    parse_stop_words_json(json_str)
+});
+
+/// Parse stop words from JSON, flattening all language arrays into a single set.
+/// Normalizes words to match how input text is normalized (strips diacritics).
+fn parse_stop_words_json(json_str: &str) -> HashSet<String> {
+    let mut stop_words = HashSet::new();
+
+    // Simple JSON parsing without external dependency
+    // The JSON structure is: { "lang": ["word1", "word2", ...], ... }
+    let mut in_array = false;
+    let mut current_word = String::new();
+    let mut in_string = false;
+
+    for ch in json_str.chars() {
+        match ch {
+            '[' => in_array = true,
+            ']' => in_array = false,
+            '"' if in_array => {
+                if in_string {
+                    // End of string, normalize and add word
+                    if !current_word.is_empty() {
+                        // Normalize to strip diacritics (e.g., "tú" → "tu", "está" → "esta")
+                        let normalized = normalize(&current_word);
+                        if !normalized.is_empty() {
+                            stop_words.insert(normalized);
+                        }
+                        // Also insert original for non-normalized lookups
+                        stop_words.insert(current_word.clone());
+                        current_word.clear();
+                    }
+                }
+                in_string = !in_string;
+            }
+            _ if in_string => {
+                current_word.push(ch);
+            }
+            _ => {}
+        }
+    }
+
+    stop_words
+}
+
+/// Check if a word is a stop word.
+///
+/// Stop words are filtered during index construction to:
+/// 1. Reduce index size
+/// 2. Prevent low-quality fuzzy matches (e.g., "land" → "and")
+/// 3. Improve search relevance
+#[inline]
+pub fn is_stop_word(word: &str) -> bool {
+    STOP_WORDS.contains(word)
+}
+
 /// Tokenize text into (word, offset) pairs.
 ///
 /// Returns normalized words with their byte offsets in the original text.
@@ -68,7 +139,8 @@ fn tokenize(text: &str) -> Vec<(String, usize)> {
         let word: String = chars[word_char_start..i].iter().collect();
         let normalized = normalize(&word);
 
-        if !normalized.is_empty() {
+        // Skip empty words and stop words
+        if !normalized.is_empty() && !is_stop_word(&normalized) {
             tokens.push((normalized, word_start));
         }
     }
@@ -95,10 +167,7 @@ fn tokenize(text: &str) -> Vec<(String, usize)> {
         properties = ["posting_list_sorted", "doc_freq_correct", "build_complete"]
     )
 )]
-pub fn build_inverted_index(
-    texts: &[String],
-    field_boundaries: &[FieldBoundary],
-) -> InvertedIndex {
+pub fn build_inverted_index(texts: &[String], field_boundaries: &[FieldBoundary]) -> InvertedIndex {
     let mut terms: HashMap<String, Vec<Posting>> = HashMap::new();
 
     // Process each document
@@ -107,7 +176,8 @@ pub fn build_inverted_index(
 
         for (word, offset) in tokens {
             // Determine field type and section_id at this position
-            let (field_type, section_id) = get_field_info_for_inverted(doc_id, offset, field_boundaries);
+            let (field_type, section_id) =
+                get_field_info_for_inverted(doc_id, offset, field_boundaries);
 
             let posting = Posting {
                 doc_id,
@@ -135,13 +205,7 @@ pub fn build_inverted_index(
         doc_ids.dedup();
         let doc_freq = doc_ids.len();
 
-        final_terms.insert(
-            term,
-            PostingList {
-                postings,
-                doc_freq,
-            },
-        );
+        final_terms.insert(term, PostingList { postings, doc_freq });
     }
 
     InvertedIndex {
@@ -184,8 +248,14 @@ pub fn build_inverted_index_parallel(
         .map(|(doc_id, text)| {
             let mut doc_terms: HashMap<String, Vec<Posting>> = HashMap::new();
             for (word, offset) in tokenize(text) {
-                let (field_type, section_id) = get_field_info_for_inverted(doc_id, offset, field_boundaries);
-                doc_terms.entry(word).or_default().push(Posting { doc_id, offset, field_type, section_id });
+                let (field_type, section_id) =
+                    get_field_info_for_inverted(doc_id, offset, field_boundaries);
+                doc_terms.entry(word).or_default().push(Posting {
+                    doc_id,
+                    offset,
+                    field_type,
+                    section_id,
+                });
             }
             doc_terms
         })
@@ -200,7 +270,9 @@ pub fn build_inverted_index_parallel(
     }
 
     // Sort each posting list
-    terms.par_iter_mut().for_each(|(_, postings)| postings.sort());
+    terms
+        .par_iter_mut()
+        .for_each(|(_, postings)| postings.sort());
 
     // Build final posting lists with doc_freq
     let final_terms: HashMap<String, PostingList> = terms
@@ -209,11 +281,20 @@ pub fn build_inverted_index_parallel(
             let mut doc_ids: Vec<usize> = postings.iter().map(|p| p.doc_id).collect();
             doc_ids.sort();
             doc_ids.dedup();
-            (term, PostingList { postings, doc_freq: doc_ids.len() })
+            (
+                term,
+                PostingList {
+                    postings,
+                    doc_freq: doc_ids.len(),
+                },
+            )
         })
         .collect();
 
-    InvertedIndex { terms: final_terms, total_docs: texts.len() }
+    InvertedIndex {
+        terms: final_terms,
+        total_docs: texts.len(),
+    }
 }
 
 /// Sequential version for non-parallel builds (WASM).
@@ -228,8 +309,14 @@ pub fn build_inverted_index_parallel(
         .map(|(doc_id, text)| {
             let mut doc_terms: HashMap<String, Vec<Posting>> = HashMap::new();
             for (word, offset) in tokenize(text) {
-                let (field_type, section_id) = get_field_info_for_inverted(doc_id, offset, field_boundaries);
-                doc_terms.entry(word).or_default().push(Posting { doc_id, offset, field_type, section_id });
+                let (field_type, section_id) =
+                    get_field_info_for_inverted(doc_id, offset, field_boundaries);
+                doc_terms.entry(word).or_default().push(Posting {
+                    doc_id,
+                    offset,
+                    field_type,
+                    section_id,
+                });
             }
             doc_terms
         })
@@ -252,11 +339,20 @@ pub fn build_inverted_index_parallel(
             let mut doc_ids: Vec<usize> = postings.iter().map(|p| p.doc_id).collect();
             doc_ids.sort();
             doc_ids.dedup();
-            (term, PostingList { postings, doc_freq: doc_ids.len() })
+            (
+                term,
+                PostingList {
+                    postings,
+                    doc_freq: doc_ids.len(),
+                },
+            )
         })
         .collect();
 
-    InvertedIndex { terms: final_terms, total_docs: texts.len() }
+    InvertedIndex {
+        terms: final_terms,
+        total_docs: texts.len(),
+    }
 }
 
 /// Threshold configuration for index mode selection.
@@ -347,7 +443,8 @@ pub fn build_unified_index(
 
     let (suffix_array, lcp) = match mode {
         IndexMode::SuffixArrayOnly | IndexMode::Hybrid => {
-            let suffix_index = crate::build_index(docs.clone(), texts.clone(), field_boundaries.clone());
+            let suffix_index =
+                crate::build_index(docs.clone(), texts.clone(), field_boundaries.clone());
             (Some(suffix_index.suffix_array), Some(suffix_index.lcp))
         }
         IndexMode::InvertedIndexOnly => (None, None),

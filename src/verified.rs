@@ -82,18 +82,10 @@ impl fmt::Display for InvariantError {
                 docs_len,
                 texts_len,
             } => {
-                write!(
-                    f,
-                    "docs.len() {} != texts.len() {}",
-                    docs_len, texts_len
-                )
+                write!(f, "docs.len() {} != texts.len() {}", docs_len, texts_len)
             }
             InvariantError::MismatchedLcpSuffixArray { lcp_len, sa_len } => {
-                write!(
-                    f,
-                    "lcp.len() {} != suffix_array.len() {}",
-                    lcp_len, sa_len
-                )
+                write!(f, "lcp.len() {} != suffix_array.len() {}", lcp_len, sa_len)
             }
             InvariantError::InvalidFieldBoundary { doc_id, texts_len } => {
                 write!(
@@ -121,11 +113,7 @@ impl fmt::Display for InvariantError {
                 )
             }
             InvariantError::IncorrectTotalDocs { claimed, actual } => {
-                write!(
-                    f,
-                    "total_docs {} != texts.len() {}",
-                    claimed, actual
-                )
+                write!(f, "total_docs {} != texts.len() {}", claimed, actual)
             }
             InvariantError::EmptyPostingList { term } => {
                 write!(f, "posting list for '{}' is empty", term)
@@ -157,10 +145,7 @@ impl ValidatedSuffixEntry {
     /// Create a validated suffix entry.
     ///
     /// Returns `Err` if invariants are violated.
-    pub fn new(
-        entry: SuffixEntry,
-        texts: &[String],
-    ) -> Result<Self, InvariantError> {
+    pub fn new(entry: SuffixEntry, texts: &[String]) -> Result<Self, InvariantError> {
         // Check doc_id bound
         if entry.doc_id >= texts.len() {
             return Err(InvariantError::InvalidDocId {
@@ -229,10 +214,7 @@ impl SortedSuffixArray {
     /// Create a sorted suffix array by validating an existing array.
     ///
     /// Returns `Err` if the array is not sorted or contains invalid entries.
-    pub fn from_vec(
-        entries: Vec<SuffixEntry>,
-        texts: &[String],
-    ) -> Result<Self, InvariantError> {
+    pub fn from_vec(entries: Vec<SuffixEntry>, texts: &[String]) -> Result<Self, InvariantError> {
         // Validate all entries
         let validated: Result<Vec<_>, _> = entries
             .into_iter()

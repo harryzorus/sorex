@@ -188,7 +188,11 @@ pub fn check_suffix_array_complete(texts: &[String], suffix_array: &[SuffixEntry
                  missing entry for doc_id={}, offset={} (suffix: '{}')",
                 doc_id,
                 offset,
-                text.get(offset..).unwrap_or("").chars().take(20).collect::<String>()
+                text.get(offset..)
+                    .unwrap_or("")
+                    .chars()
+                    .take(20)
+                    .collect::<String>()
             );
         }
     }
@@ -212,11 +216,7 @@ pub fn check_suffix_array_complete(texts: &[String], suffix_array: &[SuffixEntry
 /// # Panics (debug builds only)
 /// Panics if LCP values are incorrect.
 #[inline]
-pub fn check_lcp_correct(
-    texts: &[String],
-    suffix_array: &[SuffixEntry],
-    lcp: &[usize],
-) {
+pub fn check_lcp_correct(texts: &[String], suffix_array: &[SuffixEntry], lcp: &[usize]) {
     debug_assert_eq!(
         lcp.len(),
         suffix_array.len(),
@@ -361,12 +361,7 @@ pub fn check_field_hierarchy() {
 
 /// Check that a score respects field type dominance.
 #[inline]
-pub fn check_score_dominance(
-    score1: f64,
-    field1: &FieldType,
-    score2: f64,
-    field2: &FieldType,
-) {
+pub fn check_score_dominance(score1: f64, field1: &FieldType, score2: f64, field2: &FieldType) {
     use std::cmp::Ordering;
 
     let cmp = match (field1, field2) {
@@ -385,11 +380,7 @@ pub fn check_score_dominance(
             actual, expected,
             "Contract violation: field_type_dominance - \
              {:?} score ({}) should {:?} {:?} score ({})",
-            field1,
-            score1,
-            expected,
-            field2,
-            score2
+            field1, score1, expected, field2, score2
         );
     }
 }
@@ -484,7 +475,10 @@ mod tests {
     #[test]
     fn test_check_suffix_entry_valid() {
         let texts = vec!["hello".to_string()];
-        let valid_entry = SuffixEntry { doc_id: 0, offset: 2 };
+        let valid_entry = SuffixEntry {
+            doc_id: 0,
+            offset: 2,
+        };
 
         // Should not panic
         check_suffix_entry_valid(&valid_entry, &texts);
@@ -494,7 +488,10 @@ mod tests {
     #[should_panic(expected = "Contract violation")]
     fn test_check_suffix_entry_invalid_doc_id() {
         let texts = vec!["hello".to_string()];
-        let invalid_entry = SuffixEntry { doc_id: 5, offset: 0 };
+        let invalid_entry = SuffixEntry {
+            doc_id: 5,
+            offset: 0,
+        };
 
         check_suffix_entry_valid(&invalid_entry, &texts);
     }

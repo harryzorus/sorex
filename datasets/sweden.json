@@ -1,0 +1,26 @@
+{
+  "id": 27,
+  "slug": "sweden",
+  "title": "Sweden",
+  "excerpt": "A Nordic country in Northern Europe",
+  "href": "/countries/sweden",
+  "type": "page",
+  "category": "geography",
+  "text": "Sweden is a Nordic country in Northern Europe known for its forests, lakes, and Northern Lights. Stockholm, the capital, is built on fourteen islands and is known for its archipelago and modern design. Sweden has a population of about 10.5 million and is famous for its innovations, IKEA furniture, and music (ABBA). The country is known for its strong welfare system and high quality of life. Sweden joined the European Union in 1995 but has not adopted the Euro, using the Swedish Krona instead. The country recently joined NATO in 2024. Sweden is known for its glass art (Orrefors), music festivals, and Nobel Prize traditions.",
+  "fieldBoundaries": [
+    {
+      "docId": 27,
+      "start": 0,
+      "end": 6,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 27,
+      "start": 7,
+      "end": 206,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

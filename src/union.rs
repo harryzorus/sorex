@@ -166,7 +166,11 @@ pub fn build_union_index_parallel(inputs: Vec<UnionIndexInput>) -> UnionIndex {
         let (titles, (headings, content)) = rayon::join(
             || {
                 if has_titles {
-                    Some(build_hybrid_index_parallel(docs.clone(), title_texts, vec![]))
+                    Some(build_hybrid_index_parallel(
+                        docs.clone(),
+                        title_texts,
+                        vec![],
+                    ))
                 } else {
                     None
                 }
@@ -175,14 +179,22 @@ pub fn build_union_index_parallel(inputs: Vec<UnionIndexInput>) -> UnionIndex {
                 rayon::join(
                     || {
                         if has_headings {
-                            Some(build_hybrid_index_parallel(docs.clone(), heading_texts, vec![]))
+                            Some(build_hybrid_index_parallel(
+                                docs.clone(),
+                                heading_texts,
+                                vec![],
+                            ))
                         } else {
                             None
                         }
                     },
                     || {
                         if has_content {
-                            Some(build_hybrid_index_parallel(docs.clone(), content_texts, vec![]))
+                            Some(build_hybrid_index_parallel(
+                                docs.clone(),
+                                content_texts,
+                                vec![],
+                            ))
                         } else {
                             None
                         }
@@ -196,17 +208,29 @@ pub fn build_union_index_parallel(inputs: Vec<UnionIndexInput>) -> UnionIndex {
     #[cfg(not(feature = "parallel"))]
     let (titles, headings, content) = {
         let titles = if has_titles {
-            Some(build_hybrid_index_parallel(docs.clone(), title_texts, vec![]))
+            Some(build_hybrid_index_parallel(
+                docs.clone(),
+                title_texts,
+                vec![],
+            ))
         } else {
             None
         };
         let headings = if has_headings {
-            Some(build_hybrid_index_parallel(docs.clone(), heading_texts, vec![]))
+            Some(build_hybrid_index_parallel(
+                docs.clone(),
+                heading_texts,
+                vec![],
+            ))
         } else {
             None
         };
         let content = if has_content {
-            Some(build_hybrid_index_parallel(docs.clone(), content_texts, vec![]))
+            Some(build_hybrid_index_parallel(
+                docs.clone(),
+                content_texts,
+                vec![],
+            ))
         } else {
             None
         };
@@ -261,7 +285,11 @@ pub fn search_union(index: &UnionIndex, query: &str) -> Vec<SearchResult> {
 
     // Sort by score descending
     let mut results: Vec<SearchResult> = results_by_doc.into_values().collect();
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results
 }
 
@@ -313,7 +341,7 @@ fn update_best_result(
     // when the TypeScript build pipeline sets them
     let section_id = match source {
         SearchSource::Title => None, // Title matches link to top of page
-        _ => None, // Heading/Content section_id to be added via field boundaries
+        _ => None,                   // Heading/Content section_id to be added via field boundaries
     };
     results
         .entry(doc_id)
@@ -324,7 +352,12 @@ fn update_best_result(
                 existing.section_id = section_id.clone();
             }
         })
-        .or_insert(SearchResult { doc, source, score, section_id });
+        .or_insert(SearchResult {
+            doc,
+            source,
+            score,
+            section_id,
+        });
 }
 
 #[cfg(test)]
@@ -349,7 +382,12 @@ mod tests {
     #[test]
     fn test_build_union_index() {
         let inputs = vec![
-            make_input(0, "Rust Guide", "Getting Started", "Rust is a systems language"),
+            make_input(
+                0,
+                "Rust Guide",
+                "Getting Started",
+                "Rust is a systems language",
+            ),
             make_input(1, "Python Intro", "Basics", "Python is interpreted"),
         ];
         let index = build_union_index(inputs);
@@ -424,7 +462,7 @@ mod tests {
     #[test]
     fn test_empty_index_sections() {
         let inputs = vec![
-            make_input(0, "Title Only", "", ""),  // No headings or content
+            make_input(0, "Title Only", "", ""), // No headings or content
         ];
         let index = build_union_index(inputs);
 
@@ -439,7 +477,12 @@ mod tests {
     #[test]
     fn test_multi_word_query() {
         let inputs = vec![
-            make_input(0, "Rust Programming", "Getting Started", "Learn Rust basics"),
+            make_input(
+                0,
+                "Rust Programming",
+                "Getting Started",
+                "Learn Rust basics",
+            ),
             make_input(1, "Python Guide", "Programming Basics", "Python intro"),
         ];
         let index = build_union_index(inputs);

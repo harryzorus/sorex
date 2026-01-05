@@ -1,0 +1,26 @@
+{
+  "id": 23,
+  "slug": "romania",
+  "title": "Romania",
+  "excerpt": "A country in Southeast Europe with Carpathian mountains",
+  "href": "/countries/romania",
+  "type": "page",
+  "category": "geography",
+  "text": "Romania is a country in Southeast Europe known for its Carpathian Mountains, medieval towns, and folk traditions. Bucharest, the capital, is known as the Paris of the East and features the Palace of Parliament, one of the world's largest buildings. Romania has a population of about 19 million and is known for its traditions, castles, and dark history associated with Dracula. The country is famous for its medieval fortified towns like Brașov and Sibiu. Romania joined the European Union in 2007 and adopted the Euro in... (not yet, uses the Leu). The country has a rich folk culture with traditional music, dance, and crafts. Romania is known for its Transylvania region, associated with Vlad the Impaler and the Dracula legend.",
+  "fieldBoundaries": [
+    {
+      "docId": 23,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 23,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

@@ -74,9 +74,7 @@ pub fn sais(text: &[u8]) -> Vec<usize> {
 
     // Remove the sentinel position from the result
     // The sentinel is always at position len-1 and always sorts first
-    sa.into_iter()
-        .filter(|&pos| pos < text.len())
-        .collect()
+    sa.into_iter().filter(|&pos| pos < text.len()).collect()
 }
 
 /// Core SA-IS implementation for u8 alphabet.
@@ -93,9 +91,7 @@ fn sais_inner(text: &[u8], alphabet_size: usize) -> Vec<usize> {
     let types = classify_suffixes_u8(text);
 
     // Step 2: Find LMS positions
-    let lms_positions: Vec<usize> = (1..n)
-        .filter(|&i| is_lms(&types, i))
-        .collect();
+    let lms_positions: Vec<usize> = (1..n).filter(|&i| is_lms(&types, i)).collect();
 
     // Step 3: Bucket sort setup
     let bucket_sizes = compute_bucket_sizes_u8(text, alphabet_size);
@@ -233,16 +229,18 @@ fn sais_recursive(text: &[usize], alphabet_size: usize) -> Vec<usize> {
         return vec![0];
     }
     if n == 2 {
-        return if text[0] <= text[1] { vec![0, 1] } else { vec![1, 0] };
+        return if text[0] <= text[1] {
+            vec![0, 1]
+        } else {
+            vec![1, 0]
+        };
     }
 
     // Classify suffixes
     let types = classify_suffixes_usize(text);
 
     // Find LMS positions
-    let lms_positions: Vec<usize> = (1..n)
-        .filter(|&i| is_lms(&types, i))
-        .collect();
+    let lms_positions: Vec<usize> = (1..n).filter(|&i| is_lms(&types, i)).collect();
 
     if lms_positions.is_empty() {
         // No LMS means all L-type or all S-type
@@ -723,10 +721,7 @@ mod tests {
 
     #[test]
     fn test_vocab_suffix_array_finds_script() {
-        let vocabulary = vec![
-            "javascript".to_string(),
-            "typescript".to_string(),
-        ];
+        let vocabulary = vec!["javascript".to_string(), "typescript".to_string()];
         let sa = build_vocab_suffix_array_sais(&vocabulary);
 
         // Find entries where suffix starts with "script"

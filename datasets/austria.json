@@ -1,0 +1,26 @@
+{
+  "id": 0,
+  "slug": "austria",
+  "title": "Austria",
+  "excerpt": "A landlocked country in Central Europe",
+  "href": "/countries/austria",
+  "type": "page",
+  "category": "geography",
+  "text": "Austria is a landlocked country in Central Europe. Vienna, the capital and largest city, is the cultural and political center of the country. Austria is known for its Alpine scenery, classical music heritage, and contributions to European culture. The country is located in the eastern Alps and has a population of about 9 million. Austria joined the European Union in 1995 and is part of the Eurozone since 1999. The Danube River flows through Austria and is an important waterway. Austria is famous for composers like Wolfgang Amadeus Mozart and Ludwig van Beethoven who spent significant time there.",
+  "fieldBoundaries": [
+    {
+      "docId": 0,
+      "start": 0,
+      "end": 7,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 0,
+      "start": 8,
+      "end": 207,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}

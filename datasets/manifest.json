@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "documents": [
+    "austria.json",
+    "belgium.json",
+    "bulgaria.json",
+    "croatia.json",
+    "cyprus.json",
+    "czech-republic.json",
+    "denmark.json",
+    "estonia.json",
+    "finland.json",
+    "france.json",
+    "germany.json",
+    "greece.json",
+    "hungary.json",
+    "iceland.json",
+    "ireland.json",
+    "italy.json",
+    "latvia.json",
+    "lithuania.json",
+    "luxembourg.json",
+    "malta.json",
+    "netherlands.json",
+    "poland.json",
+    "portugal.json",
+    "romania.json",
+    "slovakia.json",
+    "slovenia.json",
+    "spain.json",
+    "sweden.json",
+    "switzerland.json",
+    "ukraine.json"
+  ],
+  "indexes": {
+    "index": {
+      "include": "*"
+    }
+  }
+}

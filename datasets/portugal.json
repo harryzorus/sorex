@@ -1,0 +1,26 @@
+{
+  "id": 22,
+  "slug": "portugal",
+  "title": "Portugal",
+  "excerpt": "A country on the Iberian Peninsula",
+  "href": "/countries/portugal",
+  "type": "page",
+  "category": "geography",
+  "text": "Portugal is a country on the western edge of the Iberian Peninsula in Southern Europe. Lisbon, the capital, is known for its hills, tiles (azulejos), and historical sites. Portugal has a population of about 10.4 million and is known for its wine, cork production, and maritime heritage. The country has a rich history of exploration and navigation, with famous explorers like Vasco da Gama. Portugal joined the European Union in 1986 and adopted the Euro in 2002. The Douro Valley is known for its terraced vineyards and port wine production. Portugal is known for its Mediterranean and Atlantic coastlines, with beautiful beaches and dramatic cliffs like the Cliffs of Ponta da Piedade.",
+  "fieldBoundaries": [
+    {
+      "docId": 22,
+      "start": 0,
+      "end": 8,
+      "fieldType": "title",
+      "sectionId": null
+    },
+    {
+      "docId": 22,
+      "start": 9,
+      "end": 208,
+      "fieldType": "heading",
+      "sectionId": "overview"
+    }
+  ]
+}
