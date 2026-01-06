@@ -6,41 +6,37 @@ This guide covers integrating Sieve into your frontend application. Sieve compil
 
 ## Quick Start
 
-### 1. Build the WASM Module
+### 1. Generate a Search Index
 
 ```bash
-# From the sieve directory
-wasm-pack build --target web --out-dir pkg --features wasm
+# Build index from a directory of JSON documents
+sieve index --input ./docs --output ./search-output
 ```
 
 This produces:
-- `pkg/sieve.js`  -  ES module with WASM loader
-- `pkg/sieve_bg.wasm`  -  The WASM binary (~50KB gzipped)
-- `pkg/sieve.d.ts`  -  TypeScript definitions
+- `index-{hash}.sieve` - Self-contained binary with embedded WASM (~153KB gzipped)
+- `sieve-loader.js` - JavaScript loader module (17KB)
+- `sieve-loader.js.map` - Source map for debugging (optional, 40KB)
 
-### 2. Generate a Search Index
-
-```bash
-# From your content
-cat docs.json | sieve --binary > index.sieve
-```
-
-### 3. Load and Search
+### 2. Load and Search
 
 ```typescript
-import init, { SieveSearcher } from './pkg/sieve.js';
+import { loadSieve } from './sieve-loader.js';
 
-// Initialize WASM (do this once)
-await init();
-
-// Load your index
-const response = await fetch('/search/index.sieve');
-const bytes = new Uint8Array(await response.arrayBuffer());
-const searcher = new SieveSearcher(bytes);
+// Load index (extracts and initializes WASM automatically)
+const searcher = await loadSieve('./index-a1b2c3d4.sieve');
 
 // Search!
 const results = searcher.search('query', 10);
+
+// Results include section IDs for deep linking
+results.forEach(r => {
+  const url = r.sectionId ? `${r.href}#${r.sectionId}` : r.href;
+  console.log(`${r.title}: ${url}`);
+});
 ```
+
+That's it! The loader handles WASM extraction and initialization automatically.
 
 ---
 
@@ -236,7 +232,7 @@ interface BoostOptions {
 ```tsx
 // useSearch.ts
 import { useState, useEffect, useCallback } from 'react';
-import init, { SieveSearcher } from './pkg/sieve.js';
+import { loadSieve, SieveSearcher, SearchResult } from './sieve-loader.js';
 
 export function useSearch() {
   const [searcher, setSearcher] = useState<SieveSearcher | null>(null);
@@ -244,16 +240,17 @@ export function useSearch() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function load() {
-      await init();
-      const response = await fetch('/search/index.sieve');
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      setSearcher(new SieveSearcher(bytes));
-      setIsLoading(false);
-    }
-    load();
-
-    return () => searcher?.free();
+    let mounted = true;
+    loadSieve('/search/index.sieve').then(s => {
+      if (mounted) {
+        setSearcher(s);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      mounted = false;
+      searcher?.free();
+    };
   }, []);
 
   const search = useCallback((query: string) => {
@@ -301,16 +298,12 @@ export function SearchModal() {
 
 ```html
 <script type="module">
-  import init, { SieveSearcher } from './pkg/sieve.js';
+  import { loadSieve } from './sieve-loader.js';
 
   let searcher;
 
   async function initSearch() {
-    await init();
-    const response = await fetch('/search/index.sieve');
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    searcher = new SieveSearcher(bytes);
-
+    searcher = await loadSieve('/search/index.sieve');
     document.getElementById('search-input')
       .addEventListener('input', handleSearch);
   }
@@ -418,18 +411,18 @@ Suggestions are sorted by document frequency (most common terms first).
 
 ### 1. Initialize Once
 
-WASM initialization and index loading are expensive. Do them once at app startup, not per search.
+Index loading is the expensive operation. Do it once at app startup, not per search.
 
 ```typescript
 // Good: Initialize once
-const searcher = await initSearch();
+const searcher = await loadSieve('/search/index.sieve');
 document.addEventListener('keydown', (e) => {
   if (e.key === '/') searchModal.open(searcher);
 });
 
 // Bad: Initialize per search
 searchButton.onclick = async () => {
-  const searcher = await initSearch();  // Slow!
+  const searcher = await loadSieve('/search/index.sieve');  // Slow!
   searcher.search(query);
 };
 ```
@@ -468,7 +461,7 @@ Load the index before the user opens search:
 
 ```typescript
 // Preload on page load
-let searcherPromise = initSearch();
+let searcherPromise = loadSieve('/search/index.sieve');
 
 // Use when needed
 async function openSearch() {
@@ -486,7 +479,7 @@ async function openSearch() {
 The index file is corrupted or in the wrong format. Regenerate it:
 
 ```bash
-cat docs.json | sieve --binary > index.sieve
+sieve index --input ./docs --output ./search-output
 ```
 
 ### Empty Results

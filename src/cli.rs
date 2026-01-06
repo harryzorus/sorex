@@ -8,28 +8,24 @@ use clap::{Parser, Subcommand};
 )]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Commands,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
     /// Build search index from directory of JSON files
-    Build {
+    Index {
         /// Input directory containing manifest.json and document files
         #[arg(short, long)]
         input: String,
 
-        /// Output directory for .sieve files and optionally WASM
+        /// Output directory for .sieve files
         #[arg(short, long)]
         output: String,
 
-        /// Specific indexes to build (comma-separated). Default: all in manifest
-        #[arg(long, value_delimiter = ',')]
-        indexes: Option<Vec<String>>,
-
-        /// Emit WASM/JS/TypeScript files alongside indexes
+        /// Generate demo HTML page showing integration example
         #[arg(long)]
-        emit_wasm: bool,
+        demo: bool,
     },
 
     /// Inspect a .sieve file structure

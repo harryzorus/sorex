@@ -256,6 +256,8 @@ That's 100x faster, and the gap widens with vocabulary size.
 
 Posting lists can be huge. A common term like "the" might appear in every document. Naive storage wastes space:
 
+> **Note:** Block PFOR is a technique popularized by [Apache Lucene](https://lucene.apache.org/) (Lucene 4.0+). Sieve's implementation follows the same principles: 128-document blocks, bit-packing, and exception handling for outliers.
+
 ```
 Posting list for "the": [0, 1, 2, 3, 4, ...]
 Raw storage: 4 bytes × n_docs
@@ -393,7 +395,7 @@ fn intersect(a: &[usize], b: &[usize]) -> Vec<usize> {
 
 ### Skip Lists
 
-For very long posting lists, add skip pointers:
+Skip lists for posting traversal are another classic Lucene technique. For very long posting lists, add skip pointers:
 
 ```
 Posting list: [0, 5, 12, 18, 25, 33, 41, 50, ...]

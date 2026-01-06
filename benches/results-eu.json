@@ -1,6 +1,6 @@
 {
   "meta": {
-    "timestamp": "2026-01-05T22:07:25.919Z",
+    "timestamp": "2026-01-06T06:53:36.504Z",
     "cpu": "Apple M5",
     "memory": "32GB",
     "os": "darwin 26.2",
@@ -10,33 +10,33 @@
   "timeToFirst": [
     {
       "library": "Sieve (load .sieve)",
-      "opsPerSec": 8962,
-      "meanMs": 0.112,
-      "samples": 44813
+      "opsPerSec": 4959,
+      "meanMs": 0.202,
+      "samples": 24798
     },
     {
       "library": "fuse.js (build)",
-      "opsPerSec": 20257,
-      "meanMs": 0.049,
-      "samples": 101288
+      "opsPerSec": 20791,
+      "meanMs": 0.048,
+      "samples": 103957
     },
     {
       "library": "lunr.js (build)",
-      "opsPerSec": 415,
-      "meanMs": 2.407,
-      "samples": 2077
+      "opsPerSec": 401,
+      "meanMs": 2.493,
+      "samples": 2006
     },
     {
       "library": "flexsearch (build)",
-      "opsPerSec": 3253,
-      "meanMs": 0.307,
-      "samples": 16264
+      "opsPerSec": 3124,
+      "meanMs": 0.32,
+      "samples": 15618
     },
     {
       "library": "minisearch (build)",
-      "opsPerSec": 1198,
-      "meanMs": 0.835,
-      "samples": 5989
+      "opsPerSec": 1179,
+      "meanMs": 0.848,
+      "samples": 5894
     }
   ],
   "queryLatency": {
@@ -46,32 +46,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 93302,
-          "meanUs": 10.7,
+          "opsPerSec": 82327,
+          "meanUs": 12.1,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 3510,
-          "meanUs": 284.9,
+          "opsPerSec": 3396,
+          "meanUs": 294.4,
           "resultsFound": 30
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 97385,
-          "meanUs": 10.3,
+          "opsPerSec": 95303,
+          "meanUs": 10.5,
           "resultsFound": 30
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 2856942,
-          "meanUs": 0.4,
+          "opsPerSec": 3025779,
+          "meanUs": 0.3,
           "resultsFound": 30
         },
         {
           "library": "minisearch",
-          "opsPerSec": 98394,
-          "meanUs": 10.2,
+          "opsPerSec": 96874,
+          "meanUs": 10.3,
           "resultsFound": 30
         }
       ]
@@ -82,32 +82,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 95362,
-          "meanUs": 10.5,
+          "opsPerSec": 81114,
+          "meanUs": 12.3,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 3208,
-          "meanUs": 311.7,
+          "opsPerSec": 3385,
+          "meanUs": 295.5,
           "resultsFound": 30
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 80713,
-          "meanUs": 12.4,
+          "opsPerSec": 89788,
+          "meanUs": 11.1,
           "resultsFound": 29
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 2008282,
+          "opsPerSec": 2012540,
           "meanUs": 0.5,
           "resultsFound": 31
         },
         {
           "library": "minisearch",
-          "opsPerSec": 36399,
-          "meanUs": 27.5,
+          "opsPerSec": 34937,
+          "meanUs": 28.6,
           "resultsFound": 30
         }
       ]
@@ -118,32 +118,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 158984,
-          "meanUs": 6.3,
+          "opsPerSec": 144529,
+          "meanUs": 6.9,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 1859,
-          "meanUs": 537.8,
+          "opsPerSec": 1815,
+          "meanUs": 550.9,
           "resultsFound": 14
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 155071,
-          "meanUs": 6.4,
+          "opsPerSec": 152307,
+          "meanUs": 6.6,
           "resultsFound": 11
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 2386915,
+          "opsPerSec": 2380671,
           "meanUs": 0.4,
           "resultsFound": 15
         },
         {
           "library": "minisearch",
-          "opsPerSec": 129988,
-          "meanUs": 7.7,
+          "opsPerSec": 128394,
+          "meanUs": 7.8,
           "resultsFound": 11
         }
       ]
@@ -154,31 +154,31 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 15318,
-          "meanUs": 65.3,
+          "opsPerSec": 15173,
+          "meanUs": 65.9,
           "resultsFound": 1
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 1904,
-          "meanUs": 525.1,
+          "opsPerSec": 1843,
+          "meanUs": 542.5,
           "resultsFound": 0
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 865652,
+          "opsPerSec": 831340,
           "meanUs": 1.2,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3496145,
+          "opsPerSec": 3983513,
           "meanUs": 0.3,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 194029,
+          "opsPerSec": 193360,
           "meanUs": 5.2,
           "resultsFound": 0
         }
@@ -190,32 +190,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 31956,
-          "meanUs": 31.3,
+          "opsPerSec": 31474,
+          "meanUs": 31.8,
           "resultsFound": 0
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 3234,
-          "meanUs": 309.2,
+          "opsPerSec": 3124,
+          "meanUs": 320.1,
           "resultsFound": 29
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 58841,
-          "meanUs": 17,
+          "opsPerSec": 57224,
+          "meanUs": 17.5,
           "resultsFound": 29
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 976884,
+          "opsPerSec": 1019030,
           "meanUs": 1,
           "resultsFound": 29
         },
         {
           "library": "minisearch",
-          "opsPerSec": 27617,
-          "meanUs": 36.2,
+          "opsPerSec": 27385,
+          "meanUs": 36.5,
           "resultsFound": 30
         }
       ]
@@ -226,32 +226,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 35206,
-          "meanUs": 28.4,
+          "opsPerSec": 34726,
+          "meanUs": 28.8,
           "resultsFound": 0
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 948,
-          "meanUs": 1054.8,
+          "opsPerSec": 953,
+          "meanUs": 1049.5,
           "resultsFound": 8
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 95770,
-          "meanUs": 10.4,
+          "opsPerSec": 93309,
+          "meanUs": 10.7,
           "resultsFound": 13
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 966883,
+          "opsPerSec": 1041216,
           "meanUs": 1,
           "resultsFound": 4
         },
         {
           "library": "minisearch",
-          "opsPerSec": 19678,
-          "meanUs": 50.8,
+          "opsPerSec": 18762,
+          "meanUs": 53.3,
           "resultsFound": 13
         }
       ]
@@ -262,32 +262,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 31857,
-          "meanUs": 31.4,
+          "opsPerSec": 30151,
+          "meanUs": 33.2,
           "resultsFound": 0
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 794,
-          "meanUs": 1259.1,
+          "opsPerSec": 714,
+          "meanUs": 1400.6,
           "resultsFound": 0
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 235353,
-          "meanUs": 4.2,
+          "opsPerSec": 225795,
+          "meanUs": 4.4,
           "resultsFound": 1
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 1449564,
-          "meanUs": 0.7,
+          "opsPerSec": 1558209,
+          "meanUs": 0.6,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 15378,
-          "meanUs": 65,
+          "opsPerSec": 15359,
+          "meanUs": 65.1,
           "resultsFound": 1
         }
       ]
@@ -298,32 +298,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 16696,
-          "meanUs": 59.9,
+          "opsPerSec": 16066,
+          "meanUs": 62.2,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 2742,
-          "meanUs": 364.6,
+          "opsPerSec": 2644,
+          "meanUs": 378.2,
           "resultsFound": 30
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 930698,
+          "opsPerSec": 887764,
           "meanUs": 1.1,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3487242,
-          "meanUs": 0.3,
+          "opsPerSec": 4008116,
+          "meanUs": 0.2,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 76963,
-          "meanUs": 13,
+          "opsPerSec": 75238,
+          "meanUs": 13.3,
           "resultsFound": 30
         }
       ]
@@ -334,32 +334,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 17410,
-          "meanUs": 57.4,
+          "opsPerSec": 16403,
+          "meanUs": 61,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 1947,
-          "meanUs": 513.6,
+          "opsPerSec": 1841,
+          "meanUs": 543.3,
           "resultsFound": 6
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 959190,
-          "meanUs": 1,
+          "opsPerSec": 947517,
+          "meanUs": 1.1,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3469714,
-          "meanUs": 0.3,
+          "opsPerSec": 4047660,
+          "meanUs": 0.2,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 122397,
-          "meanUs": 8.2,
+          "opsPerSec": 138092,
+          "meanUs": 7.2,
           "resultsFound": 0
         }
       ]
@@ -370,32 +370,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 22317,
-          "meanUs": 44.8,
+          "opsPerSec": 21975,
+          "meanUs": 45.5,
           "resultsFound": 4
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 4001,
-          "meanUs": 249.9,
+          "opsPerSec": 3843,
+          "meanUs": 260.2,
           "resultsFound": 13
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 910907,
-          "meanUs": 1.1,
+          "opsPerSec": 1030775,
+          "meanUs": 1,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3502922,
-          "meanUs": 0.3,
+          "opsPerSec": 4140411,
+          "meanUs": 0.2,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 73237,
-          "meanUs": 13.7,
+          "opsPerSec": 71774,
+          "meanUs": 13.9,
           "resultsFound": 30
         }
       ]
@@ -406,32 +406,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 15185,
-          "meanUs": 65.9,
+          "opsPerSec": 14057,
+          "meanUs": 71.1,
           "resultsFound": 10
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 2003,
-          "meanUs": 499.3,
+          "opsPerSec": 1912,
+          "meanUs": 523.1,
           "resultsFound": 29
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 684825,
+          "opsPerSec": 673168,
           "meanUs": 1.5,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3323823,
-          "meanUs": 0.3,
+          "opsPerSec": 4001220,
+          "meanUs": 0.2,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 22462,
-          "meanUs": 44.5,
+          "opsPerSec": 21964,
+          "meanUs": 45.5,
           "resultsFound": 30
         }
       ]
@@ -442,32 +442,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 14044,
-          "meanUs": 71.2,
+          "opsPerSec": 14657,
+          "meanUs": 68.2,
           "resultsFound": 0
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 1299,
-          "meanUs": 769.6,
+          "opsPerSec": 1337,
+          "meanUs": 748.1,
           "resultsFound": 0
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 753954,
+          "opsPerSec": 762344,
           "meanUs": 1.3,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3424100,
-          "meanUs": 0.3,
+          "opsPerSec": 4147190,
+          "meanUs": 0.2,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 43824,
-          "meanUs": 22.8,
+          "opsPerSec": 42213,
+          "meanUs": 23.7,
           "resultsFound": 0
         }
       ]
@@ -478,32 +478,32 @@
       "results": [
         {
           "library": "Sieve",
-          "opsPerSec": 23937,
-          "meanUs": 41.8,
+          "opsPerSec": 23372,
+          "meanUs": 42.8,
           "resultsFound": 8
         },
         {
           "library": "fuse.js",
-          "opsPerSec": 1329,
-          "meanUs": 752.5,
+          "opsPerSec": 1304,
+          "meanUs": 766.7,
           "resultsFound": 8
         },
         {
           "library": "lunr.js",
-          "opsPerSec": 614441,
+          "opsPerSec": 607273,
           "meanUs": 1.6,
           "resultsFound": 0
         },
         {
           "library": "flexsearch",
-          "opsPerSec": 3307068,
+          "opsPerSec": 3810744,
           "meanUs": 0.3,
           "resultsFound": 0
         },
         {
           "library": "minisearch",
-          "opsPerSec": 15055,
-          "meanUs": 66.4,
+          "opsPerSec": 14179,
+          "meanUs": 70.5,
           "resultsFound": 8
         }
       ]
@@ -517,10 +517,10 @@
         {
           "library": "Sieve (streaming)",
           "results": 30,
-          "tier1Us": "8.6",
-          "tier2Us": "19.6",
-          "allUs": "101.0",
-          "p99Us": "136.7",
+          "tier1Us": "10.1",
+          "tier2Us": "21.5",
+          "allUs": "108.0",
+          "p99Us": "213.2",
           "breakdown": "10+10+10"
         },
         {
@@ -528,8 +528,8 @@
           "results": 30,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "289.6",
-          "p99Us": "383.1",
+          "allUs": "288.4",
+          "p99Us": "369.5",
           "breakdown": "30"
         },
         {
@@ -538,7 +538,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "11.7",
-          "p99Us": "25.5",
+          "p99Us": "26.0",
           "breakdown": "29"
         },
         {
@@ -547,7 +547,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "0.6",
-          "p99Us": "3.1",
+          "p99Us": "2.5",
           "breakdown": "31"
         },
         {
@@ -555,8 +555,8 @@
           "results": 30,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "30.2",
-          "p99Us": "45.8",
+          "allUs": "29.8",
+          "p99Us": "39.2",
           "breakdown": "30"
         }
       ]
@@ -568,10 +568,10 @@
         {
           "library": "Sieve (streaming)",
           "results": 18,
-          "tier1Us": "0.5",
-          "tier2Us": "5.1",
-          "allUs": "64.8",
-          "p99Us": "82.7",
+          "tier1Us": "0.6",
+          "tier2Us": "5.6",
+          "allUs": "68.6",
+          "p99Us": "176.8",
           "breakdown": "0+8+10"
         },
         {
@@ -579,8 +579,8 @@
           "results": 30,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "366.7",
-          "p99Us": "414.3",
+          "allUs": "375.5",
+          "p99Us": "561.3",
           "breakdown": "30"
         },
         {
@@ -589,7 +589,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "1.3",
-          "p99Us": "3.8",
+          "p99Us": "2.6",
           "breakdown": "0"
         },
         {
@@ -598,7 +598,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "0.3",
-          "p99Us": "1.0",
+          "p99Us": "0.8",
           "breakdown": "0"
         },
         {
@@ -607,7 +607,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "13.4",
-          "p99Us": "20.0",
+          "p99Us": "20.6",
           "breakdown": "30"
         }
       ]
@@ -620,9 +620,9 @@
           "library": "Sieve (streaming)",
           "results": 8,
           "tier1Us": "0.4",
-          "tier2Us": "0.9",
-          "allUs": "42.8",
-          "p99Us": "57.0",
+          "tier2Us": "1.0",
+          "allUs": "43.5",
+          "p99Us": "58.8",
           "breakdown": "0+0+8"
         },
         {
@@ -630,8 +630,8 @@
           "results": 8,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "737.3",
-          "p99Us": "868.0",
+          "allUs": "748.5",
+          "p99Us": "844.0",
           "breakdown": "8"
         },
         {
@@ -639,8 +639,8 @@
           "results": 0,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "1.9",
-          "p99Us": "4.8",
+          "allUs": "1.8",
+          "p99Us": "3.7",
           "breakdown": "0"
         },
         {
@@ -649,7 +649,7 @@
           "tier1Us": "-",
           "tier2Us": "-",
           "allUs": "0.3",
-          "p99Us": "0.7",
+          "p99Us": "0.8",
           "breakdown": "0"
         },
         {
@@ -657,8 +657,8 @@
           "results": 8,
           "tier1Us": "-",
           "tier2Us": "-",
-          "allUs": "68.9",
-          "p99Us": "96.6",
+          "allUs": "73.5",
+          "p99Us": "138.6",
           "breakdown": "8"
         }
       ]
@@ -674,8 +674,8 @@
     },
     {
       "library": "Sieve (.sieve)",
-      "rawKB": "29.0",
-      "gzipKB": "15.6",
+      "rawKB": "347.1",
+      "gzipKB": "167.6",
       "note": "binary"
     },
     {

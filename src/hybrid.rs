@@ -632,6 +632,9 @@ mod tests {
             excerpt: String::new(),
             href: format!("/doc/{}", id),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         }
     }
 
@@ -727,10 +730,11 @@ mod tests {
     #[test]
     fn test_vocabulary_size() {
         let docs = vec![make_doc(0, "Test")];
-        let texts = vec!["the the the rust rust".to_string()];
+        // Note: "the" is a stop word and gets filtered out
+        let texts = vec!["apple apple apple rust rust".to_string()];
         let index = build_hybrid_index(docs, texts, vec![]);
 
-        // Vocabulary should have 2 unique terms: "the", "rust"
+        // Vocabulary should have 2 unique terms: "apple", "rust"
         assert_eq!(index.vocabulary.len(), 2);
     }
 

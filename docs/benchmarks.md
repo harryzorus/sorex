@@ -47,11 +47,11 @@ How long from loading until search is ready? This is what users experience.
 
 | Library | Time | Notes |
 |---------|------|-------|
-| **Sieve (WASM)** | 0.11ms | Load pre-built .sieve binary |
+| **Sieve (WASM)** | 0.12ms | Load pre-built .sieve binary |
 | fuse.js | 0.05ms | No index (stores raw data) |
-| FlexSearch | 0.31ms | Build from documents |
-| MiniSearch | 0.84ms | Build from documents |
-| lunr.js | 2.43ms | Build from documents |
+| FlexSearch | 0.32ms | Build from documents |
+| MiniSearch | 0.85ms | Build from documents |
+| lunr.js | 2.61ms | Build from documents |
 
 *Measured on European Countries dataset (30 documents).*
 
@@ -59,11 +59,11 @@ Sieve's load time is predictable because it doesn't build anything at runtime. J
 
 ### Offline Index Build (Sieve)
 
-Sieve builds indexes ahead of time using the `sieve build` CLI or Rust API. This happens at deploy time, not in the browser.
+Sieve builds indexes ahead of time using the `sieve index` CLI or Rust API. This happens at deploy time, not in the browser.
 
 ```bash
-# Build index from documents
-sieve build --input ./docs --output ./search-index --emit-wasm
+# Build index from documents (WASM is embedded by default)
+sieve index --input ./docs --output ./search-index
 ```
 
 For native Rust build times, run `cargo bench -- index_build`.
@@ -72,35 +72,35 @@ For native Rust build times, run `cargo bench -- index_build`.
 
 ## Query Latency
 
-Search performance on European Countries dataset (30 documents). Higher ops/sec is better.
+Search performance on European Countries dataset (30 documents). Sieve shows tier latencies: **T1** (exact), **T2** (prefix), **All** (including fuzzy).
 
 ### Exact Word Queries
 
 Query: `"history"` - Common word (11+ results expected)
 
-| Library | Results | Latency (us) | ops/sec |
-|---------|---------|--------------|---------|
-| **Sieve** | 10 | 6.3 | 159,666 |
-| FlexSearch | 15 | 0.4 | 2,501,958 |
-| lunr.js | 11 | 6.3 | 158,660 |
-| MiniSearch | 11 | 7.5 | 133,526 |
-| fuse.js | 14 | 559.8 | 1,786 |
+| Library | Results | T1 (us) | T2 (us) | All (us) | ops/sec |
+|---------|---------|---------|---------|----------|---------|
+| **Sieve** | 10 | 2.1 | 3.8 | 6.6 | 151,158 |
+| FlexSearch | 15 | - | - | 0.4 | 2,426,517 |
+| lunr.js | 11 | - | - | 6.5 | 153,586 |
+| MiniSearch | 11 | - | - | 7.7 | 130,599 |
+| fuse.js | 14 | - | - | 555.8 | 1,799 |
 
-FlexSearch is fastest for exact matches because it has the tightest inner loop. Fuse.js is 1000x slower because it scans all documents and computes fuzzy scores.
+FlexSearch is fastest for exact matches because it has the tightest inner loop. Fuse.js is 1000x slower because it scans all documents and computes fuzzy scores. **Sieve shows first results (T1) in 2.1us** - users see results immediately while fuzzy search continues.
 
 ### Rare Terms
 
 Query: `"fjords"` (appears in Norway only)
 
-| Library | Results | Latency (us) | ops/sec |
-|---------|---------|--------------|---------|
-| **Sieve** | 1 | 65.9 | 15,175 |
-| FlexSearch | 0 | 0.2 | 4,057,569 |
-| lunr.js | 0 | 1.1 | 913,244 |
-| MiniSearch | 0 | 5.0 | 198,543 |
-| fuse.js | 0 | 542.7 | 1,843 |
+| Library | Results | T1 (us) | T2 (us) | All (us) | ops/sec |
+|---------|---------|---------|---------|----------|---------|
+| **Sieve** | 1 | 0.4 | 0.8 | 64.4 | 15,524 |
+| FlexSearch | 0 | - | - | 0.3 | 3,659,951 |
+| lunr.js | 0 | - | - | 1.1 | 876,883 |
+| MiniSearch | 0 | - | - | 5.1 | 194,748 |
+| fuse.js | 0 | - | - | 527.0 | 1,898 |
 
-**Only Sieve finds the result.** Inverted indexes don't index rare terms - they require minimum document frequency thresholds. Sieve's suffix array finds any string, rare or common.
+**Only Sieve finds the result.** Inverted indexes don't index rare terms - they require minimum document frequency thresholds. Sieve's suffix array finds any string, rare or common. The 64us total is dominated by fuzzy search, but T1/T2 complete in under 1us.
 
 ---
 
@@ -108,13 +108,15 @@ Query: `"fjords"` (appears in Norway only)
 
 This is why Sieve exists. Query: `"land"` (to find "Iceland", "Finland", "landlocked", etc.)
 
-| Library | Results | Latency (us) | Notes |
-|---------|---------|--------------|-------|
-| **Sieve** | **10** | 60.5 | Finds substring matches |
-| MiniSearch | 30 | 13.1 | Fuzzy mode (over-inclusive) |
-| fuse.js | 30 | 373.6 | Fuzzy matches everything |
-| lunr.js | **0** | 1.1 | No substring support |
-| FlexSearch | **0** | 0.2 | No substring support |
+| Library | Results | T1 (us) | T2 (us) | All (us) | Notes |
+|---------|---------|---------|---------|----------|-------|
+| **Sieve** | **10** | 0.5 | 5.2 | 59.8 | Finds substring matches |
+| MiniSearch | 30 | - | - | 13.2 | Fuzzy mode (over-inclusive) |
+| fuse.js | 30 | - | - | 387.9 | Fuzzy matches everything |
+| lunr.js | **0** | - | - | 1.1 | No substring support |
+| FlexSearch | **0** | - | - | 0.3 | No substring support |
+
+**Key insight:** Sieve returns 8 prefix matches (T2) in just 5.2us - before the 60us fuzzy search even starts. Users see "Finland", "Iceland", "landlocked" immediately.
 
 ### Why Result Counts Differ
 
@@ -153,25 +155,25 @@ Inverted indexes tokenize by words - they cannot match substrings within words. 
 
 Query: `"popultion"` (typo for "population", edit distance 1)
 
-| Library | Results | Latency (us) | Notes |
-|---------|---------|--------------|-------|
-| **Sieve** | **10** | 67.2 | Levenshtein automata (precise) |
-| MiniSearch | 30 | 44.4 | Fuzzy mode (over-inclusive) |
-| fuse.js | 29 | 512.8 | Fuzzy matching (very slow) |
-| lunr.js | 0 | 1.5 | No fuzzy support |
-| FlexSearch | 0 | 0.3 | No fuzzy support |
+| Library | Results | T1 (us) | T2 (us) | All (us) | Notes |
+|---------|---------|---------|---------|----------|-------|
+| **Sieve** | **10** | 0.4 | 0.9 | 65.1 | Levenshtein automata (precise) |
+| MiniSearch | 30 | - | - | 44.6 | Fuzzy mode (over-inclusive) |
+| fuse.js | 29 | - | - | 522.8 | Fuzzy matching (very slow) |
+| lunr.js | 0 | - | - | 1.4 | No fuzzy support |
+| FlexSearch | 0 | - | - | 0.3 | No fuzzy support |
 
 Query: `"mediteranean"` (typo for "mediterranean", edit distance 1)
 
-| Library | Results | Latency (us) | Notes |
-|---------|---------|--------------|-------|
-| **Sieve** | **8** | 42.5 | Correct matches only |
-| MiniSearch | 8 | 73.4 | Fuzzy mode |
-| fuse.js | 8 | 780.2 | Fuzzy matching (slow) |
-| lunr.js | 0 | 1.6 | No fuzzy support |
-| FlexSearch | 0 | 0.3 | No fuzzy support |
+| Library | Results | T1 (us) | T2 (us) | All (us) | Notes |
+|---------|---------|---------|---------|----------|-------|
+| **Sieve** | **8** | 0.4 | 1.0 | 41.7 | Correct matches only |
+| MiniSearch | 8 | - | - | 69.4 | Fuzzy mode |
+| fuse.js | 8 | - | - | 779.3 | Fuzzy matching (slow) |
+| lunr.js | 0 | - | - | 1.6 | No fuzzy support |
+| FlexSearch | 0 | - | - | 0.3 | No fuzzy support |
 
-**Key difference:** Sieve uses Levenshtein automata for true edit-distance matching within distance 2. MiniSearch's fuzzy mode uses prefix expansion (generates all possible prefixes), which produces false positives and is not true edit-distance matching.
+**Key difference:** Sieve uses Levenshtein automata for true edit-distance matching within distance 2. MiniSearch's fuzzy mode uses prefix expansion (generates all possible prefixes), which produces false positives and is not true edit-distance matching. Note that T1/T2 return quickly (no matches for typos), while all results come from T3 fuzzy search.
 
 ---
 
@@ -187,25 +189,25 @@ Sieve's streaming API returns results in three tiers, enabling progressive UX wh
 
 | Library | Results | Tier 1 | Tier 2 | All | P99 | Breakdown |
 |---------|---------|--------|--------|-----|-----|-----------|
-| **Sieve (streaming)** | 30 | **8.7us** | 18.8us | 100.3us | 135.5us | 10+10+10 |
-| FlexSearch | 31 | - | - | 0.6us | 2.1us | 31 |
-| lunr.js | 29 | - | - | 11.8us | 17.3us | 29 |
-| MiniSearch | 30 | - | - | 30.9us | 41.0us | 30 |
-| fuse.js | 30 | - | - | 300.7us | 367.0us | 30 |
+| **Sieve (streaming)** | 30 | **9.1us** | 19.8us | 103.9us | 228.6us | 10+10+10 |
+| FlexSearch | 31 | - | - | 0.7us | 4.7us | 31 |
+| lunr.js | 29 | - | - | 12.4us | 26.9us | 29 |
+| MiniSearch | 30 | - | - | 30.7us | 44.3us | 30 |
+| fuse.js | 30 | - | - | 307.3us | 396.1us | 30 |
 
-**Sieve shows 10 exact matches in 8.7us** - users see results 10x faster than waiting for all 30.
+**Sieve shows 10 exact matches in 9.1us** - users see results 10x faster than waiting for all 30.
 
 ### Substring Query: `"land"`
 
 | Library | Results | Tier 1 | Tier 2 | All | P99 | Breakdown |
 |---------|---------|--------|--------|-----|-----|-----------|
-| **Sieve (streaming)** | 18 | 0.5us | **5.1us** | 64.7us | 79.7us | 0+8+10 |
-| FlexSearch | 0 | - | - | 0.3us | 0.6us | 0 |
-| lunr.js | 0 | - | - | 1.3us | 2.5us | 0 |
-| MiniSearch | 30 | - | - | 13.1us | 16.9us | 30 |
-| fuse.js | 30 | - | - | 373.7us | 413.6us | 30 |
+| **Sieve (streaming)** | 18 | 0.5us | **5.2us** | 64.9us | 91.9us | 0+8+10 |
+| FlexSearch | 0 | - | - | 0.3us | 0.8us | 0 |
+| lunr.js | 0 | - | - | 1.3us | 3.2us | 0 |
+| MiniSearch | 30 | - | - | 13.7us | 19.3us | 30 |
+| fuse.js | 30 | - | - | 398.2us | 500.2us | 30 |
 
-**No exact match for "land"** (tier 1 returns 0), but **8 prefix matches in 5.1us** from words like "landlocked", "landscape". Tier 3 adds 10 fuzzy matches.
+**No exact match for "land"** (tier 1 returns 0), but **8 prefix matches in 5.2us** from words like "landlocked", "landscape". Tier 3 adds 10 fuzzy matches.
 
 *Note: FlexSearch/lunr.js return 0 results - they don't support substring search. MiniSearch/fuse.js return 30 because their fuzzy matching is over-inclusive (see "Why Result Counts Differ" above).*
 
@@ -213,11 +215,11 @@ Sieve's streaming API returns results in three tiers, enabling progressive UX wh
 
 | Library | Results | Tier 1 | Tier 2 | All | P99 | Breakdown |
 |---------|---------|--------|--------|-----|-----|-----------|
-| **Sieve (streaming)** | 8 | 0.4us | 0.9us | **43.3us** | 63.6us | 0+0+8 |
-| FlexSearch | 0 | - | - | 0.3us | 0.7us | 0 |
-| lunr.js | 0 | - | - | 1.8us | 4.5us | 0 |
-| MiniSearch | 8 | - | - | 71.1us | 95.6us | 8 |
-| fuse.js | 8 | - | - | 761.4us | 835.3us | 8 |
+| **Sieve (streaming)** | 8 | 0.4us | 1.0us | **43.1us** | 60.0us | 0+0+8 |
+| FlexSearch | 0 | - | - | 0.4us | 1.0us | 0 |
+| lunr.js | 0 | - | - | 1.9us | 5.3us | 0 |
+| MiniSearch | 8 | - | - | 69.0us | 95.4us | 8 |
+| fuse.js | 8 | - | - | 791.5us | 916.2us | 8 |
 
 **All results come from fuzzy tier** (typo doesn't match exactly or as prefix). Sieve's Levenshtein DFA is faster than fuse.js (~17x) and competitive with MiniSearch.
 
@@ -246,12 +248,13 @@ Sieve's binary format is slightly larger than raw data but includes:
 
 | Component | Size | Notes |
 |-----------|------|-------|
-| Header | 44 bytes | Magic, version, counts |
+| Header | 52 bytes | Magic, version, counts |
 | Vocabulary | ~500 bytes | Sorted term list |
 | Suffix Array | ~8 KB | Delta + varint encoded |
 | Postings | ~15 KB | Block PFOR compressed |
 | Levenshtein DFA | ~1.2 KB | Precomputed automaton |
 | Documents | varies | Metadata for results |
+| Dictionary Tables | varies | Parquet-style compression (v7) |
 | Footer | 8 bytes | CRC32 + magic |
 
 ---
@@ -266,7 +269,12 @@ Library code size (what users download):
 | fuse.js | 66 KB | 15.3 KB |
 | MiniSearch | 76 KB | 17.9 KB |
 | lunr.js | 97 KB | 24.3 KB |
-| **Sieve (WASM)** | 342 KB | 153 KB |
+| **Sieve (WASM + loader)** | 346 KB | 153 KB |
+
+The Sieve bundle consists of:
+- `sieve_bg.wasm`: 329 KB raw, 153 KB gzipped (embedded in .sieve file)
+- `sieve-loader.js`: 17 KB raw, 4.5 KB gzipped (self-contained, no dependencies)
+- `sieve-loader.js.map`: 40 KB (optional, for debugging)
 
 Sieve's WASM bundle is larger because it includes:
 - Suffix array construction and search
@@ -303,7 +311,7 @@ The right choice depends on what you're willing to trade.
 - Users expect substring search ("auth" -> "authentication")
 - Typo tolerance is essential ("typscript" -> "typescript")
 - Correctness matters (field ranking is proven, not tested)
-- You can accept 153KB for features JS libraries can't provide
+- You can accept ~150KB for features JS libraries can't provide
 
 **Use FlexSearch when:**
 - Bundle size is the constraint (6.6KB)
@@ -390,3 +398,4 @@ cargo bench
 - [Algorithms](./algorithms.md) - Suffix arrays, Levenshtein automata
 - [Integration](./integration.md) - WASM setup, browser integration
 - [Verification](./verification.md) - Formal verification approach and limits
+- [Contributing](./contributing.md) - How to contribute safely

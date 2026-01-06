@@ -89,6 +89,9 @@ mod tests {
             excerpt: String::new(),
             href: format!("/doc/{}", id),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         }
     }
 

@@ -1,6 +1,6 @@
 # European Countries Benchmark Results
 
-**Generated:** 2026-01-05T22:07:25.919Z
+**Generated:** 2026-01-06T06:53:36.504Z
 
 ## System Information
 
@@ -20,11 +20,11 @@ How long until search is ready? Lower is better.
 
 | Library | Mean (ms) | ops/sec |
 |---------|-----------|---------|
-| Sieve (load .sieve) | 0.112 | 8,962 |
-| fuse.js (build) | 0.049 | 20,257 |
-| lunr.js (build) | 2.407 | 415 |
-| flexsearch (build) | 0.307 | 3,253 |
-| minisearch (build) | 0.835 | 1,198 |
+| Sieve (load .sieve) | 0.202 | 4,959 |
+| fuse.js (build) | 0.048 | 20,791 |
+| lunr.js (build) | 2.493 | 401 |
+| flexsearch (build) | 0.32 | 3,124 |
+| minisearch (build) | 0.848 | 1,179 |
 
 *Sieve loads a pre-built binary index. JS libraries build at runtime.*
 
@@ -40,41 +40,41 @@ Search performance by query type. Higher ops/sec is better.
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 10.7 | 93,302 | 10 |
-| fuse.js | 284.9 | 3,510 | 30 |
-| lunr.js | 10.3 | 97,385 | 30 |
-| flexsearch | 0.4 | 2,856,942 | 30 |
-| minisearch | 10.2 | 98,394 | 30 |
+| Sieve | 12.1 | 82,327 | 10 |
+| fuse.js | 294.4 | 3,396 | 30 |
+| lunr.js | 10.5 | 95,303 | 30 |
+| flexsearch | 0.3 | 3,025,779 | 30 |
+| minisearch | 10.3 | 96,874 | 30 |
 
 **Query: `European`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 10.5 | 95,362 | 10 |
-| fuse.js | 311.7 | 3,208 | 30 |
-| lunr.js | 12.4 | 80,713 | 29 |
-| flexsearch | 0.5 | 2,008,282 | 31 |
-| minisearch | 27.5 | 36,399 | 30 |
+| Sieve | 12.3 | 81,114 | 10 |
+| fuse.js | 295.5 | 3,385 | 30 |
+| lunr.js | 11.1 | 89,788 | 29 |
+| flexsearch | 0.5 | 2,012,540 | 31 |
+| minisearch | 28.6 | 34,937 | 30 |
 
 **Query: `history`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 6.3 | 158,984 | 10 |
-| fuse.js | 537.8 | 1,859 | 14 |
-| lunr.js | 6.4 | 155,071 | 11 |
-| flexsearch | 0.4 | 2,386,915 | 15 |
-| minisearch | 7.7 | 129,988 | 11 |
+| Sieve | 6.9 | 144,529 | 10 |
+| fuse.js | 550.9 | 1,815 | 14 |
+| lunr.js | 6.6 | 152,307 | 11 |
+| flexsearch | 0.4 | 2,380,671 | 15 |
+| minisearch | 7.8 | 128,394 | 11 |
 
 **Query: `fjords`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 65.3 | 15,318 | 1 |
-| fuse.js | 525.1 | 1,904 | 0 |
-| lunr.js | 1.2 | 865,652 | 0 |
-| flexsearch | 0.3 | 3,496,145 | 0 |
-| minisearch | 5.2 | 194,029 | 0 |
+| Sieve | 65.9 | 15,173 | 1 |
+| fuse.js | 542.5 | 1,843 | 0 |
+| lunr.js | 1.2 | 831,340 | 0 |
+| flexsearch | 0.3 | 3,983,513 | 0 |
+| minisearch | 5.2 | 193,360 | 0 |
 
 ### Multi-Word Queries
 
@@ -82,31 +82,31 @@ Search performance by query type. Higher ops/sec is better.
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 31.3 | 31,956 | 0 |
-| fuse.js | 309.2 | 3,234 | 29 |
-| lunr.js | 17 | 58,841 | 29 |
-| flexsearch | 1 | 976,884 | 29 |
-| minisearch | 36.2 | 27,617 | 30 |
+| Sieve | 31.8 | 31,474 | 0 |
+| fuse.js | 320.1 | 3,124 | 29 |
+| lunr.js | 17.5 | 57,224 | 29 |
+| flexsearch | 1 | 1,019,030 | 29 |
+| minisearch | 36.5 | 27,385 | 30 |
 
 **Query: `Mediterranean Sea`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 28.4 | 35,206 | 0 |
-| fuse.js | 1054.8 | 948 | 8 |
-| lunr.js | 10.4 | 95,770 | 13 |
-| flexsearch | 1 | 966,883 | 4 |
-| minisearch | 50.8 | 19,678 | 13 |
+| Sieve | 28.8 | 34,726 | 0 |
+| fuse.js | 1049.5 | 953 | 8 |
+| lunr.js | 10.7 | 93,309 | 13 |
+| flexsearch | 1 | 1,041,216 | 4 |
+| minisearch | 53.3 | 18,762 | 13 |
 
 **Query: `constitutional monarchy`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 31.4 | 31,857 | 0 |
-| fuse.js | 1259.1 | 794 | 0 |
-| lunr.js | 4.2 | 235,353 | 1 |
-| flexsearch | 0.7 | 1,449,564 | 0 |
-| minisearch | 65 | 15,378 | 1 |
+| Sieve | 33.2 | 30,151 | 0 |
+| fuse.js | 1400.6 | 714 | 0 |
+| lunr.js | 4.4 | 225,795 | 1 |
+| flexsearch | 0.6 | 1,558,209 | 0 |
+| minisearch | 65.1 | 15,359 | 1 |
 
 ### Substring Queries (Sieve Advantage)
 
@@ -114,31 +114,31 @@ Search performance by query type. Higher ops/sec is better.
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 59.9 | 16,696 | 10 |
-| fuse.js | 364.6 | 2,742 | 30 |
-| lunr.js | 1.1 | 930,698 | 0 |
-| flexsearch | 0.3 | 3,487,242 | 0 |
-| minisearch | 13 | 76,963 | 30 |
+| Sieve | 62.2 | 16,066 | 10 |
+| fuse.js | 378.2 | 2,644 | 30 |
+| lunr.js | 1.1 | 887,764 | 0 |
+| flexsearch | 0.2 | 4,008,116 | 0 |
+| minisearch | 13.3 | 75,238 | 30 |
 
 **Query: `burg`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 57.4 | 17,410 | 10 |
-| fuse.js | 513.6 | 1,947 | 6 |
-| lunr.js | 1 | 959,190 | 0 |
-| flexsearch | 0.3 | 3,469,714 | 0 |
-| minisearch | 8.2 | 122,397 | 0 |
+| Sieve | 61 | 16,403 | 10 |
+| fuse.js | 543.3 | 1,841 | 6 |
+| lunr.js | 1.1 | 947,517 | 0 |
+| flexsearch | 0.2 | 4,047,660 | 0 |
+| minisearch | 7.2 | 138,092 | 0 |
 
 **Query: `ian`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 44.8 | 22,317 | 4 |
-| fuse.js | 249.9 | 4,001 | 13 |
-| lunr.js | 1.1 | 910,907 | 0 |
-| flexsearch | 0.3 | 3,502,922 | 0 |
-| minisearch | 13.7 | 73,237 | 30 |
+| Sieve | 45.5 | 21,975 | 4 |
+| fuse.js | 260.2 | 3,843 | 13 |
+| lunr.js | 1 | 1,030,775 | 0 |
+| flexsearch | 0.2 | 4,140,411 | 0 |
+| minisearch | 13.9 | 71,774 | 30 |
 
 ### Typo Tolerance (Fuzzy)
 
@@ -146,31 +146,31 @@ Search performance by query type. Higher ops/sec is better.
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 65.9 | 15,185 | 10 |
-| fuse.js | 499.3 | 2,003 | 29 |
-| lunr.js | 1.5 | 684,825 | 0 |
-| flexsearch | 0.3 | 3,323,823 | 0 |
-| minisearch | 44.5 | 22,462 | 30 |
+| Sieve | 71.1 | 14,057 | 10 |
+| fuse.js | 523.1 | 1,912 | 29 |
+| lunr.js | 1.5 | 673,168 | 0 |
+| flexsearch | 0.2 | 4,001,220 | 0 |
+| minisearch | 45.5 | 21,964 | 30 |
 
 **Query: `provnce`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 71.2 | 14,044 | 0 |
-| fuse.js | 769.6 | 1,299 | 0 |
-| lunr.js | 1.3 | 753,954 | 0 |
-| flexsearch | 0.3 | 3,424,100 | 0 |
-| minisearch | 22.8 | 43,824 | 0 |
+| Sieve | 68.2 | 14,657 | 0 |
+| fuse.js | 748.1 | 1,337 | 0 |
+| lunr.js | 1.3 | 762,344 | 0 |
+| flexsearch | 0.2 | 4,147,190 | 0 |
+| minisearch | 23.7 | 42,213 | 0 |
 
 **Query: `mediteranean`**
 
 | Library | Latency (us) | ops/sec | Results |
 |---------|--------------|---------|---------|
-| Sieve | 41.8 | 23,937 | 8 |
-| fuse.js | 752.5 | 1,329 | 8 |
-| lunr.js | 1.6 | 614,441 | 0 |
-| flexsearch | 0.3 | 3,307,068 | 0 |
-| minisearch | 66.4 | 15,055 | 8 |
+| Sieve | 42.8 | 23,372 | 8 |
+| fuse.js | 766.7 | 1,304 | 8 |
+| lunr.js | 1.6 | 607,273 | 0 |
+| flexsearch | 0.3 | 3,810,744 | 0 |
+| minisearch | 70.5 | 14,179 | 8 |
 
 ---
 
@@ -183,33 +183,33 @@ Query: `European`
 
 | Library | Results | First (us) | All (us) | P99 (us) |
 |---------|---------|------------|----------|----------|
-| Sieve (streaming) | 30 | 8.6 | 101.0 | 136.7 |
-| fuse.js | 30 | - | 289.6 | 383.1 |
-| lunr.js | 29 | - | 11.7 | 25.5 |
-| flexsearch | 31 | - | 0.6 | 3.1 |
-| minisearch | 30 | - | 30.2 | 45.8 |
+| Sieve (streaming) | 30 | 10.1 | 108.0 | 213.2 |
+| fuse.js | 30 | - | 288.4 | 369.5 |
+| lunr.js | 29 | - | 11.7 | 26.0 |
+| flexsearch | 31 | - | 0.6 | 2.5 |
+| minisearch | 30 | - | 29.8 | 39.2 |
 
 ### Substring match
 Query: `land`
 
 | Library | Results | First (us) | All (us) | P99 (us) |
 |---------|---------|------------|----------|----------|
-| Sieve (streaming) | 18 | 0.5 | 64.8 | 82.7 |
-| fuse.js | 30 | - | 366.7 | 414.3 |
-| lunr.js | 0 | - | 1.3 | 3.8 |
-| flexsearch | 0 | - | 0.3 | 1.0 |
-| minisearch | 30 | - | 13.4 | 20.0 |
+| Sieve (streaming) | 18 | 0.6 | 68.6 | 176.8 |
+| fuse.js | 30 | - | 375.5 | 561.3 |
+| lunr.js | 0 | - | 1.3 | 2.6 |
+| flexsearch | 0 | - | 0.3 | 0.8 |
+| minisearch | 30 | - | 13.4 | 20.6 |
 
 ### Fuzzy match
 Query: `mediteranean`
 
 | Library | Results | First (us) | All (us) | P99 (us) |
 |---------|---------|------------|----------|----------|
-| Sieve (streaming) | 8 | 0.4 | 42.8 | 57.0 |
-| fuse.js | 8 | - | 737.3 | 868.0 |
-| lunr.js | 0 | - | 1.9 | 4.8 |
-| flexsearch | 0 | - | 0.3 | 0.7 |
-| minisearch | 8 | - | 68.9 | 96.6 |
+| Sieve (streaming) | 8 | 0.4 | 43.5 | 58.8 |
+| fuse.js | 8 | - | 748.5 | 844.0 |
+| lunr.js | 0 | - | 1.8 | 3.7 |
+| flexsearch | 0 | - | 0.3 | 0.8 |
+| minisearch | 8 | - | 73.5 | 138.6 |
 
 ---
 
@@ -220,7 +220,7 @@ Serialized index size (network transfer). Smaller is better.
 | Library | Raw (KB) | Gzipped (KB) | Notes |
 |---------|----------|--------------|-------|
 | Raw Data | 23.4 | 6.5 |  |
-| Sieve (.sieve) | 29.0 | 15.6 | binary |
+| Sieve (.sieve) | 347.1 | 167.6 | binary |
 | fuse.js | 23.4 | 6.5 | no index |
 | lunr.js | 68.4 | 12.8 |  |
 | flexsearch | 22.4 | 6.8 |  |

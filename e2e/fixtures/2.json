@@ -1,0 +1,16 @@
+{
+  "id": 2,
+  "slug": "wasm-intro",
+  "title": "WebAssembly Introduction",
+  "excerpt": "Run native code in the browser",
+  "href": "/docs/wasm-intro",
+  "type": "doc",
+  "category": "advanced",
+  "author": "Alice",
+  "tags": ["wasm", "performance"],
+  "text": "WebAssembly Introduction Run native code in the browser. WebAssembly enables near-native performance for web applications using Rust or C++.",
+  "fieldBoundaries": [
+    { "docId": 2, "start": 0, "end": 24, "fieldType": "title", "sectionId": null },
+    { "docId": 2, "start": 25, "end": 141, "fieldType": "content", "sectionId": "intro" }
+  ]
+}

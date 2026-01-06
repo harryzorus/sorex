@@ -11,7 +11,7 @@ Sieve builds compact binary search indices (`.sieve` format) that load instantly
 │                                                                          │
 │   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐            │
 │   │ Content │ ──► │  Index  │ ──► │  WASM   │ ──► │ Browser │            │
-│   │  .json  │     │  .sieve │     │   50KB  │     │  <1ms   │            │
+│   │  .json  │     │  .sieve │     │  153KB  │     │  <1ms   │            │
 │   └─────────┘     └─────────┘     └─────────┘     └─────────┘            │
 │                                                                          │
 │   Your docs       Binary index    Loads anywhere  Instant search         │
@@ -34,7 +34,7 @@ The other bet: formal verification. Instead of hoping the ranking logic is corre
 - **Block PFOR compression** for posting lists—smaller than JSON, faster to decode
 - **Formal verification** via Lean 4 proofs—binary search actually works, scoring hierarchy is actually correct
 
-The result: a 50KB WASM bundle that handles real-time search on thousands of documents.
+The result: a ~150KB WASM bundle that handles real-time search on thousands of documents.
 
 ---
 
@@ -50,9 +50,9 @@ The result: a 50KB WASM bundle that handles real-time search on thousands of doc
 | **Field Ranking** | Title > Heading > Content, mathematically proven | Compile-time verified |
 | **Deep Linking** | Section IDs in results for #anchor navigation | Zero overhead |
 
-### Binary Format (`.sieve` v6)
+### Binary Format (`.sieve` v7)
 
-The index format is designed for fast memory-mapped loading:
+The index format is designed for fast memory-mapped loading. **v7 is self-contained**: a single `.sieve` file includes the search index, document metadata, and the WASM runtime.
 
 - **Vocabulary**: Length-prefixed UTF-8, lexicographically sorted
 - **Suffix Array**: Term index + offset pairs for prefix search
@@ -114,68 +114,78 @@ cargo deb --profile release-native --install
 ### Build an Index
 
 ```bash
-# From JSON payload
-cat docs.json | sieve --binary > index.sieve
+# Build index from a directory of JSON documents
+sieve index --input ./docs --output ./search-output
 
 # Inspect an existing index
-sieve --inspect index.sieve
+sieve inspect ./search-output/index-*.sieve
+
+# Build with demo HTML page
+sieve index --input ./docs --output ./search-output --demo
 ```
 
-### JSON Payload Format
+### Input Directory Format
 
+Sieve reads a directory containing a `manifest.json` and per-document JSON files:
+
+```
+docs/
+├── manifest.json          # Index configuration
+├── getting-started.json   # Document files
+├── installation.json
+└── api-reference.json
+```
+
+**manifest.json:**
 ```json
 {
-  "docs": [
-    {
-      "id": 0,
-      "title": "Getting Started",
-      "excerpt": "Learn how to set up...",
-      "href": "/docs/getting-started",
-      "kind": "doc"
-    }
-  ],
-  "texts": [
-    "Getting Started\n\nLearn how to set up your first project..."
-  ],
+  "version": 1,
+  "documents": ["getting-started.json", "installation.json", "api-reference.json"]
+}
+```
+
+**Per-document JSON:**
+```json
+{
+  "id": 0,
+  "slug": "getting-started",
+  "title": "Getting Started",
+  "excerpt": "Learn how to set up...",
+  "href": "/docs/getting-started",
+  "type": "doc",
+  "category": "documentation",
+  "text": "Getting Started Learn how to set up your first project...",
   "fieldBoundaries": [
-    { "doc_id": 0, "start_offset": 0, "end_offset": 15, "field_type": "title" },
-    { "doc_id": 0, "start_offset": 16, "end_offset": 100, "field_type": "content" }
-  ],
-  "sectionBoundaries": [
-    { "doc_id": 0, "start_offset": 0, "end_offset": 100, "section_id": "getting-started" }
+    { "start": 0, "end": 15, "fieldType": "title", "sectionId": null },
+    { "start": 16, "end": 100, "fieldType": "content", "sectionId": "intro" }
   ]
 }
 ```
 
-### WASM Build
-
-```bash
-wasm-pack build --target web --out-dir pkg --features wasm
-```
-
 ### Browser Integration
 
+The `.sieve` file is self-contained with embedded WASM. Use the generated `sieve-loader.js`:
+
 ```javascript
-import init, { SieveSearcher } from './pkg/sieve.js';
+import { loadSieve } from './sieve-loader.js';
 
-await init();
-const response = await fetch('/index.sieve');
-const bytes = new Uint8Array(await response.arrayBuffer());
-const searcher = new SieveSearcher(bytes);
+// Load index (extracts and initializes WASM automatically)
+const searcher = await loadSieve('./index-a1b2c3d4.sieve');
 
-// Search with options
-const results = searcher.search('query', {
-  limit: 10,
-  fuzzy: true,
-  prefix: true
-});
+// Search
+const results = searcher.search('query', 10);
 
-// Results include section_id for deep linking
+// Results include sectionId for deep linking
 results.forEach(r => {
   const url = r.sectionId ? `${r.href}#${r.sectionId}` : r.href;
-  console.log(`${r.title} (${r.score}): ${url}`);
+  console.log(`${r.title}: ${url}`);
 });
+
+// Free when done (optional - uses FinalizationRegistry)
+searcher.free();
 ```
+
+The loader is fully self-contained with no external dependencies. Multiple `.sieve` files with different WASM versions can coexist on the same page.
 
 ---
 
@@ -196,7 +206,7 @@ Comparison with alternatives (100 documents, 500KB text):
 
 | Library | Index Size | Query Time | Bundle Size |
 |---------|------------|------------|-------------|
-| **Sieve** | 85KB | <1ms | 50KB |
+| **Sieve** | 85KB | <1ms | 153KB |
 | Lunr.js | 240KB | 15ms | 8KB |
 | FlexSearch | 180KB | 3ms | 22KB |
 | Fuse.js | N/A | 30ms | 24KB |

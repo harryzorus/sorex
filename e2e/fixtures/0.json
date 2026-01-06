@@ -1,0 +1,16 @@
+{
+  "id": 0,
+  "slug": "getting-started",
+  "title": "Getting Started with Rust",
+  "excerpt": "Learn the basics of Rust programming",
+  "href": "/docs/getting-started",
+  "type": "doc",
+  "category": "tutorial",
+  "author": "Alice",
+  "tags": ["rust", "beginner"],
+  "text": "Getting Started with Rust Learn the basics of Rust programming. Rust is a systems programming language focused on safety and performance.",
+  "fieldBoundaries": [
+    { "docId": 0, "start": 0, "end": 25, "fieldType": "title", "sectionId": null },
+    { "docId": 0, "start": 26, "end": 140, "fieldType": "content", "sectionId": "intro" }
+  ]
+}

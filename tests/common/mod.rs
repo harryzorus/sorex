@@ -12,6 +12,9 @@ pub fn make_doc(id: usize, title: &str) -> SearchDoc {
         excerpt: format!("Excerpt for {}", title),
         href: format!("/doc/{}", id),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }
 }
 

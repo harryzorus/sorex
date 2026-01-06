@@ -12,6 +12,12 @@ pub struct Document {
     #[serde(rename = "type")]
     pub doc_type: String,
     pub category: Option<String>,
+    /// Author name (for multi-author blogs)
+    #[serde(default)]
+    pub author: Option<String>,
+    /// Tags/labels for categorization
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub text: String,
     pub field_boundaries: Vec<FieldBoundary>,
 }
@@ -29,6 +35,8 @@ mod tests {
             href: "/test".to_string(),
             doc_type: "post".to_string(),
             category: None,
+            author: None,
+            tags: vec![],
             text: "test content".to_string(),
             field_boundaries: vec![],
         }

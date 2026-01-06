@@ -800,6 +800,9 @@ mod tests {
             excerpt: "".to_string(),
             href: "/test".to_string(),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         }];
         let texts = vec!["hello world".to_string()];
 
@@ -825,6 +828,9 @@ mod tests {
                 excerpt: "".to_string(),
                 href: "/test".to_string(),
                 kind: "post".to_string(),
+                category: None,
+                author: None,
+                tags: vec![],
             }],
             texts.clone(),
             vec![],

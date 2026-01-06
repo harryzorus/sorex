@@ -1032,6 +1032,9 @@ fn make_doc(id: usize) -> SearchDoc {
         excerpt: format!("Excerpt {}", id),
         href: format!("/doc/{}", id),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }
 }
 
@@ -1053,6 +1056,9 @@ fn build_test_index_with_fields(
             excerpt: format!("Excerpt {}", i),
             href: format!("/doc/{}", i),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         })
         .collect();
 

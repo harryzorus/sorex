@@ -148,9 +148,13 @@ async function benchmark(): Promise<void> {
   console.log('\n=== WASM Bundle Sizes ===\n');
   console.log('| Component | Raw | Gzipped |');
   console.log('|-----------|-----|---------|');
-  console.log('| sieve_bg.wasm | 310 KB | 146 KB |');
-  console.log('| sieve.js | 32 KB | 6.6 KB |');
-  console.log('| **Total** | **342 KB** | **153 KB** |');
+  console.log('| sieve_bg.wasm | 329 KB | 153 KB |');
+  console.log('| sieve-loader.js | 17 KB | 4.5 KB |');
+  console.log('| sieve-loader.js.map | 40 KB | (optional) |');
+  console.log('| **Total** | **346 KB** | **~153 KB** |');
+  console.log('');
+  console.log('Note: .sieve files embed WASM, so total gzipped is ~153KB (compressed together).');
+  console.log('Source map is optional and only needed for debugging.');
 
   console.log('\n=== Comparison with JS Libraries ===\n');
   console.log('| Library | Bundle Size (gzip) |');

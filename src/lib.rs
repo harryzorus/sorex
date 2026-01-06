@@ -47,8 +47,10 @@
 
 // Module declarations
 pub mod binary;
+#[cfg(feature = "serde_json")]
 pub mod build;
 pub mod contracts;
+pub mod dict_table;
 pub mod docs_compression;
 pub mod fst_index;
 mod hybrid;
@@ -124,6 +126,9 @@ mod tests {
                 excerpt: format!("Excerpt {}", index),
                 href: format!("/doc/{}", index),
                 kind: "post".to_string(),
+                category: None,
+                author: None,
+                tags: vec![],
             })
             .collect();
 
@@ -140,6 +145,9 @@ mod tests {
                 excerpt: format!("Excerpt {}", index),
                 href: format!("/doc/{}", index),
                 kind: "post".to_string(),
+                category: None,
+                author: None,
+                tags: vec![],
             })
             .collect();
 
@@ -195,6 +203,9 @@ mod tests {
                 excerpt: format!("Excerpt {}", index),
                 href: format!("/doc/{}", index),
                 kind: "post".to_string(),
+                category: None,
+                author: None,
+                tags: vec![],
             })
             .collect();
 
@@ -479,6 +490,9 @@ mod tests {
                     excerpt: format!("Excerpt {}", id),
                     href: format!("/doc/{}", id),
                     kind: "post".to_string(),
+                    category: None,
+                    author: None,
+                    tags: vec![],
                 })
                 .collect();
             let index = build_hybrid_index(docs, normalized.clone(), vec![]);

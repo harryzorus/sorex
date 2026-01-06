@@ -47,7 +47,7 @@ fuzzy-matcher = "0.3"      # FZF-style fuzzy matching
 simsearch = "0.2"          # Simple in-memory fuzzy search
 
 [features]
-default = ["parallel", "unicode-normalization", "serde_json"]
+default = ["parallel", "unicode-normalization", "serde_json", "embed-wasm"]
 parallel = ["rayon", "indicatif"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen"]  # No unicode-normalization or serde_json for smaller WASM
 embed-wasm = []  # Embed WASM/JS in binary for --demo flag (requires wasm-pack build first)
@@ -57,7 +57,7 @@ lean = ["sieve-lean-macros"]
 wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 
 # Debian package configuration (cargo-deb)
-# Build with: wasm-pack build --release && cargo deb --profile release-native -- --features embed-wasm
+# Build with: wasm-pack build --release && cargo deb --profile release-native
 [package.metadata.deb]
 maintainer = "Harry Tummalachērla <harry@harryzorus.xyz>"
 copyright = "2026, Harry Tummalachērla"
@@ -67,13 +67,15 @@ Sieve is a formally verified full-text search engine using suffix arrays.
 It provides fast substring and fuzzy search with mathematical guarantees
 of correctness via Lean 4 proofs.
 
-The binary includes embedded WASM files. Use `sieve --emit-wasm <dir>` to
-extract them for web builds.
+WASM is embedded in every .sieve index file by default.
+
+Commands:
+  sieve index --input <dir> --output <dir>   Build search index
+  sieve inspect <file.sieve>                 Inspect index structure
 
 """
 section = "utils"
 priority = "optional"
-features = ["embed-wasm"]
 assets = [
     ["target/release-native/sieve", "usr/bin/sieve", "755"],
     ["examples/generate-eu-data.sh", "usr/share/sieve/examples/generate-eu-data.sh", "755"],

@@ -436,34 +436,36 @@ Stop and check Lean specs if you see yourself:
 
 ## Build System (CLI & Multi-Index)
 
-### `sieve build` Command
+### `sieve index` Command
 
-The new `build` subcommand reads per-document JSON files and constructs search indexes.
+The `index` subcommand reads per-document JSON files and constructs a search index. WASM is embedded in the `.sieve` file by default.
 
 ```bash
-sieve build --input <dir> --output <dir> [--indexes <names>] [--emit-wasm]
+sieve index --input <dir> --output <dir> [--demo]
 ```
 
 **Flags:**
 
 - `--input <dir>`: Directory containing `manifest.json` and per-document JSON files
-- `--output <dir>`: Output directory for `.sieve` files and optional WASM
-- `--indexes <names>`: Comma-separated list of indexes to build (default: all in manifest)
-- `--emit-wasm`: Also emit WASM/JS/TypeScript files alongside indexes
+- `--output <dir>`: Output directory for `.sieve` file
+- `--demo`: Generate demo HTML page showing integration example
+
+### `sieve inspect` Command
+
+Inspect a `.sieve` file's structure and metadata:
+
+```bash
+sieve inspect <file.sieve>
+```
 
 ### Input Format
 
 ```
 input/
-├── manifest.json                    # Index definitions & document list
+├── manifest.json                    # Document list
 │   {
 │     "version": 1,
-│     "documents": ["0.json", "1.json", ...],
-│     "indexes": {
-│       "all": {"include": "*"},
-│       "titles": {"include": "*", "fields": ["title"]},
-│       "engineering": {"include": {"category": "engineering"}}
-│     }
+│     "documents": ["0.json", "1.json", ...]
 │   }
 ├── 0.json                           # Per-document JSON files
 ├── 1.json
@@ -481,6 +483,8 @@ input/
   "href": "/posts/2026/01/my-post",
   "type": "post",
   "category": "engineering",
+  "author": "John Doe",
+  "tags": ["rust", "search"],
   "text": "normalized searchable content",
   "fieldBoundaries": [
     { "start": 0, "end": 10, "fieldType": "title", "sectionId": null },
@@ -493,33 +497,12 @@ input/
 
 ```
 output/
-├── index-{hash}.sieve               # Binary search index (v6 format)
-├── manifest.json                    # Output metadata
-├── sieve.js                         # (if --emit-wasm)
-├── sieve.d.ts
-├── sieve_bg.wasm
-└── sieve_bg.wasm.d.ts
+├── index-{hash}.sieve               # Self-contained binary (v7 with embedded WASM)
+├── sieve-loader.js                  # JS loader for browser integration
+└── demo.html                        # (if --demo)
 ```
 
-**Output manifest.json:**
-
-```json
-{
-  "version": 1,
-  "indexes": {
-    "all": {
-      "file": "index-a1b2c3d4.sieve",
-      "docCount": 42,
-      "termCount": 1847
-    }
-  },
-  "wasm": {
-    "js": "sieve.js",
-    "wasm": "sieve_bg.wasm",
-    "types": "sieve.d.ts"
-  }
-}
-```
+Each `.sieve` file is self-contained with embedded WASM (~330KB raw, ~153KB gzipped). The `sieve-loader.js` extracts and initializes the WASM runtime.
 
 ### Parallel Architecture
 
@@ -533,11 +516,12 @@ output/
    - Each index constructed independently
    - Shared Levenshtein DFA (built once, Arc-shared)
    - Each index uses `build_fst_index()` (verified)
+   - WASM bytes embedded in each index
 
 3. **Phase 3 (Sequential)**: Emit files
-   - Write `.sieve` files (binary format v6)
-   - Emit WASM (if `--emit-wasm`)
-   - Write output `manifest.json`
+   - Write `.sieve` files (binary format v7 with WASM)
+   - Write `sieve-loader.js`
+   - Write `demo.html` (if `--demo`)
 
 ### No New Invariants Required
 
@@ -545,7 +529,7 @@ The build system is a **preprocessing layer** above verified functions:
 
 - ✅ Document filtering/remapping: Not part of search correctness
 - ✅ Each index construction: Uses existing `build_fst_index()` (verified)
-- ✅ WASM emission: Independent of index logic
+- ✅ WASM embedding: Independent of index logic
 - ✅ Runtime validation: Existing `WellFormedIndex` checks catch bugs
 
 **Example: Doc ID Remapping**
@@ -560,28 +544,50 @@ The build system is a **preprocessing layer** above verified functions:
 
 - `src/cli.rs` - Clap CLI definitions
 - `src/build/mod.rs` - Main orchestration
-- `src/build/manifest.rs` - Input/output manifest parsing
+- `src/build/manifest.rs` - Input manifest parsing
 - `src/build/document.rs` - Per-document structure
 - `src/build/parallel.rs` - Parallel loading and construction
+- `src/build/loader/` - TypeScript loader modules (see below)
+
+### JavaScript Loader
+
+The `sieve-loader.js` file is generated from TypeScript modules:
+
+```
+src/build/loader/
+├── index.ts      # Public API: loadSieve, loadSieveSync
+├── parser.ts     # .sieve parsing + CRC32 validation
+├── searcher.ts   # SieveSearcher class wrapper
+├── wasm-state.ts # WASM instance state management
+├── imports.ts    # wasm-bindgen import bindings
+└── build.ts      # Bundler script
+```
+
+**To rebuild after modifying loader code:**
+
+```bash
+cd src/build/loader && bun run build.ts
+```
+
+**Type checking:**
+
+```bash
+cd src/build/loader && bunx tsc --noEmit
+```
+
+The bundled `sieve-loader.js` is embedded in the Rust CLI via `include_str!` and emitted during `sieve index`.
 
 ### Example Usage
 
 ```bash
-# Build single index with WASM
-sieve build --input ./search-input --output ./search-output --emit-wasm
+# Build index (WASM embedded by default)
+sieve index --input ./search-input --output ./search-output
 
-# Build multiple indexes
-sieve build \
-  --input ./search-input \
-  --output ./search-output \
-  --indexes all,titles,engineering \
-  --emit-wasm
+# Build with demo HTML page
+sieve index --input ./search-input --output ./search-output --demo
 
-# Build specific index only
-sieve build \
-  --input ./search-input \
-  --output ./search-output \
-  --indexes titles
+# Inspect built index
+sieve inspect ./search-output/index-*.sieve
 ```
 
 ## More Documentation

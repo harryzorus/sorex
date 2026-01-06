@@ -8,11 +8,43 @@ use std::sync::Arc;
 use indicatif::ProgressBar;
 
 use crate::binary::{encode_docs_binary, BinaryLayer, DocMetaInput, PostingEntry};
+use crate::dict_table::{extract_href_prefix, DictTables};
 use crate::fst_index::build_fst_index;
 use crate::levenshtein_dfa::ParametricDFA;
 use crate::{FieldBoundary, FieldType, SearchDoc};
 
 use super::{Document, InputManifest, NormalizedIndexDefinition};
+
+/// Build dictionary tables from documents for Parquet-style compression.
+///
+/// Collects unique values for category, author, tags, and href_prefix fields.
+fn build_dict_tables(docs: &[SearchDoc]) -> DictTables {
+    let mut tables = DictTables::new();
+
+    for doc in docs {
+        // Category dictionary
+        if let Some(ref cat) = doc.category {
+            tables.category.insert(cat);
+        }
+
+        // Author dictionary
+        if let Some(ref author) = doc.author {
+            tables.author.insert(author);
+        }
+
+        // Tags dictionary
+        for tag in &doc.tags {
+            tables.tags.insert(tag);
+        }
+
+        // Href prefix dictionary
+        if let Some(prefix) = extract_href_prefix(&doc.href) {
+            tables.href_prefix.insert(&prefix);
+        }
+    }
+
+    tables
+}
 
 /// Loaded documents ready for indexing
 pub struct LoadedDocuments {
@@ -76,7 +108,7 @@ pub fn load_documents_with_progress(
             // Update progress
             let count = counter.fetch_add(1, Ordering::Relaxed) + 1;
             progress.set_position(count as u64);
-            if count % 10 == 0 || count == total {
+            if count.is_multiple_of(10) || count == total {
                 progress.set_message(format!("{}/{}", count, total));
             }
 
@@ -111,10 +143,24 @@ pub fn build_indexes_parallel(
     let lev_dfa = ParametricDFA::build(true);
     let lev_dfa_bytes = Arc::new(lev_dfa.to_bytes());
 
+    // Always embed WASM when feature is enabled
+    #[cfg(feature = "embed-wasm")]
+    let wasm_bytes: Arc<Vec<u8>> =
+        Arc::new(include_bytes!("../../pkg/sieve_bg.wasm").to_vec());
+
     // Build each index in parallel
     index_defs
         .par_iter()
-        .map(|(name, def)| build_single_index(name, def, documents, Arc::clone(&lev_dfa_bytes)))
+        .map(|(name, def)| {
+            build_single_index(
+                name,
+                def,
+                documents,
+                Arc::clone(&lev_dfa_bytes),
+                #[cfg(feature = "embed-wasm")]
+                Arc::clone(&wasm_bytes),
+            )
+        })
         .collect()
 }
 
@@ -130,6 +176,11 @@ pub fn build_indexes_with_progress(
     let lev_dfa = ParametricDFA::build(true);
     let lev_dfa_bytes = Arc::new(lev_dfa.to_bytes());
 
+    // Always embed WASM when feature is enabled
+    #[cfg(feature = "embed-wasm")]
+    let wasm_bytes: Arc<Vec<u8>> =
+        Arc::new(include_bytes!("../../pkg/sieve_bg.wasm").to_vec());
+
     let counter = AtomicUsize::new(0);
     let _total = index_defs.len();
 
@@ -137,7 +188,14 @@ pub fn build_indexes_with_progress(
     let indexes: Vec<BuiltIndex> = index_defs
         .par_iter()
         .map(|(name, def)| {
-            let index = build_single_index(name, def, documents, Arc::clone(&lev_dfa_bytes));
+            let index = build_single_index(
+                name,
+                def,
+                documents,
+                Arc::clone(&lev_dfa_bytes),
+                #[cfg(feature = "embed-wasm")]
+                Arc::clone(&wasm_bytes),
+            );
 
             // Update progress
             let count = counter.fetch_add(1, Ordering::Relaxed) + 1;
@@ -166,6 +224,7 @@ fn build_single_index(
     def: &NormalizedIndexDefinition,
     documents: &[Document],
     lev_dfa_bytes: Arc<Vec<u8>>,
+    #[cfg(feature = "embed-wasm")] wasm_bytes: Arc<Vec<u8>>,
 ) -> BuiltIndex {
     // 1. Filter documents by include criteria
     let filtered_docs: Vec<&Document> = documents
@@ -185,6 +244,9 @@ fn build_single_index(
             excerpt: doc.excerpt.clone(),
             href: doc.href.clone(),
             kind: doc.doc_type.clone(),
+            category: doc.category.clone(),
+            author: doc.author.clone(),
+            tags: doc.tags.clone(),
         });
 
         texts.push(doc.text.clone());
@@ -284,12 +346,20 @@ fn build_single_index(
             href: d.href.clone(),
             doc_type: d.kind.clone(),
             section_id: None,
+            category: d.category.clone(),
+            author: d.author.clone(),
+            tags: d.tags.clone(),
         })
         .collect();
     let docs_bytes = encode_docs_binary(&docs_input);
 
+    // Build dictionary tables for Parquet-style compression (v7)
+    let dict_tables = build_dict_tables(&search_docs);
+    let mut dict_table_bytes = Vec::new();
+    dict_tables.encode(&mut dict_table_bytes);
+
     // Build binary layer with section_id support (v6)
-    let layer = BinaryLayer::build_v6(
+    let mut layer = BinaryLayer::build_v6(
         &vocabulary,
         &suffix_array,
         &postings,
@@ -299,6 +369,17 @@ fn build_single_index(
         docs_bytes,
     )
     .expect("failed to build binary layer");
+
+    // Add dictionary tables to the layer (v7 compression)
+    layer.header.dict_table_len = dict_table_bytes.len() as u32;
+    layer.dict_table_bytes = dict_table_bytes;
+
+    // Add embedded WASM (v7) - always embedded when feature is enabled
+    #[cfg(feature = "embed-wasm")]
+    {
+        layer.header.wasm_len = wasm_bytes.len() as u32;
+        layer.wasm_bytes = (*wasm_bytes).clone();
+    }
 
     let bytes = layer.to_bytes().expect("failed to serialize binary layer");
 
@@ -324,6 +405,8 @@ mod tests {
             href: format!("/{}", slug),
             doc_type: "post".to_string(),
             category: category.map(|s| s.to_string()),
+            author: None,
+            tags: vec![],
             text: format!("{} content", slug),
             field_boundaries: vec![],
         }

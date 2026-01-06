@@ -2,7 +2,6 @@ pub mod document;
 pub mod manifest;
 pub mod parallel;
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -22,30 +21,6 @@ pub struct NormalizedIndexDefinition {
     pub fields: Option<Vec<String>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct OutputManifest {
-    pub version: u32,
-    pub indexes: HashMap<String, OutputIndexInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wasm: Option<WasmInfo>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct OutputIndexInfo {
-    pub file: String,
-    #[serde(rename = "docCount")]
-    pub doc_count: usize,
-    #[serde(rename = "termCount")]
-    pub term_count: usize,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct WasmInfo {
-    pub js: String,
-    pub wasm: String,
-    pub types: String,
-}
-
 /// Create a progress style for the main progress bars
 #[cfg(feature = "parallel")]
 fn create_progress_style() -> ProgressStyle {
@@ -56,19 +31,10 @@ fn create_progress_style() -> ProgressStyle {
     .progress_chars("━━╸")
 }
 
-/// Create a spinner style for indeterminate progress
-#[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-fn create_spinner_style() -> ProgressStyle {
-    ProgressStyle::with_template("{spinner:.cyan} {prefix:<12} {msg}")
-        .unwrap()
-        .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-}
-
 pub fn run_build(
     input_dir: &str,
     output_dir: &str,
-    indexes: Option<Vec<String>>,
-    emit_wasm: bool,
+    emit_demo: bool,
 ) -> Result<(), String> {
     let input_path = Path::new(input_dir);
     let output_path = Path::new(output_dir);
@@ -109,53 +75,14 @@ pub fn run_build(
         return Ok(());
     }
 
-    // 3. Determine which indexes to build
-    let index_defs: Vec<(String, NormalizedIndexDefinition)> = if let Some(names) = indexes {
-        names
-            .iter()
-            .filter_map(|name| {
-                manifest
-                    .indexes
-                    .get(name)
-                    .map(|def| {
-                        (
-                            name.clone(),
-                            NormalizedIndexDefinition {
-                                include: IncludeFilter::from(def.include.clone()),
-                                fields: def.fields.clone(),
-                            },
-                        )
-                    })
-                    .or_else(|| {
-                        eprintln!("Warning: Index '{}' not defined in manifest", name);
-                        None
-                    })
-            })
-            .collect()
-    } else if manifest.indexes.is_empty() {
-        // Default: single "index" with all documents
-        vec![(
-            "index".to_string(),
-            NormalizedIndexDefinition {
-                include: IncludeFilter::All,
-                fields: None,
-            },
-        )]
-    } else {
-        manifest
-            .indexes
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    NormalizedIndexDefinition {
-                        include: IncludeFilter::from(v.include.clone()),
-                        fields: v.fields.clone(),
-                    },
-                )
-            })
-            .collect()
-    };
+    // 3. Build a single index with all documents
+    let index_defs: Vec<(String, NormalizedIndexDefinition)> = vec![(
+        "index".to_string(),
+        NormalizedIndexDefinition {
+            include: IncludeFilter::All,
+            fields: None,
+        },
+    )];
 
     // 4. Build indexes in parallel with progress bar
     #[cfg(feature = "parallel")]
@@ -190,11 +117,7 @@ pub fn run_build(
     #[cfg(feature = "parallel")]
     write_pb.set_message("files...");
 
-    let mut output_manifest = OutputManifest {
-        version: 1,
-        indexes: HashMap::new(),
-        wasm: None,
-    };
+    let mut first_index_file: Option<String> = None;
 
     for index in &built_indexes {
         // Compute content hash for filename
@@ -211,58 +134,27 @@ pub fn run_build(
         fs::write(&path, &index.bytes)
             .map_err(|e| format!("Failed to write {}: {}", path.display(), e))?;
 
+        if first_index_file.is_none() {
+            first_index_file = Some(filename.clone());
+        }
+
         #[cfg(feature = "parallel")]
         write_pb.set_message(format!("{} ({} docs)", filename, index.doc_count));
         #[cfg(feature = "parallel")]
         write_pb.inc(1);
-
-        output_manifest.indexes.insert(
-            index.name.clone(),
-            OutputIndexInfo {
-                file: filename,
-                doc_count: index.doc_count,
-                term_count: index.term_count,
-            },
-        );
     }
 
     #[cfg(feature = "parallel")]
     write_pb.finish_with_message("done");
 
-    // 7. Emit WASM if requested
-    #[cfg(feature = "embed-wasm")]
-    if emit_wasm {
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        let wasm_pb = multi.add(ProgressBar::new_spinner());
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        wasm_pb.set_style(create_spinner_style());
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        wasm_pb.set_prefix("WASM");
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        wasm_pb.set_message("emitting files...");
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        wasm_pb.enable_steady_tick(std::time::Duration::from_millis(80));
+    // 7. Always emit JS loader
+    emit_js_loader(output_path)?;
 
-        emit_wasm_to_dir(output_path)?;
-        output_manifest.wasm = Some(WasmInfo {
-            js: "sieve.js".to_string(),
-            wasm: "sieve_bg.wasm".to_string(),
-            types: "sieve.d.ts".to_string(),
-        });
-
-        #[cfg(all(feature = "parallel", feature = "embed-wasm"))]
-        wasm_pb.finish_with_message("emitted");
+    // 8. Emit demo HTML if requested
+    if emit_demo {
+        let index_file = first_index_file.as_deref().unwrap_or("index.sieve");
+        emit_demo_html(output_path, index_file)?;
     }
-
-    if emit_wasm && cfg!(not(feature = "embed-wasm")) {
-        return Err("--emit-wasm requires 'embed-wasm' feature. Build with: cargo build --features embed-wasm".to_string());
-    }
-
-    // 8. Write output manifest
-    let manifest_json = serde_json::to_string_pretty(&output_manifest)
-        .map_err(|e| format!("Failed to serialize manifest: {}", e))?;
-    fs::write(output_path.join("manifest.json"), manifest_json)
-        .map_err(|e| format!("Failed to write manifest: {}", e))?;
 
     // Final summary
     #[cfg(feature = "parallel")]
@@ -298,35 +190,34 @@ fn format_bytes(bytes: usize) -> String {
     }
 }
 
-/// Emit embedded WASM files to a directory.
-#[cfg(feature = "embed-wasm")]
-fn emit_wasm_to_dir(output_path: &Path) -> Result<(), String> {
-    const SIEVE_WASM: &[u8] = include_bytes!("../../pkg/sieve_bg.wasm");
-    const SIEVE_JS: &str = include_str!("../../pkg/sieve.js");
-    const SIEVE_DTS: &str = include_str!("../../pkg/sieve.d.ts");
-    const SIEVE_WASM_DTS: &str = include_str!("../../pkg/sieve_bg.wasm.d.ts");
+/// Emit the JS loader that extracts WASM from .sieve files.
+fn emit_js_loader(output_path: &Path) -> Result<(), String> {
+    // Generated by: cd src/build/loader && bun run build.ts
+    const LOADER_JS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/target/loader/sieve-loader.js"));
+    const LOADER_MAP: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/target/loader/sieve-loader.js.map"));
 
-    // Write WASM binary
-    let wasm_path = output_path.join("sieve_bg.wasm");
-    fs::write(&wasm_path, SIEVE_WASM)
-        .map_err(|e| format!("Failed to write sieve_bg.wasm: {}", e))?;
-    eprintln!("  ✓ {}", wasm_path.display());
+    let loader_path = output_path.join("sieve-loader.js");
+    fs::write(&loader_path, LOADER_JS)
+        .map_err(|e| format!("Failed to write sieve-loader.js: {}", e))?;
+    eprintln!("  ✓ {}", loader_path.display());
 
-    // Write JS bindings
-    let js_path = output_path.join("sieve.js");
-    fs::write(&js_path, SIEVE_JS).map_err(|e| format!("Failed to write sieve.js: {}", e))?;
-    eprintln!("  ✓ {}", js_path.display());
+    let map_path = output_path.join("sieve-loader.js.map");
+    fs::write(&map_path, LOADER_MAP)
+        .map_err(|e| format!("Failed to write sieve-loader.js.map: {}", e))?;
+    eprintln!("  ✓ {}", map_path.display());
 
-    // Write TypeScript declarations
-    let dts_path = output_path.join("sieve.d.ts");
-    fs::write(&dts_path, SIEVE_DTS).map_err(|e| format!("Failed to write sieve.d.ts: {}", e))?;
-    eprintln!("  ✓ {}", dts_path.display());
+    Ok(())
+}
 
-    // Write WASM TypeScript declarations
-    let wasm_dts_path = output_path.join("sieve_bg.wasm.d.ts");
-    fs::write(&wasm_dts_path, SIEVE_WASM_DTS)
-        .map_err(|e| format!("Failed to write sieve_bg.wasm.d.ts: {}", e))?;
-    eprintln!("  ✓ {}", wasm_dts_path.display());
+/// Emit demo HTML page.
+fn emit_demo_html(output_path: &Path, index_file: &str) -> Result<(), String> {
+    const DEMO_HTML: &str = include_str!("demo_template.html");
+
+    let demo_html = DEMO_HTML.replace("{{INDEX_FILE}}", index_file);
+    let demo_path = output_path.join("demo.html");
+    fs::write(&demo_path, demo_html)
+        .map_err(|e| format!("Failed to write demo.html: {}", e))?;
+    eprintln!("  ✓ {}", demo_path.display());
 
     Ok(())
 }

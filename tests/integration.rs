@@ -26,6 +26,9 @@ fn load_fixture() -> (Vec<SearchDoc>, Vec<String>, Vec<FieldBoundary>) {
             excerpt: d["excerpt"].as_str().unwrap().to_string(),
             href: d["href"].as_str().unwrap().to_string(),
             kind: d["type"].as_str().unwrap().to_string(),
+            category: d.get("category").and_then(|c| c.as_str()).map(|s| s.to_string()),
+            author: None,
+            tags: vec![],
         })
         .collect();
 
@@ -139,6 +142,9 @@ fn test_wasm_compatible_api() {
         excerpt: "Testing WASM compatibility".to_string(),
         href: "/wasm".to_string(),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }];
     let texts = vec!["webassembly rust wasm bindgen".to_string()];
     let index = build_index(docs, texts, vec![]);
@@ -168,6 +174,9 @@ fn test_multi_term_search() {
             excerpt: "Learn Rust".to_string(),
             href: "/rust".to_string(),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         },
         SearchDoc {
             id: 1,
@@ -175,6 +184,9 @@ fn test_multi_term_search() {
             excerpt: "Learn Go".to_string(),
             href: "/go".to_string(),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         },
         SearchDoc {
             id: 2,
@@ -182,6 +194,9 @@ fn test_multi_term_search() {
             excerpt: "Compare languages".to_string(),
             href: "/compare".to_string(),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         },
     ];
 
@@ -214,6 +229,9 @@ fn test_fuzzy_matching() {
         excerpt: "Various languages".to_string(),
         href: "/langs".to_string(),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }];
 
     let texts = vec!["programming languages rust python javascript".to_string()];
@@ -237,6 +255,9 @@ fn test_case_insensitive_search() {
         excerpt: "Testing case".to_string(),
         href: "/case".to_string(),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }];
 
     // Note: Index stores normalized (lowercase) text

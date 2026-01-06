@@ -49,6 +49,15 @@ pub struct SearchDoc {
         lean(strategy = "proptest::strategy::Just(\"post\".to_string())")
     )]
     pub kind: String,
+    /// Category for client-side filtering (e.g., "engineering", "adventures")
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Author name (for multi-author blogs)
+    #[serde(default)]
+    pub author: Option<String>,
+    /// Tags/labels for categorization
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Field type within a document.

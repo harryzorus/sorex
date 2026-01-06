@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "slug": "typescript-guide",
+  "title": "TypeScript for JavaScript Developers",
+  "excerpt": "Migrate from JavaScript to TypeScript",
+  "href": "/docs/typescript-guide",
+  "type": "doc",
+  "category": "tutorial",
+  "author": "Bob",
+  "tags": ["typescript", "javascript"],
+  "text": "TypeScript for JavaScript Developers Migrate from JavaScript to TypeScript. TypeScript adds static typing to JavaScript for better tooling.",
+  "fieldBoundaries": [
+    { "docId": 1, "start": 0, "end": 36, "fieldType": "title", "sectionId": null },
+    { "docId": 1, "start": 37, "end": 142, "fieldType": "content", "sectionId": "intro" }
+  ]
+}

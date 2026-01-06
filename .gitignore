@@ -26,6 +26,7 @@ Cargo.lock
 
 # Benchmark node_modules
 /benches/node_modules/
+bun.lock
 
 # Generated example data (regenerate with examples/generate-eu-data.sh)
 /examples/eu-countries/*.json

@@ -267,6 +267,9 @@ mod tests {
             excerpt: "".to_string(),
             href: format!("/doc/{}", id),
             kind: "post".to_string(),
+            category: None,
+            author: None,
+            tags: vec![],
         }
     }
 

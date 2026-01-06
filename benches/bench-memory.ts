@@ -75,17 +75,20 @@ let sieveIndexBytes: Buffer | null = null;
 
 async function loadSieveWasm(): Promise<void> {
   const outputDir = join(__dirname, '../datasets/output');
-  const manifestPath = join(outputDir, 'manifest.json');
-  const manifest: Manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const pkgDir = join(__dirname, '../pkg');
 
-  // Find the index file
-  const indexFile = manifest.indexes.index.file;
-  const indexPath = join(outputDir, indexFile);
+  // Find the .sieve file by globbing
+  const { globSync } = await import('glob');
+  const sieveFiles = globSync(join(outputDir, '*.sieve'));
+  if (sieveFiles.length === 0) {
+    throw new Error(`No .sieve files found in ${outputDir}. Run: sieve index --input datasets --output datasets/output`);
+  }
+  const indexPath = sieveFiles[0];
   sieveIndexBytes = readFileSync(indexPath);
 
-  // Load WASM module using initSync (works in Node.js)
-  const wasmJsPath = join(outputDir, 'sieve.js');
-  const wasmBinaryPath = join(outputDir, 'sieve_bg.wasm');
+  // Load WASM module from pkg/ directory (built by wasm-pack)
+  const wasmJsPath = join(pkgDir, 'sieve.js');
+  const wasmBinaryPath = join(pkgDir, 'sieve_bg.wasm');
   const wasmBytes = readFileSync(wasmBinaryPath);
 
   sieveModule = await import(wasmJsPath) as SieveModule;

@@ -8,7 +8,7 @@ Three ideas shape every technical decision:
 2. **Compact binary format**  -  Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
 3. **Proven correctness**  -  Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
 
-The goal: instant search in browsers without sacrificing accuracy or features. A 50KB WASM bundle shouldn't feel like a compromise.
+The goal: instant search in browsers without sacrificing accuracy or features. A ~150KB WASM bundle shouldn't feel like a compromise.
 
 ---
 
@@ -41,7 +41,7 @@ JSON Payload                              .sieve binary
 
 ## Parallel Build (MapReduce)
 
-The `sieve build` CLI uses a MapReduce-style architecture for maximum throughput on multi-core machines:
+The `sieve index` CLI uses a MapReduce-style architecture for maximum throughput on multi-core machines:
 
 ```
 INPUT                          MAP PHASE                         REDUCE PHASE
@@ -70,54 +70,48 @@ manifest.json
                    Vec<Document>
                    (sorted by ID)
                           │
-    ┌─────────────────────┼─────────────────────┐
-    ▼                     ▼                     ▼
+                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ PHASE 2: Parallel Index Construction (Rayon par_iter)           │
+│ PHASE 2: Index Construction                                     │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Shared: Arc<ParametricDFA> (built once, ~1.2KB)         │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
-│  Index "all"         Index "titles"      Index "engineering"    │
-│  ──────────          ────────────        ──────────────────     │
-│  filter: *           filter: *           filter: category=eng   │
-│  fields: all         fields: [title]     fields: all            │
-│       │                    │                    │                │
-│       ▼                    ▼                    ▼                │
-│  build_fst_index()   build_fst_index()   build_fst_index()      │
-│       │                    │                    │                │
-│       ▼                    ▼                    ▼                │
-│  BinaryLayer::build  BinaryLayer::build  BinaryLayer::build     │
+│  All Documents                                                  │
+│  ─────────────                                                  │
+│       │                                                         │
+│       ▼                                                         │
+│  build_fst_index()   ← Verified suffix array construction       │
+│       │                                                         │
+│       ▼                                                         │
+│  BinaryLayer::build  ← Encode with embedded WASM                │
 └─────────────────────────────────────────────────────────────────┘
                           │
                           ▼
-                Vec<BuiltIndex>
+                   BuiltIndex
                           │
 ┌─────────────────────────────────────────────────────────────────┐
 │ PHASE 3: Sequential Output (single thread)                      │
 │                                                                 │
-│  for index in built_indexes:                                    │
-│    hash = crc32(index.bytes)                                    │
-│    write "{name}-{hash}.sieve"                                  │
+│  hash = crc32(index.bytes)                                      │
+│  write "index-{hash}.sieve"     ← WASM embedded                 │
 │                                                                 │
-│  if emit_wasm:                                                  │
-│    write sieve.js, sieve_bg.wasm, sieve.d.ts                    │
+│  write sieve-loader.js          ← JS loader for browser         │
+│  write sieve-loader.js.map      ← Source map (for debugging)    │
 │                                                                 │
-│  write manifest.json                                            │
+│  if --demo:                                                     │
+│    write demo.html              ← Demo page                     │
 └─────────────────────────────────────────────────────────────────┘
                           │
                           ▼
 OUTPUT
 ──────
 output/
-├── index-a1b2c3d4.sieve
-├── titles-e5f6g7h8.sieve
-├── engineering-i9j0k1l2.sieve
-├── manifest.json
-├── sieve.js           (if --emit-wasm)
-├── sieve_bg.wasm
-└── sieve.d.ts
+├── index-a1b2c3d4.sieve      ← Self-contained (index + WASM)
+├── sieve-loader.js           ← Extracts WASM from .sieve
+├── sieve-loader.js.map       ← Source map (for debugging)
+└── demo.html                 ← (if --demo)
 ```
 
 ### Why This Architecture
@@ -125,31 +119,56 @@ output/
 | Phase | Parallelization | Bottleneck |
 |-------|-----------------|------------|
 | Document loading | Per-file | I/O bound (SSD throughput) |
-| Index building | Per-index | CPU bound (suffix array construction) |
+| Index building | Single index | CPU bound (suffix array construction) |
 | Output writing | Sequential | I/O bound (negligible) |
 
-The Levenshtein DFA is built once and shared via `Arc` across all parallel index builds. This is the most expensive single computation (~1.2KB precomputed automaton with ~70 states), so sharing it avoids redundant work.
-
-Each index build is completely independent - they filter different documents and may index different fields, but all use the same verified `build_fst_index()` function that guarantees suffix array sortedness and index well-formedness.
+The Levenshtein DFA is built once (~1.2KB precomputed automaton with ~70 states). The index uses the verified `build_fst_index()` function that guarantees suffix array sortedness and index well-formedness.
 
 ---
 
-## Binary Format (`.sieve` v6)
+## Binary Format (`.sieve` v7)
 
 The format is designed for memory-mapped loading with minimal parsing. Validation happens once at load time; after that, all operations are direct pointer arithmetic.
+
+**v7 is self-contained** - a single `.sieve` file includes everything needed: the search index, document metadata, and the WASM runtime. No separate JS/WASM files needed.
+
+### Why Embed WASM?
+
+Each `.sieve` file embeds its own WASM runtime to avoid backwards compatibility concerns.
+
+The binary format evolves: new compression schemes, additional metadata fields, changed section layouts. If the WASM runtime were separate, every format change would require either:
+- Maintaining multiple runtime versions
+- Coordinating runtime and index upgrades across deployments
+- Version detection logic to load the right runtime
+
+By embedding the runtime, each index is self-contained and frozen in time. A v7 index carries v7-compatible code. A future v8 index carries v8-compatible code. They coexist without conflict. Old indexes keep working indefinitely. New indexes use new features. No migration required.
+
+**Tradeoff**: ~150KB (gzipped) added to each index. For most sites with a single search index, this is negligible. If you need multiple indexes without duplicated WASM, [file an issue](https://github.com/harryzorus/sieve/issues).
+
+### Acknowledgments
+
+Several techniques in this format are inspired by [Apache Lucene](https://lucene.apache.org/), the gold standard for search engine internals:
+
+- **Block PFOR compression** for posting lists (Lucene 4.0+)
+- **Skip lists** for large posting traversal (Lucene's multi-level skips)
+- **Varint encoding** for compact integer storage
+- **Term dictionary** with binary search (similar to Lucene's BlockTree)
+
+The suffix array and Levenshtein DFA components are Sieve-specific additions that enable substring and fuzzy search capabilities beyond traditional inverted indexes.
 
 ### Layout
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ HEADER (44 bytes)                                               │
+│ HEADER (52 bytes)                                               │
 │   magic: "SIFT" (4 bytes) ────────────── Validates file type    │
-│   version: u8 = 6                                               │
+│   version: u8 = 7                                               │
 │   flags: u8 ──────────────────────────── HAS_SKIP_LISTS, etc.   │
 │   doc_count: u32                                                │
 │   term_count: u32                                               │
 │   vocab_len, sa_len, postings_len, skip_len: u32                │
-│   section_table_len, lev_dfa_len, docs_len: u32                 │
+│   section_table_len, lev_dfa_len, docs_len, wasm_len: u32       │
+│   dict_table_len: u32 ───────────────── Dictionary tables (v7)  │
 │   reserved: 2 bytes                                             │
 ├─────────────────────────────────────────────────────────────────┤
 │ VOCABULARY                                                      │
@@ -169,13 +188,13 @@ The format is designed for memory-mapped loading with minimal parsing. Validatio
 │     varint(num_blocks)                                          │
 │     For each block: PFOR-encoded deltas (128 docs)              │
 │     varint(tail_count) + varint[tail_count] for remainder       │
-│     varint[doc_freq] section_idx values (v6)                    │
+│     varint[doc_freq] section_idx values (v6+)                   │
 ├─────────────────────────────────────────────────────────────────┤
 │ SKIP LISTS (for terms with >1024 docs)                          │
 │   Multi-level skip pointers for fast posting traversal          │
 │   Enables O(log n) seeks within large posting lists             │
 ├─────────────────────────────────────────────────────────────────┤
-│ SECTION TABLE (v6)                                              │
+│ SECTION TABLE (v6+)                                             │
 │   Deduplicated section_id strings for deep linking              │
 │   varint(count) + length-prefixed strings                       │
 │   Postings reference these by index (0 = no section)            │
@@ -190,7 +209,22 @@ The format is designed for memory-mapped loading with minimal parsing. Validatio
 │   For each doc:                                                 │
 │     type: u8 (0=page, 1=post)                                   │
 │     title, excerpt, href: varint_len + utf8                     │
-│     has_section_id: u8, section_id: varint_len + utf8 (if 1)    │
+│     category, author: dictionary-indexed (v7)                   │
+│     tags: array of dictionary indices (v7)                      │
+├─────────────────────────────────────────────────────────────────┤
+│ WASM (v7)                                                       │
+│   Embedded WebAssembly runtime (sieve_bg.wasm)                  │
+│   ~150KB gzipped, makes .sieve fully self-contained             │
+│   Client-side loader extracts and instantiates                  │
+├─────────────────────────────────────────────────────────────────┤
+│ DICTIONARY TABLES (v7)                                          │
+│   Parquet-style string deduplication for repeated fields        │
+│   num_tables: u8 (4)                                            │
+│   category_table: varint(count) + length-prefixed strings       │
+│   author_table: varint(count) + length-prefixed strings         │
+│   tags_table: varint(count) + length-prefixed strings           │
+│   href_prefix_table: varint(count) + length-prefixed strings    │
+│   Reduces wire size by ~45 bytes/doc for large indexes          │
 ├─────────────────────────────────────────────────────────────────┤
 │ FOOTER (8 bytes)                                                │
 │   crc32: u32 ────────────────────────── Over header + sections  │
@@ -465,29 +499,49 @@ wasm-pack build --target web --features wasm
 | No `serde_json` in WASM | Cuts ~20KB |
 | Precomputed DFA | ~1.2KB vs runtime construction |
 
-Output: ~50KB gzipped (without serialization dependencies).
+Output: ~150KB gzipped (WASM + JS loader).
+
+### JavaScript Loader
+
+The `sieve-loader.js` is generated from TypeScript modules in `src/build/loader/`:
+
+```
+src/build/loader/
+├── index.ts      # Public API: loadSieve, loadSieveSync
+├── parser.ts     # .sieve parsing + CRC32 validation
+├── searcher.ts   # SieveSearcher class wrapper
+├── wasm-state.ts # Per-instance WASM state (heap, memory)
+├── imports.ts    # wasm-bindgen import bindings
+└── build.ts      # Bundles to target/loader/
+```
+
+Build with `cd src/build/loader && bun run build.ts`. Output goes to `target/loader/sieve-loader.js` (and `.map`), which is embedded in the Rust CLI via `include_str!`.
+
+**Key features:**
+- **Self-contained**: No external dependencies, all wasm-bindgen glue code inlined
+- **Version isolation**: Multiple WASM versions coexist via per-instance state
+- **CRC32 validation**: Recalculates checksum after stripping WASM from index
 
 ### JavaScript Interface
 
 ```typescript
-interface SieveSearcher {
-  search(query: string, options?: SearchOptions): SearchResult[];
-  suggest(prefix: string, limit: number): string[];
-  free(): void;  // Release WASM memory
-}
+// Load a .sieve file
+async function loadSieve(url: string): Promise<SieveSearcher>;
+function loadSieveSync(buffer: ArrayBuffer): SieveSearcher;
 
-interface SearchOptions {
-  limit?: number;   // Max results (default: 10)
-  fuzzy?: boolean;  // Enable fuzzy matching
-  prefix?: boolean; // Enable prefix matching
+class SieveSearcher {
+  search(query: string, limit?: number): SearchResult[];
+  has_docs(): boolean;
+  doc_count(): number;
+  vocab_size(): number;
+  has_vocabulary(): boolean;
+  free(): void;  // Release WASM memory
 }
 
 interface SearchResult {
   title: string;
   excerpt: string;
   href: string;
-  score: number;
-  source: 'title' | 'heading' | 'content';
   sectionId: string | null;  // For deep linking
 }
 ```

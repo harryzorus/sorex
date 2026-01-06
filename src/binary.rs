@@ -5,6 +5,7 @@
 //! - Block PFOR postings (128-doc blocks)
 //! - Skip lists for large posting lists
 //! - CRC32 integrity validation
+//! - Embedded WASM runtime (v7)
 //!
 //! # Security Considerations
 //!
@@ -14,13 +15,13 @@
 //! - CRC32 footer detects corruption/truncation
 //! - Varint decoder has maximum iteration limits
 //!
-//! # Format Overview (v5)
+//! # Format Overview (v7)
 //!
 //! ```text
 //! ┌────────────────────────────────────────────────────────────┐
-//! │ HEADER (44 bytes)                                          │
-//! │   magic: [u8; 4] = "SIEVE"                                  │
-//! │   version: u8 = 5                                          │
+//! │ HEADER (52 bytes)                                          │
+//! │   magic: [u8; 4] = "SIFT"                                  │
+//! │   version: u8 = 7                                          │
 //! │   flags: u8                                                │
 //! │   doc_count: u32                                           │
 //! │   term_count: u32                                          │
@@ -28,9 +29,11 @@
 //! │   sa_len: u32                                              │
 //! │   postings_len: u32                                        │
 //! │   skip_len: u32                                            │
-//! │   reserved1: u32 (was fst_len in v2-v3, now unused)        │
+//! │   section_table_len: u32 (v6: section_id string table)     │
 //! │   lev_dfa_len: u32                                         │
-//! │   docs_json_len: u32 (v5: embedded JSON docs)              │
+//! │   docs_len: u32 (embedded binary docs)                     │
+//! │   wasm_len: u32 (v7: embedded WASM runtime)                │
+//! │   dict_table_len: u32 (v7: dictionary tables)              │
 //! │   reserved: [u8; 2]                                        │
 //! ├────────────────────────────────────────────────────────────┤
 //! │ VOCABULARY SECTION (sorted, length-prefixed terms)         │
@@ -61,16 +64,33 @@
 //! │       num_skips: varint                                    │
 //! │       [doc_id, block_offset] pairs                         │
 //! ├────────────────────────────────────────────────────────────┤
+//! │ SECTION TABLE (v6: for deep linking)                       │
+//! │   count: varint                                            │
+//! │   For each section_id:                                     │
+//! │     len: varint                                            │
+//! │     id: [u8; len] (UTF-8 bytes)                            │
+//! ├────────────────────────────────────────────────────────────┤
 //! │ LEVENSHTEIN DFA SECTION (precomputed Schulz-Mihov tables)  │
 //! │   Parametric automaton for fuzzy matching (k=2)            │
 //! ├────────────────────────────────────────────────────────────┤
-//! │ DOCS SECTION (v5: embedded document metadata, binary)       │
+//! │ DOCS SECTION (embedded document metadata, binary)          │
 //! │   count: varint                                            │
 //! │   For each doc:                                            │
 //! │     type: u8 (0=page, 1=post)                              │
 //! │     title: varint_len + utf8                               │
 //! │     excerpt: varint_len + utf8                             │
 //! │     href: varint_len + utf8                                │
+//! │     category: varint_len + utf8 (empty if none)            │
+//! ├────────────────────────────────────────────────────────────┤
+//! │ WASM SECTION (v7: embedded WebAssembly runtime)            │
+//! │   Raw WASM binary (sieve_bg.wasm)                          │
+//! ├────────────────────────────────────────────────────────────┤
+//! │ DICTIONARY TABLES (v7: Parquet-style compression)          │
+//! │   num_tables: u8 (4)                                       │
+//! │   category_table: varint(count) + strings                  │
+//! │   author_table: varint(count) + strings                    │
+//! │   tags_table: varint(count) + strings                      │
+//! │   href_prefix_table: varint(count) + strings               │
 //! ├────────────────────────────────────────────────────────────┤
 //! │ FOOTER (8 bytes)                                           │
 //! │   crc32: u32 (over header + all sections)                  │
@@ -83,6 +103,8 @@ use std::io::{self, Read, Write};
 
 use crc32fast::Hasher as Crc32Hasher;
 
+use crate::dict_table::DictTables;
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -93,8 +115,8 @@ pub const MAGIC: [u8; 4] = [0x53, 0x49, 0x46, 0x54];
 /// Footer magic: "TFIS" (reversed, marks valid file end)
 pub const FOOTER_MAGIC: [u8; 4] = [0x54, 0x46, 0x49, 0x53];
 
-/// Current format version (v6 adds section_id per posting for deep linking)
-pub const VERSION: u8 = 6;
+/// Current format version (v7 adds embedded WASM)
+pub const VERSION: u8 = 7;
 
 /// Block size for PFOR encoding (Lucene uses 128)
 pub const BLOCK_SIZE: usize = 128;
@@ -158,7 +180,7 @@ impl FormatFlags {
 // HEADER
 // ============================================================================
 
-/// Binary format header (44 bytes fixed size, v6)
+/// Binary format header (52 bytes fixed size, v7)
 #[derive(Debug, Clone)]
 pub struct SieveHeader {
     pub version: u8,
@@ -176,11 +198,17 @@ pub struct SieveHeader {
     pub lev_dfa_len: u32,
     /// Docs binary section length (new in v5)
     pub docs_len: u32,
+    /// WASM binary length (new in v7)
+    /// Embedded WASM for self-contained search runtime
+    pub wasm_len: u32,
+    /// Dictionary tables length (new in v7)
+    /// Parquet-style compression for category, author, tags, href_prefix
+    pub dict_table_len: u32,
 }
 
 impl SieveHeader {
-    // 4 (magic) + 1 (version) + 1 (flags) + 9*4 (u32s) + 2 (reserved) = 44
-    pub const SIZE: usize = 44;
+    // 4 (magic) + 1 (version) + 1 (flags) + 11*4 (u32s) + 2 (reserved) = 52
+    pub const SIZE: usize = 52;
 
     pub fn write<W: Write>(&self, w: &mut W) -> io::Result<()> {
         w.write_all(&MAGIC)?;
@@ -195,6 +223,8 @@ impl SieveHeader {
         w.write_all(&self.section_table_len.to_le_bytes())?; // v6: section_id table
         w.write_all(&self.lev_dfa_len.to_le_bytes())?;
         w.write_all(&self.docs_len.to_le_bytes())?;
+        w.write_all(&self.wasm_len.to_le_bytes())?; // v7: embedded WASM
+        w.write_all(&self.dict_table_len.to_le_bytes())?; // v7: dictionary tables
         w.write_all(&[0u8; 2])?; // reserved (2 bytes for alignment)
         Ok(())
     }
@@ -209,7 +239,7 @@ impl SieveHeader {
             ));
         }
 
-        let mut buf = [0u8; 40]; // 44 - 4 (magic) = 40
+        let mut buf = [0u8; 48]; // 52 - 4 (magic) = 48
         r.read_exact(&mut buf)?;
 
         Ok(Self {
@@ -224,7 +254,9 @@ impl SieveHeader {
             section_table_len: u32::from_le_bytes([buf[26], buf[27], buf[28], buf[29]]), // v6: section_id table
             lev_dfa_len: u32::from_le_bytes([buf[30], buf[31], buf[32], buf[33]]),
             docs_len: u32::from_le_bytes([buf[34], buf[35], buf[36], buf[37]]),
-            // buf[38..40] is reserved
+            wasm_len: u32::from_le_bytes([buf[38], buf[39], buf[40], buf[41]]), // v7: embedded WASM
+            dict_table_len: u32::from_le_bytes([buf[42], buf[43], buf[44], buf[45]]), // v7: dictionary tables
+            // buf[46..48] is reserved
         })
     }
 }
@@ -1016,6 +1048,10 @@ pub struct BinaryLayer {
     pub lev_dfa_bytes: Vec<u8>,
     /// Docs binary section (v5: length-prefixed strings, 1-bit type)
     pub docs_bytes: Vec<u8>,
+    /// WASM binary (v7: embedded WebAssembly for self-contained runtime)
+    pub wasm_bytes: Vec<u8>,
+    /// Dictionary tables (v7: Parquet-style compression for category, author, tags, href_prefix)
+    pub dict_table_bytes: Vec<u8>,
 }
 
 /// Encode vocabulary as length-prefixed UTF-8 strings.
@@ -1065,11 +1101,13 @@ fn decode_vocabulary(bytes: &[u8], term_count: usize) -> io::Result<Vec<String>>
 }
 
 impl BinaryLayer {
-    /// Build a binary layer with section_ids (v6 format)
+    /// Build a binary layer with section_ids and embedded WASM (v7 format)
     ///
     /// Postings include section_id indices for deep linking.
     /// The section_table contains unique section_id strings.
-    pub fn build_v6(
+    /// The wasm_bytes contain the embedded WebAssembly runtime.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_v7(
         vocabulary: &[String],
         suffix_array: &[(u32, u32)],
         postings: &[Vec<PostingEntry>], // One posting list per term (in vocab order)
@@ -1077,6 +1115,7 @@ impl BinaryLayer {
         doc_count: usize,
         lev_dfa_bytes: Vec<u8>,
         docs_bytes: Vec<u8>,
+        wasm_bytes: Vec<u8>, // Embedded WASM binary
     ) -> io::Result<Self> {
         // Encode vocabulary as length-prefixed strings
         let mut vocab_bytes = Vec::new();
@@ -1127,6 +1166,8 @@ impl BinaryLayer {
             section_table_len: section_table_bytes.len() as u32,
             lev_dfa_len: lev_dfa_bytes.len() as u32,
             docs_len: docs_bytes.len() as u32,
+            wasm_len: wasm_bytes.len() as u32,
+            dict_table_len: 0, // TODO: Implement in Step 4
         };
 
         Ok(Self {
@@ -1138,7 +1179,34 @@ impl BinaryLayer {
             section_table_bytes,
             lev_dfa_bytes,
             docs_bytes,
+            wasm_bytes,
+            dict_table_bytes: Vec::new(), // Empty for now, populated via build_v7_with_dicts
         })
+    }
+
+    /// Build a binary layer with section_ids (v6-compatible, no WASM)
+    ///
+    /// Postings include section_id indices for deep linking.
+    /// The section_table contains unique section_id strings.
+    pub fn build_v6(
+        vocabulary: &[String],
+        suffix_array: &[(u32, u32)],
+        postings: &[Vec<PostingEntry>], // One posting list per term (in vocab order)
+        section_table: &[String],       // Unique section_id strings
+        doc_count: usize,
+        lev_dfa_bytes: Vec<u8>,
+        docs_bytes: Vec<u8>,
+    ) -> io::Result<Self> {
+        Self::build_v7(
+            vocabulary,
+            suffix_array,
+            postings,
+            section_table,
+            doc_count,
+            lev_dfa_bytes,
+            docs_bytes,
+            Vec::new(), // Empty WASM for v6 compatibility
+        )
     }
 
     /// Build a binary layer (legacy v5-compatible, no section_ids)
@@ -1183,7 +1251,9 @@ impl BinaryLayer {
             + self.skip_bytes.len()
             + self.section_table_bytes.len()
             + self.lev_dfa_bytes.len()
-            + self.docs_bytes.len();
+            + self.docs_bytes.len()
+            + self.wasm_bytes.len()
+            + self.dict_table_bytes.len();
         let total_size = content_size + SieveFooter::SIZE;
 
         let mut buf = Vec::with_capacity(total_size);
@@ -1195,6 +1265,8 @@ impl BinaryLayer {
         buf.extend_from_slice(&self.section_table_bytes);
         buf.extend_from_slice(&self.lev_dfa_bytes);
         buf.extend_from_slice(&self.docs_bytes);
+        buf.extend_from_slice(&self.wasm_bytes);
+        buf.extend_from_slice(&self.dict_table_bytes);
 
         // Compute CRC32 over everything written so far
         let crc32 = SieveFooter::compute_crc32(&buf);
@@ -1298,9 +1370,11 @@ impl BinaryLayer {
             + header.sa_len as usize
             + header.postings_len as usize
             + header.skip_len as usize
-            + header.section_table_len as usize  // v6: section_id string table
+            + header.section_table_len as usize // v6: section_id string table
             + header.lev_dfa_len as usize
-            + header.docs_len as usize;
+            + header.docs_len as usize
+            + header.wasm_len as usize // v7: embedded WASM
+            + header.dict_table_len as usize; // v7: dictionary tables
 
         if expected_content_size != content.len() {
             return Err(io::Error::new(
@@ -1408,6 +1482,33 @@ impl BinaryLayer {
             .get(pos..docs_end)
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "Docs section truncated"))?
             .to_vec();
+        pos = docs_end;
+
+        // v7: Embedded WASM
+        let wasm_end = pos
+            .checked_add(header.wasm_len as usize)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "WASM length overflow"))?;
+        let wasm_bytes = bytes
+            .get(pos..wasm_end)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "WASM section truncated"))?
+            .to_vec();
+        pos = wasm_end;
+
+        // v7: Dictionary tables (Parquet-style compression)
+        let dict_table_end = pos
+            .checked_add(header.dict_table_len as usize)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Dict table length overflow")
+            })?;
+        let dict_table_bytes = bytes
+            .get(pos..dict_table_end)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Dict table section truncated",
+                )
+            })?
+            .to_vec();
 
         Ok(Self {
             header,
@@ -1418,6 +1519,8 @@ impl BinaryLayer {
             section_table_bytes,
             lev_dfa_bytes,
             docs_bytes,
+            wasm_bytes,
+            dict_table_bytes,
         })
     }
 }
@@ -1434,6 +1537,12 @@ pub struct DocMetaInput {
     pub doc_type: String,
     /// Section ID for deep linking (None for titles, Some for headings/content)
     pub section_id: Option<String>,
+    /// Category for client-side filtering (e.g., "engineering", "adventures")
+    pub category: Option<String>,
+    /// Author name (for multi-author blogs)
+    pub author: Option<String>,
+    /// Tags/labels for categorization
+    pub tags: Vec<String>,
 }
 
 /// Encode docs to binary format (no JSON dependency)
@@ -1447,6 +1556,7 @@ pub struct DocMetaInput {
 ///   - href: varint_len + utf8
 ///   - has_section_id: u8 (0=None, 1=Some)
 ///   - section_id: varint_len + utf8 (only if has_section_id=1)
+///   - category: varint_len + utf8 (empty string if None)
 pub fn encode_docs_binary(docs: &[DocMetaInput]) -> Vec<u8> {
     let mut buf = Vec::new();
 
@@ -1483,6 +1593,12 @@ pub fn encode_docs_binary(docs: &[DocMetaInput]) -> Vec<u8> {
                 buf.push(0u8); // has_section_id = false
             }
         }
+
+        // Category (empty string if None)
+        let category = doc.category.as_deref().unwrap_or("");
+        let category_bytes = category.as_bytes();
+        encode_varint(category_bytes.len() as u64, &mut buf);
+        buf.extend_from_slice(category_bytes);
     }
 
     buf
@@ -1555,12 +1671,28 @@ fn decode_docs_binary(bytes: &[u8]) -> io::Result<Vec<DocMeta>> {
             None
         };
 
+        // Category (empty string = None)
+        let (len, size) = decode_varint(&bytes[offset..])?;
+        offset += size;
+        let category = if len == 0 {
+            None
+        } else {
+            let cat = String::from_utf8(bytes[offset..offset + len as usize].to_vec())
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            offset += len as usize;
+            Some(cat)
+        };
+
         docs.push(DocMeta {
             title,
             excerpt,
             href,
             doc_type: doc_type.to_string(),
             section_id,
+            category,
+            // TODO: Add dictionary-based decoding in Step 5
+            author: None,
+            tags: vec![],
         });
     }
 
@@ -1582,6 +1714,12 @@ pub struct DocMeta {
     /// Section ID for deep linking (e.g., "introduction", "performance-optimization")
     /// None for title matches (link to top of page), Some for heading/content matches
     pub section_id: Option<String>,
+    /// Category for client-side filtering (e.g., "engineering", "adventures")
+    pub category: Option<String>,
+    /// Author name (for multi-author blogs)
+    pub author: Option<String>,
+    /// Tags/labels for categorization
+    pub tags: Vec<String>,
 }
 
 /// Loaded binary layer ready for searching
@@ -1599,6 +1737,10 @@ pub struct LoadedLayer {
     pub lev_dfa_bytes: Vec<u8>,
     /// Document metadata (embedded in binary)
     pub docs: Vec<DocMeta>,
+    /// Dictionary tables for Parquet-style compression (v7)
+    pub dict_tables: DictTables,
+    /// Embedded WASM binary (v7)
+    pub wasm_bytes: Vec<u8>,
 }
 
 impl LoadedLayer {
@@ -1671,6 +1813,14 @@ impl LoadedLayer {
         // Decode docs
         let docs = decode_docs_binary(&layer.docs_bytes)?;
 
+        // Decode dictionary tables (v7)
+        let dict_tables = if !layer.dict_table_bytes.is_empty() {
+            let (tables, _) = DictTables::decode(&layer.dict_table_bytes)?;
+            tables
+        } else {
+            DictTables::default()
+        };
+
         Ok(Self {
             doc_count: layer.header.doc_count as usize,
             vocabulary,
@@ -1680,6 +1830,8 @@ impl LoadedLayer {
             skip_lists,
             lev_dfa_bytes: layer.lev_dfa_bytes,
             docs,
+            dict_tables,
+            wasm_bytes: layer.wasm_bytes,
         })
     }
 
@@ -1827,6 +1979,9 @@ mod tests {
                 href: "/about".to_string(),
                 doc_type: "page".to_string(),
                 section_id: None,
+                category: None,
+                author: None,
+                tags: vec![],
             },
             DocMetaInput {
                 title: "Test Post".to_string(),
@@ -1834,6 +1989,9 @@ mod tests {
                 href: "/posts/2024/01/test".to_string(),
                 doc_type: "post".to_string(),
                 section_id: Some("introduction".to_string()),
+                category: Some("engineering".to_string()),
+                author: None,
+                tags: vec![],
             },
         ];
         let docs_bytes = encode_docs_binary(&docs);
@@ -1944,6 +2102,8 @@ mod tests {
             section_table_len: 256, // v6: section_id table
             lev_dfa_len: 1200,
             docs_len: 5000,
+            wasm_len: 50000,      // v7: embedded WASM
+            dict_table_len: 1024, // v7: dictionary tables
         };
 
         let mut buf = Vec::new();
@@ -1957,6 +2117,8 @@ mod tests {
         assert_eq!(decoded.section_table_len, header.section_table_len);
         assert_eq!(decoded.lev_dfa_len, header.lev_dfa_len);
         assert_eq!(decoded.docs_len, header.docs_len);
+        assert_eq!(decoded.wasm_len, header.wasm_len);
+        assert_eq!(decoded.dict_table_len, header.dict_table_len);
         assert!(decoded.flags.has_skip_lists());
     }
 
@@ -2066,5 +2228,229 @@ mod tests {
 
         let parsed = SieveFooter::read(&full).unwrap();
         assert_eq!(parsed.crc32, crc32);
+    }
+
+    #[test]
+    fn test_v7_wasm_embedding() {
+        // Create a minimal index with embedded WASM
+        let vocabulary = vec!["test".to_string()];
+        let suffix_array = vec![(0, 0)];
+        let postings = vec![vec![PostingEntry {
+            doc_id: 0,
+            section_idx: 0,
+        }]];
+        let lev_dfa_bytes = build_lev_dfa_bytes();
+        let docs_bytes = encode_docs_binary(&[]);
+
+        // Simulate WASM bytes (just some recognizable pattern)
+        let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]; // WASM magic
+
+        let layer = BinaryLayer::build_v7(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            &vec![],
+            1,
+            lev_dfa_bytes,
+            docs_bytes,
+            wasm_bytes.clone(),
+        )
+        .unwrap();
+
+        let bytes = layer.to_bytes().unwrap();
+
+        // Verify header wasm_len is correct
+        let header = SieveHeader::read(&mut &bytes[..]).unwrap();
+        assert_eq!(header.version, VERSION);
+        assert_eq!(header.wasm_len, 8); // Our test WASM bytes
+
+        // Verify loaded layer has correct wasm_bytes
+        let loaded = LoadedLayer::from_bytes(&bytes).unwrap();
+        assert_eq!(loaded.wasm_bytes, wasm_bytes);
+    }
+
+    #[test]
+    fn test_v7_wasm_offset_calculation() {
+        // Test that WASM bytes are at the correct offset
+        let vocabulary = vec!["apple".to_string(), "banana".to_string()];
+        let suffix_array = vec![(0, 0), (1, 0)];
+        let postings = vec![
+            vec![
+                PostingEntry { doc_id: 0, section_idx: 0 },
+                PostingEntry { doc_id: 1, section_idx: 0 },
+            ],
+            vec![
+                PostingEntry { doc_id: 1, section_idx: 0 },
+                PostingEntry { doc_id: 2, section_idx: 0 },
+            ],
+        ];
+        let lev_dfa_bytes = build_lev_dfa_bytes();
+
+        let docs = vec![DocMetaInput {
+            title: "Test".to_string(),
+            excerpt: "Test excerpt".to_string(),
+            href: "/test".to_string(),
+            doc_type: "page".to_string(),
+            section_id: None,
+            category: None,
+            author: None,
+            tags: vec![],
+        }];
+        let docs_bytes = encode_docs_binary(&docs);
+
+        // Create recognizable WASM bytes
+        let wasm_bytes: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+
+        let layer = BinaryLayer::build_v7(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            &vec![],
+            3,
+            lev_dfa_bytes,
+            docs_bytes,
+            wasm_bytes.clone(),
+        )
+        .unwrap();
+
+        let bytes = layer.to_bytes().unwrap();
+        let header = SieveHeader::read(&mut &bytes[..]).unwrap();
+
+        // Calculate expected WASM offset
+        let wasm_offset = SieveHeader::SIZE
+            + header.vocab_len as usize
+            + header.sa_len as usize
+            + header.postings_len as usize
+            + header.skip_len as usize
+            + header.section_table_len as usize
+            + header.lev_dfa_len as usize
+            + header.docs_len as usize;
+
+        // Verify WASM bytes are at the correct offset
+        let extracted_wasm = &bytes[wasm_offset..wasm_offset + wasm_bytes.len()];
+        assert_eq!(extracted_wasm, &wasm_bytes[..]);
+    }
+
+    #[test]
+    fn test_v7_dict_tables_roundtrip() {
+        use crate::dict_table::DictTables;
+
+        // Build dictionary tables with sample data
+        let mut dict_tables = DictTables::new();
+        dict_tables.category.insert("engineering");
+        dict_tables.category.insert("adventures");
+        dict_tables.author.insert("Harry");
+        dict_tables.author.insert("Guest Author");
+        dict_tables.tags.insert("rust");
+        dict_tables.tags.insert("wasm");
+        dict_tables.tags.insert("search");
+        dict_tables.href_prefix.insert("/posts/2024/");
+        dict_tables.href_prefix.insert("/posts/2025/");
+
+        // Encode dict tables
+        let mut dict_table_bytes = Vec::new();
+        dict_tables.encode(&mut dict_table_bytes);
+
+        // Create minimal index with dict_tables
+        let vocabulary = vec!["test".to_string()];
+        let suffix_array = vec![(0, 0)];
+        let postings = vec![vec![PostingEntry {
+            doc_id: 0,
+            section_idx: 0,
+        }]];
+        let lev_dfa_bytes = build_lev_dfa_bytes();
+
+        let docs = vec![DocMetaInput {
+            title: "Test Doc".to_string(),
+            excerpt: "Test excerpt".to_string(),
+            href: "/posts/2024/test".to_string(),
+            doc_type: "post".to_string(),
+            section_id: None,
+            category: Some("engineering".to_string()),
+            author: Some("Harry".to_string()),
+            tags: vec!["rust".to_string(), "wasm".to_string()],
+        }];
+        let docs_bytes = encode_docs_binary(&docs);
+
+        // Build layer with dict_tables
+        let mut layer = BinaryLayer::build_v6(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            &vec![],
+            1,
+            lev_dfa_bytes,
+            docs_bytes,
+        )
+        .unwrap();
+
+        // Add dict_tables to layer
+        layer.header.dict_table_len = dict_table_bytes.len() as u32;
+        layer.dict_table_bytes = dict_table_bytes;
+
+        // Roundtrip through serialization
+        let bytes = layer.to_bytes().unwrap();
+        let loaded = LoadedLayer::from_bytes(&bytes).unwrap();
+
+        // Verify dict_tables were loaded correctly
+        assert_eq!(loaded.dict_tables.category.len(), 2);
+        assert_eq!(loaded.dict_tables.category.get(0), Some("engineering"));
+        assert_eq!(loaded.dict_tables.category.get(1), Some("adventures"));
+
+        assert_eq!(loaded.dict_tables.author.len(), 2);
+        assert_eq!(loaded.dict_tables.author.get(0), Some("Harry"));
+        assert_eq!(loaded.dict_tables.author.get(1), Some("Guest Author"));
+
+        assert_eq!(loaded.dict_tables.tags.len(), 3);
+        assert_eq!(loaded.dict_tables.tags.get(0), Some("rust"));
+        assert_eq!(loaded.dict_tables.tags.get(1), Some("wasm"));
+        assert_eq!(loaded.dict_tables.tags.get(2), Some("search"));
+
+        assert_eq!(loaded.dict_tables.href_prefix.len(), 2);
+        assert_eq!(loaded.dict_tables.href_prefix.get(0), Some("/posts/2024/"));
+        assert_eq!(loaded.dict_tables.href_prefix.get(1), Some("/posts/2025/"));
+    }
+
+    #[test]
+    fn test_empty_dict_tables_roundtrip() {
+        // Create index without dict_tables (empty)
+        let vocabulary = vec!["test".to_string()];
+        let suffix_array = vec![(0, 0)];
+        let postings = vec![vec![PostingEntry {
+            doc_id: 0,
+            section_idx: 0,
+        }]];
+        let lev_dfa_bytes = build_lev_dfa_bytes();
+
+        let docs = vec![DocMetaInput {
+            title: "Test".to_string(),
+            excerpt: "Test".to_string(),
+            href: "/test".to_string(),
+            doc_type: "page".to_string(),
+            section_id: None,
+            category: None,
+            author: None,
+            tags: vec![],
+        }];
+        let docs_bytes = encode_docs_binary(&docs);
+
+        // Build layer with no dict_tables (empty bytes)
+        let layer = BinaryLayer::build_v6(
+            &vocabulary,
+            &suffix_array,
+            &postings,
+            &vec![],
+            1,
+            lev_dfa_bytes,
+            docs_bytes,
+        )
+        .unwrap();
+
+        let bytes = layer.to_bytes().unwrap();
+        let loaded = LoadedLayer::from_bytes(&bytes).unwrap();
+
+        // Should have empty dict_tables
+        assert!(loaded.dict_tables.is_empty());
+        assert_eq!(loaded.dict_tables.total_entries(), 0);
     }
 }

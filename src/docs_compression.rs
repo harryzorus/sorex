@@ -15,6 +15,9 @@ pub struct Doc {
     pub href: String,
     #[serde(rename = "type")]
     pub doc_type: String,
+    /// Category for client-side filtering (optional)
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 /// Type flag as single byte
@@ -87,6 +90,7 @@ fn read_varint_string(data: &[u8]) -> (String, usize) {
 /// - title: varint_len + utf8
 /// - excerpt: varint_len + utf8
 /// - href: varint_len + utf8
+/// - category: varint_len + utf8 (empty string if None)
 ///
 /// Note: id is omitted since it's always sequential (0, 1, 2...)
 pub fn encode_docs_binary(docs: &[Doc]) -> Vec<u8> {
@@ -103,6 +107,8 @@ pub fn encode_docs_binary(docs: &[Doc]) -> Vec<u8> {
         write_varint_string(&mut buf, &doc.title);
         write_varint_string(&mut buf, &doc.excerpt);
         write_varint_string(&mut buf, &doc.href);
+        // Category (empty string if None)
+        write_varint_string(&mut buf, doc.category.as_deref().unwrap_or(""));
     }
 
     buf
@@ -133,12 +139,21 @@ pub fn decode_docs_binary(data: &[u8]) -> Vec<Doc> {
         let (href, size) = read_varint_string(&data[offset..]);
         offset += size;
 
+        let (category_str, size) = read_varint_string(&data[offset..]);
+        offset += size;
+        let category = if category_str.is_empty() {
+            None
+        } else {
+            Some(category_str)
+        };
+
         docs.push(Doc {
             id,
             title,
             excerpt,
             href,
             doc_type: doc_type.to_string(),
+            category,
         });
     }
 
@@ -157,6 +172,7 @@ mod tests {
                 excerpt: "I'm a performance engineer...".to_string(),
                 href: "/about".to_string(),
                 doc_type: "page".to_string(),
+                category: None,
             },
             Doc {
                 id: 1,
@@ -164,6 +180,7 @@ mod tests {
                 excerpt: "Organizing a 2026 adventure calendar...".to_string(),
                 href: "/posts/2026/01/american-adventures-worth-planning-for".to_string(),
                 doc_type: "post".to_string(),
+                category: Some("adventures".to_string()),
             },
         ]
     }
@@ -180,6 +197,7 @@ mod tests {
             assert_eq!(orig.excerpt, dec.excerpt);
             assert_eq!(orig.href, dec.href);
             assert_eq!(orig.doc_type, dec.doc_type);
+            assert_eq!(orig.category, dec.category);
         }
     }
 
@@ -195,6 +213,7 @@ mod tests {
     #[test]
     fn test_size_comparison() {
         // Create test docs with realistic content
+        let categories = ["engineering", "adventures", "learning", "training"];
         let docs: Vec<Doc> = (0..20)
             .map(|i| Doc {
                 id: i,
@@ -211,6 +230,11 @@ mod tests {
                     format!("article-slug-{}", i)
                 ),
                 doc_type: if i % 3 == 0 { "page" } else { "post" }.to_string(),
+                category: if i % 3 == 0 {
+                    None
+                } else {
+                    Some(categories[i as usize % categories.len()].to_string())
+                },
             })
             .collect();
 

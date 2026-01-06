@@ -617,6 +617,9 @@ impl SieveSearcher {
                 excerpt: doc.excerpt.clone(),
                 href: doc.href.clone(),
                 kind: doc.doc_type.clone(),
+                category: doc.category.clone(),
+                author: doc.author.clone(),
+                tags: doc.tags.clone(),
             })
             .collect();
 
