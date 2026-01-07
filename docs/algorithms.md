@@ -253,8 +253,8 @@ That's 100x faster, and the gap widens with vocabulary size.
 
 ### References
 
-- Original paper: Schulz & Mihov (2002), "Fast String Correction with Levenshtein Automata"
-- Paul Masurel's blog: https://fulmicoton.com/posts/levenshtein/
+- Schulz, K. U., & Mihov, S. (2002). Fast string correction with Levenshtein automata. *International Journal on Document Analysis and Recognition*, 5(1), 67-85.
+- Paul Masurel's implementation guide: https://fulmicoton.com/posts/levenshtein/
 
 ---
 
@@ -524,7 +524,7 @@ If you change the constants, the proofs fail. This prevents accidental ranking b
 ## Related Documentation
 
 - [Architecture](./architecture.md): Binary format, system overview
+- [Rust API](./rust.md): Library API for building indexes programmatically
+- [Verification](./verification.md): Lean 4 proofs for algorithm correctness
 - [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
 - [Integration](./integration.md): WASM setup, browser integration
-- [Verification](./verification.md): Formal verification details
-- [Contributing](./contributing.md): How to contribute safely

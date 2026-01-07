@@ -88,3 +88,9 @@ const results = searcher.search('query', 10);
 - [Architecture](architecture.md) - How the three-tier pipeline works
 - [Benchmarks](benchmarks.md) - Performance comparisons
 - [Verification](verification.md) - Formal proofs in Lean 4
+
+### API Reference
+
+- [CLI Reference](cli.md) - Build and inspect indexes
+- [TypeScript API](typescript.md) - Browser WASM bindings
+- [Rust API](rust.md) - Library for programmatic use

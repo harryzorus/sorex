@@ -533,8 +533,8 @@ onUnmount(() => {
 
 ## Related Documentation
 
+- [CLI Reference](./cli.md): Build indexes with `sieve index`
+- [TypeScript API](./typescript.md): Full API reference for WASM bindings
+- [Rust API](./rust.md): Library API for programmatic use
 - [Architecture](./architecture.md): Binary format, algorithm details
-- [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata
 - [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
-- [Verification](./verification.md): Formal verification guide
-- [Contributing](./contributing.md): How to contribute safely

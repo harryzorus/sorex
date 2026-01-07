@@ -351,11 +351,11 @@ When reporting verification failures, include:
 
 ## Related Documentation
 
-- [Architecture](./architecture.md): Binary format, system overview
+- [Verification](./verification.md): Formal verification guide (read first!)
+- [Architecture](./architecture.md): System overview and invariants
 - [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
-- [Integration](./integration.md): WASM setup, browser integration
-- [Verification](./verification.md): Formal verification guide
+- [Rust API](./rust.md): Library API and type-level invariants
+- [CLI Reference](./cli.md): Build and test indexes
 
 ---
 

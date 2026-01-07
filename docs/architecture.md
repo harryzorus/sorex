@@ -697,8 +697,10 @@ Total index overhead: ~15-20% on top of document metadata.
 
 ## Related Documentation
 
+- [Integration](./integration.md): WASM setup, browser integration examples
+- [CLI Reference](./cli.md): Build indexes with `sieve index`
+- [TypeScript API](./typescript.md): WASM bindings for browser search
+- [Rust API](./rust.md): Library API for programmatic use
 - [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata, Block PFOR
 - [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
-- [Integration](./integration.md): WASM setup, browser integration, TypeScript
 - [Verification](./verification.md): Formal verification guide
-- [Contributing](./contributing.md): How to contribute safely

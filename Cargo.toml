@@ -3,7 +3,7 @@ members = [".", "macros", "xtask"]
 
 [package]
 name = "sieve"
-version = "0.1.0"
+version = "0.2.4"
 edition = "2021"
 description = "Formally verified full-text search with suffix arrays"
 repository = "https://github.com/harryzorus/sieve"
@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
-sieve-lean-macros = { path = "macros", optional = true }
+sieve-lean-macros = { version = "0.2.4", optional = true }
 crc32fast = "1.4"          # CRC32 checksum for integrity validation
 unicode-normalization = { version = "0.1", optional = true }  # NFD decomposition for diacritic stripping
 # Levenshtein DFA tables implemented in-house (levenshtein_dfa.rs) - Schulz-Mihov 2002

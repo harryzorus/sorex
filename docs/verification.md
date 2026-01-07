@@ -455,8 +455,8 @@ cargo test proptest -- --test-threads=1
 
 ## Related Documentation
 
-- [Architecture](./architecture.md) - Binary format, system overview
+- [Contributing](./contributing.md) - How to contribute while maintaining verification
+- [Rust API](./rust.md) - Type-level invariants and verification types
+- [Architecture](./architecture.md) - System overview and invariants
 - [Algorithms](./algorithms.md) - Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md) - Performance comparisons with other libraries
-- [Integration](./integration.md) - WASM setup, browser integration
-- [Contributing](./contributing.md) - How to contribute safely
+- [Benchmarks](./benchmarks.md) - Performance without sacrificing correctness

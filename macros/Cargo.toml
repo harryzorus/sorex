@@ -1,8 +1,10 @@
 [package]
 name = "sieve-lean-macros"
-version = "0.1.0"
+version = "0.2.4"
 edition = "2021"
 description = "Procedural macros for generating Lean 4 specifications from Rust sieve code"
+repository = "https://github.com/harryzorus/sieve"
+license = "Apache-2.0"
 
 [lib]
 proc-macro = true

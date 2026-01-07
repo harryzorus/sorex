@@ -19,6 +19,14 @@ A formally verified search engine for static sites. Substring matching, typo tol
 | [Verification](verification.md) | How Lean 4 proofs guarantee ranking correctness. What we prove, what we trust. |
 | [Contributing](contributing.md) | Development workflow, Lean/Rust synchronization, and the verification checklist. |
 
+### API Reference
+
+| Reference | Description |
+|-----------|-------------|
+| [CLI](cli.md) | Build indexes with `sieve index`, inspect with `sieve inspect`. |
+| [TypeScript](typescript.md) | Browser API: `SieveSearcher`, `SieveProgressiveIndex`, streaming search. |
+| [Rust](rust.md) | Library API: `build_index`, `search_hybrid`, verification types. |
+
 ## Quick Start
 
 ### 1. Install the CLI

@@ -464,8 +464,9 @@ Typo for "synchronize" (missing 'h').
 
 ## Related Documentation
 
+- [Integration](./integration.md) - Get Sieve running in your project
 - [Architecture](./architecture.md) - How Sieve's index structures work
 - [Algorithms](./algorithms.md) - Suffix arrays, Levenshtein automata
-- [Integration](./integration.md) - WASM setup, browser integration
-- [Verification](./verification.md) - Formal verification approach and limits
-- [Contributing](./contributing.md) - How to contribute safely
+- [CLI Reference](./cli.md) - Build indexes with `sieve index`
+- [TypeScript API](./typescript.md) - Browser WASM bindings
+- [Rust API](./rust.md) - Library API for benchmarking

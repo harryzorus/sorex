@@ -146,7 +146,7 @@ pub fn build_indexes_parallel(
     // Always embed WASM when feature is enabled
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
-        Arc::new(include_bytes!("../../pkg/sieve_bg.wasm").to_vec());
+        Arc::new(include_bytes!(concat!(env!("SIEVE_OUT_DIR"), "/sieve_bg.wasm")).to_vec());
 
     // Build each index in parallel
     index_defs
@@ -179,7 +179,7 @@ pub fn build_indexes_with_progress(
     // Always embed WASM when feature is enabled
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
-        Arc::new(include_bytes!("../../pkg/sieve_bg.wasm").to_vec());
+        Arc::new(include_bytes!(concat!(env!("SIEVE_OUT_DIR"), "/sieve_bg.wasm")).to_vec());
 
     let counter = AtomicUsize::new(0);
     let _total = index_defs.len();
