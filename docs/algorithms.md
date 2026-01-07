@@ -76,10 +76,10 @@ We only count matches where `offset == 0` because we want terms *starting* with 
 
 ### Complexity
 
-| Operation | Time | Space |
-|-----------|------|-------|
-| Build SA | O(n log n) | O(n) |
-| Prefix search | O(log n + k) | O(k) |
+| Operation | Time | Space | Speed |
+|-----------|------|-------|-------|
+| Build SA | O(n log n) | O(n) | <span class="complexity complexity-medium">Build-time</span> |
+| Prefix search | O(log n + k) | O(k) | <span class="complexity complexity-fast">~10μs</span> |
 
 Where n = total suffix count, k = number of matches.
 
@@ -103,6 +103,12 @@ axiom findFirstGe_correct :
 ---
 
 ## Levenshtein Automata (Schulz-Mihov 2002)
+
+<aside class="skip-note">
+
+*This section covers automata theory and DFA construction. If you just want to use fuzzy search, [skip to Block PFOR](#block-pfor-compression).*
+
+</aside>
 
 Traditional fuzzy search computes edit distance for every term:
 
@@ -229,12 +235,12 @@ impl QueryMatcher {
 
 ### Complexity
 
-| Operation | Time | Space |
-|-----------|------|-------|
-| Build DFA (once) | O(8^k × k^2) | ~1.2KB for k=2 |
-| Build matcher | O(query_len) | O(query_len) |
-| Match one term | O(term_len) | O(1) |
-| Full fuzzy search | O(vocabulary × avg_term_len) | O(1) |
+| Operation | Time | Space | Speed |
+|-----------|------|-------|-------|
+| Build DFA (once) | O(8^k × k^2) | ~1.2KB for k=2 | <span class="complexity complexity-medium">Build-time</span> |
+| Build matcher | O(query_len) | O(query_len) | <span class="complexity complexity-fast">~1μs</span> |
+| Match one term | O(term_len) | O(1) | <span class="complexity complexity-fast">~10ns</span> |
+| Full fuzzy search | O(vocabulary × avg_term_len) | O(1) | <span class="complexity complexity-medium">~50μs</span> |
 
 The key win: no per-comparison edit distance computation. Just table lookups.
 
@@ -253,6 +259,12 @@ That's 100x faster, and the gap widens with vocabulary size.
 ---
 
 ## Block PFOR Compression
+
+<aside class="skip-note">
+
+*Compression internals ahead. [Skip to Inverted Index](#inverted-index) if you just need the API.*
+
+</aside>
 
 Posting lists can be huge. A common term like "the" might appear in every document. Naive storage wastes space:
 
@@ -511,8 +523,8 @@ If you change the constants, the proofs fail. This prevents accidental ranking b
 
 ## Related Documentation
 
-- [Architecture](./architecture.md)  -  Binary format, system overview
-- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
-- [Integration](./integration.md)  -  WASM setup, browser integration
-- [Verification](./verification.md)  -  Formal verification details
-- [Contributing](./contributing.md)  -  How to contribute safely
+- [Architecture](./architecture.md): Binary format, system overview
+- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
+- [Integration](./integration.md): WASM setup, browser integration
+- [Verification](./verification.md): Formal verification details
+- [Contributing](./contributing.md): How to contribute safely

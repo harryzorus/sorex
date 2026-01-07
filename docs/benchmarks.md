@@ -343,6 +343,11 @@ cd benches && bun install
 # European Countries benchmark (includes Sieve)
 bun run bench:eu
 
+# NVIDIA CUTLASS documentation benchmark
+bun run crawl:cutlass  # Crawl docs.nvidia.com (outputs to datasets/cutlass/)
+sieve build --input datasets/cutlass --output datasets/cutlass
+bun run bench:cutlass  # Run benchmarks, outputs to RESULTS-CUTLASS.md
+
 # Synthetic corpus (JS libraries only)
 bun run bench
 
@@ -389,6 +394,71 @@ cargo bench
 - macOS 26.2
 - Bun 1.3.5
 - Libraries: fuse.js 7.0, lunr.js 2.3, flexsearch 0.7, minisearch 7.1
+
+---
+
+## CUTLASS Documentation Benchmark
+
+Real-world benchmark on NVIDIA CUTLASS documentation (70 pages of technical GPU programming documentation).
+
+**Dataset:** NVIDIA CUTLASS 4.3.4 documentation
+- 70 pages covering CUDA, tensor cores, matrix multiplication
+- Technical vocabulary: "gemm", "tensor", "warp", "synchronize", "epilogue"
+- Mix of API reference, tutorials, and architecture docs
+
+### Substring Search: Query "sync"
+
+Finding all mentions of synchronization-related terms.
+
+| Library | Results | Notes |
+|---------|---------|-------|
+| **Sieve** | **28** | Finds "synchronize", "async", "__syncthreads", "sync_warp" |
+| FlexSearch | 4 | Only exact "sync" token matches |
+| MiniSearch | 4 | Only exact "sync" token matches |
+| lunr.js | 3 | Only exact "sync" token matches |
+| fuse.js | 1 | Fuzzy matching too imprecise |
+
+**Key insight:** In technical documentation, substring search is essential. Users searching "sync" expect to find all synchronization primitives, not just documents with "sync" as a standalone word.
+
+### Typo Tolerance: Query "epilouge"
+
+Common typo for "epilogue" (a CUTLASS concept for post-GEMM operations).
+
+| Library | Results | Notes |
+|---------|---------|-------|
+| **Sieve** | **12** | Levenshtein distance 1, finds all epilogue docs |
+| fuse.js | 0 | Fuzzy threshold too strict for this typo |
+| FlexSearch | 0 | No fuzzy support |
+| lunr.js | 0 | No fuzzy support |
+| MiniSearch | 0 | Fuzzy mode doesn't catch this |
+
+**Key insight:** Technical terms like "epilogue" are easy to misspell. Sieve's Levenshtein automata handle this naturally.
+
+### Time to First Result: Query "tensor"
+
+Common query in GPU documentation.
+
+| Library | Latency | Notes |
+|---------|---------|-------|
+| FlexSearch | 7 μs | Fastest (inverted index only) |
+| MiniSearch | 14 μs | Good balance |
+| **Sieve T1** | 18 μs | First results stream immediately |
+| lunr.js | 37 μs | Stemming overhead |
+| fuse.js | 870 μs | Full document scan |
+
+**Key insight:** Sieve's T1 results arrive in 18μs while T2/T3 compute in background. Users see results immediately.
+
+### Fuzzy Match Latency: Query "syncronize" (typo)
+
+Typo for "synchronize" (missing 'h').
+
+| Library | Latency | Results |
+|---------|---------|---------|
+| **Sieve** | 52 μs | 15 (all synchronize variants) |
+| fuse.js | 415 μs | 15 (8x slower) |
+| FlexSearch | 0 μs | 0 (no fuzzy) |
+| lunr.js | 0 μs | 0 (no fuzzy) |
+| MiniSearch | 0 μs | 0 (fuzzy didn't catch it) |
 
 ---
 

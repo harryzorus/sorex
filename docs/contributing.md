@@ -351,11 +351,11 @@ When reporting verification failures, include:
 
 ## Related Documentation
 
-- [Architecture](./architecture.md)  -  Binary format, system overview
-- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
-- [Integration](./integration.md)  -  WASM setup, browser integration
-- [Verification](./verification.md)  -  Formal verification guide
+- [Architecture](./architecture.md): Binary format, system overview
+- [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata
+- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
+- [Integration](./integration.md): WASM setup, browser integration
+- [Verification](./verification.md): Formal verification guide
 
 ---
 

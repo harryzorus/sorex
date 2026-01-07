@@ -4,37 +4,135 @@
 
 Three ideas shape every technical decision:
 
-1. **Precompute everything possible**  -  Build-time work is free; query-time work is expensive. If you can compute it once, do it at index time.
-2. **Compact binary format**  -  Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
-3. **Proven correctness**  -  Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
+1. **Precompute everything possible:** Build-time work is free; query-time work is expensive. If you can compute it once, do it at index time.
+2. **Compact binary format:** Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
+3. **Proven correctness:** Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
 
 The goal: instant search in browsers without sacrificing accuracy or features. A ~150KB WASM bundle shouldn't feel like a compromise.
+
+---
+
+## Visual Overview
+
+### Build and Runtime Flow
+
+```mermaid
+flowchart LR
+    subgraph Build["Build Time"]
+        src[Markdown/HTML] --> cli[sieve build]
+        cli --> idx[".sieve file"]
+    end
+
+    subgraph Runtime["Browser Runtime"]
+        idx --> wasm[WASM Module]
+        wasm --> worker[Web Worker]
+        query[User Query] --> worker
+        worker --> out[Streaming Results]
+    end
+
+    style src fill:#64748b,color:#fff,stroke:#475569
+    style cli fill:#64748b,color:#fff,stroke:#475569
+    style idx fill:#64748b,color:#fff,stroke:#475569
+    style query fill:#64748b,color:#fff,stroke:#475569
+    style wasm fill:#0d9488,color:#fff,stroke:#0f766e
+    style worker fill:#0d9488,color:#fff,stroke:#0f766e
+    style out fill:#0d9488,color:#fff,stroke:#0f766e
+```
+
+### Web Worker Integration
+
+Search runs in a dedicated Web Worker to keep the main thread free. The UI stays responsive at 60fps even during complex fuzzy searches.
+
+```mermaid
+flowchart LR
+    subgraph Main["Main Thread"]
+        ui[UI Component]
+    end
+
+    subgraph WW["Web Worker"]
+        direction TB
+        sieve[SieveSearcher]
+    end
+
+    ui -->|"postMessage(query)"| WW
+    sieve -->|"T1: exact"| ui
+    sieve -->|"T2: prefix"| ui
+    sieve -->|"T3: fuzzy"| ui
+
+    style ui fill:#0d9488,color:#fff,stroke:#0f766e
+    style sieve fill:#64748b,color:#fff,stroke:#475569
+```
+
+**Why Web Workers?**
+- **Non-blocking**: Heavy computation doesn't freeze the UI
+- **Streaming**: Results arrive progressively as each tier completes
+- **Isolation**: WASM memory is sandboxed in the worker
+
+### Three-Tier Search Pipeline
+
+```mermaid
+flowchart TB
+    query["Query: epilouge"] --> T1
+
+    subgraph T1["Tier 1: Exact"]
+        direction LR
+        inv[Inverted Index] --> o1["O(1)"]
+    end
+
+    subgraph T2["Tier 2: Prefix"]
+        direction LR
+        suf[Suffix Array] --> o2["O(m log n)"]
+    end
+
+    subgraph T3["Tier 3: Fuzzy"]
+        direction LR
+        lev[Levenshtein DFA] --> o3["O(n)"]
+    end
+
+    T1 --> |"~2μs"| res1["Results"]
+    T1 --> T2
+    T2 --> |"~10μs"| res2["Results"]
+    T2 --> T3
+    T3 --> |"~50μs"| res3["Results"]
+
+    %% Colors match the tier they come from
+    style query fill:#64748b,color:#fff,stroke:#475569
+    style inv fill:#64748b,color:#fff,stroke:#475569
+    style o1 fill:#64748b,color:#fff,stroke:#475569
+    style suf fill:#64748b,color:#fff,stroke:#475569
+    style o2 fill:#64748b,color:#fff,stroke:#475569
+    style lev fill:#64748b,color:#fff,stroke:#475569
+    style o3 fill:#64748b,color:#fff,stroke:#475569
+    style res1 fill:#4f6d8c,color:#fff,stroke:#3d5a73
+    style res2 fill:#0d9488,color:#fff,stroke:#0f766e
+    style res3 fill:#d97706,color:#fff,stroke:#b45309
+```
 
 ---
 
 ## System Overview
 
 ```
-BUILD TIME                                RUNTIME (WASM)
-─────────────                             ──────────────
-JSON Payload                              .sieve binary
-    │                                          │
-    ▼                                          ▼
-┌─────────────────────────┐              ┌─────────────────────────┐
-│ Index Construction      │              │ Search Execution        │
-│                         │              │                         │
-│ 1. Tokenize + normalize │              │ 1. Parse query          │
-│ 2. Build inverted index │              │ 2. Exact match (O(1))   │
-│ 3. Build vocab SA       │              │ 3. Prefix match (O(log k))│
-│ 4. Precompute Lev DFA   │              │ 4. Fuzzy match (DFA)    │
-│ 5. Encode to binary     │              │ 5. Score + rank         │
-│                         │              │ 6. Return results       │
-└─────────────────────────┘              └─────────────────────────┘
-         │                                          │
-         ▼                                          ▼
-    .sieve file                              SearchResult[]
-    (~15% overhead                           with section_ids
-     vs raw text)                            for deep linking
+BUILD TIME                                   RUNTIME (WASM)
+──────────────                               ──────────────
+JSON Payload                                 .sieve binary
+    │                                             │
+    ▼                                             ▼
+┌───────────────────────────┐              ┌────────────────────────────┐
+│ Index Construction        │              │ Search Execution           │
+│                           │              │                            │
+│ 1. Tokenize + normalize   │              │ 1. Parse query             │
+│ 2. Build inverted index   │              │ 2. Exact match O(1)        │
+│ 3. Build vocab SA         │              │ 3. Prefix match O(log k)   │
+│ 4. Precompute Lev DFA     │              │ 4. Fuzzy match (DFA)       │
+│ 5. Encode to binary       │              │ 5. Score + rank            │
+│                           │              │ 6. Return results          │
+└───────────────────────────┘              └────────────────────────────┘
+          │                                             │
+          ▼                                             ▼
+     .sieve file                                 SearchResult[]
+     (~15% overhead                              with section_ids
+      vs raw text)                               for deep linking
 ```
 
 ---
@@ -128,6 +226,12 @@ The Levenshtein DFA is built once (~1.2KB precomputed automaton with ~70 states)
 
 ## Binary Format (`.sieve` v7)
 
+<aside class="skip-note">
+
+*Deep dive into the wire format. [Skip to Search Algorithms](#search-algorithms) if you just want to understand query execution.*
+
+</aside>
+
 The format is designed for memory-mapped loading with minimal parsing. Validation happens once at load time; after that, all operations are direct pointer arithmetic.
 
 **v7 is self-contained** - a single `.sieve` file includes everything needed: the search index, document metadata, and the WASM runtime. No separate JS/WASM files needed.
@@ -143,7 +247,12 @@ The binary format evolves: new compression schemes, additional metadata fields, 
 
 By embedding the runtime, each index is self-contained and frozen in time. A v7 index carries v7-compatible code. A future v8 index carries v8-compatible code. They coexist without conflict. Old indexes keep working indefinitely. New indexes use new features. No migration required.
 
-**Tradeoff**: ~150KB (gzipped) added to each index. For most sites with a single search index, this is negligible. If you need multiple indexes without duplicated WASM, [file an issue](https://github.com/harryzorus/sieve/issues).
+<aside class="callout callout-neutral">
+<div class="callout-title">Size Tradeoff</div>
+
+~150KB (gzipped) added to each index. For most sites with a single search index, this is negligible. If you need multiple indexes without duplicated WASM, [file an issue](https://github.com/harryzorus/sieve/issues).
+
+</aside>
 
 ### Acknowledgments
 
@@ -155,6 +264,12 @@ Several techniques in this format are inspired by [Apache Lucene](https://lucene
 - **Term dictionary** with binary search (similar to Lucene's BlockTree)
 
 The suffix array and Levenshtein DFA components are Sieve-specific additions that enable substring and fuzzy search capabilities beyond traditional inverted indexes.
+
+<aside class="sidenote">
+
+Lucene's approach prioritizes server-side search with large heaps and persistent storage. Sieve inverts this for client-side WASM: everything precomputed, everything in one memory-mapped blob, no runtime allocations during search.
+
+</aside>
 
 ### Layout
 
@@ -383,8 +498,8 @@ Separate indices for titles, headings, and content:
 
 ```
 UnionIndex
-├── docs: Vec<SearchDoc>        ← Shared metadata
-├── titles: Option<HybridIndex> ← Title text only
+├── docs: Vec<SearchDoc>          ← Shared metadata
+├── titles: Option<HybridIndex>   ← Title text only
 ├── headings: Option<HybridIndex> ← Heading text only
 └── content: Option<HybridIndex>  ← Body text only
 ```
@@ -400,10 +515,10 @@ Each sub-index combines inverted + suffix array:
 
 ```
 HybridIndex
-├── inverted_index: HashMap<String, PostingList>  ← O(1) exact
-├── vocabulary: Vec<String>                        ← Sorted terms
-├── vocab_suffix_array: Vec<(term_idx, offset)>   ← O(log k) prefix
-└── docs, texts, field_boundaries                  ← Metadata
+├── inverted_index: HashMap<String, PostingList> ← O(1) exact
+├── vocabulary: Vec<String>                      ← Sorted terms
+├── vocab_suffix_array: Vec<(term_idx, offset)>  ← O(log k) prefix
+└── docs, texts, field_boundaries                ← Metadata
 ```
 
 ---
@@ -440,6 +555,12 @@ Resolution:
 ---
 
 ## Formal Verification
+
+<aside class="skip-note">
+
+*Proof engineering details. [Skip to WASM Compilation](#wasm-compilation) if you just need deployment info.*
+
+</aside>
 
 ### Three-Layer Defense
 
@@ -552,13 +673,13 @@ interface SearchResult {
 
 ### Time Complexity
 
-| Operation | Complexity | Notes |
-|-----------|------------|-------|
-| Index load | O(n) | Linear scan, one-time cost |
-| Exact match | O(1) | Hash table lookup |
-| Prefix match | O(log k + m) | k = vocabulary, m = matches |
-| Fuzzy match | O(k × t) | k = vocabulary, t = avg term length |
-| Posting intersection | O(min(n, m)) | Using skip lists for large lists |
+| Operation | Complexity | Speed | Notes |
+|-----------|------------|-------|-------|
+| Index load | O(n) | <span class="complexity complexity-medium">~50ms</span> | Linear scan, one-time cost |
+| Exact match | O(1) | <span class="complexity complexity-fast">~2μs</span> | Hash table lookup |
+| Prefix match | O(log k + m) | <span class="complexity complexity-fast">~10μs</span> | k = vocabulary, m = matches |
+| Fuzzy match | O(k × t) | <span class="complexity complexity-medium">~50μs</span> | k = vocabulary, t = avg term length |
+| Posting intersection | O(min(n, m)) | <span class="complexity complexity-fast">~5μs</span> | Using skip lists for large lists |
 
 ### Space Complexity
 
@@ -576,8 +697,8 @@ Total index overhead: ~15-20% on top of document metadata.
 
 ## Related Documentation
 
-- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata, Block PFOR
-- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
-- [Integration](./integration.md)  -  WASM setup, browser integration, TypeScript
-- [Verification](./verification.md)  -  Formal verification guide
-- [Contributing](./contributing.md)  -  How to contribute safely
+- [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata, Block PFOR
+- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
+- [Integration](./integration.md): WASM setup, browser integration, TypeScript
+- [Verification](./verification.md): Formal verification guide
+- [Contributing](./contributing.md): How to contribute safely

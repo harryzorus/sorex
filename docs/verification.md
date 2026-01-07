@@ -4,9 +4,14 @@ This document describes the formal verification infrastructure for the search cr
 
 ## For AI Agents (Claude, Copilot, etc.)
 
-**READ THIS SECTION FIRST**
+<aside class="callout callout-warning">
+<div class="callout-title">Critical</div>
 
-This codebase has formal verification. You MUST follow these rules:
+This codebase has formal verification. Breaking invariants causes silent data corruption. Run `cargo xtask verify` after every change.
+
+</aside>
+
+You MUST follow these rules:
 
 ### Mandatory Workflow
 
@@ -192,8 +197,8 @@ def SearchIndex.WellFormed (idx : SearchIndex) : Prop :=
 ### Modifying Binary Search
 
 1. Binary search correctness depends on `Sorted` invariant
-2. Any change must preserve: "all before result are < target"
-3. Any change must preserve: "result and after are >= target"
+2. Any change must preserve: "all before result are less than target"
+3. Any change must preserve: "result and after are greater than or equal to target"
 4. Use `check_binary_search_result` to verify bounds
 5. Run property tests: `cargo test lean_proptest`
 

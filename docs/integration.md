@@ -409,9 +409,14 @@ Suggestions are sorted by document frequency (most common terms first).
 
 ## Performance Tips
 
-### 1. Initialize Once
+<aside class="callout callout-success">
+<div class="callout-title">Pro Tip</div>
 
 Index loading is the expensive operation. Do it once at app startup, not per search.
+
+</aside>
+
+### 1. Initialize Once
 
 ```typescript
 // Good: Initialize once
@@ -474,6 +479,13 @@ async function openSearch() {
 
 ## Troubleshooting
 
+<aside class="callout callout-warning">
+<div class="callout-title">Important</div>
+
+Always call `searcher.free()` when done with a searcher in SPAs to prevent memory leaks. See the examples below.
+
+</aside>
+
 ### "Failed to parse binary" Error
 
 The index file is corrupted or in the wrong format. Regenerate it:
@@ -484,7 +496,7 @@ sieve index --input ./docs --output ./search-output
 
 ### Empty Results
 
-1. Check that field boundaries are correct (start < end)
+1. Check that field boundaries are correct (`start < end`)
 2. Verify text offsets match the actual text content
 3. Ensure section IDs are valid (alphanumeric, hyphens, underscores only)
 
@@ -521,8 +533,8 @@ onUnmount(() => {
 
 ## Related Documentation
 
-- [Architecture](./architecture.md)  -  Binary format, algorithm details
-- [Algorithms](./algorithms.md)  -  Suffix arrays, Levenshtein automata
-- [Benchmarks](./benchmarks.md)  -  Performance comparisons with other libraries
-- [Verification](./verification.md)  -  Formal verification guide
-- [Contributing](./contributing.md)  -  How to contribute safely
+- [Architecture](./architecture.md): Binary format, algorithm details
+- [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata
+- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
+- [Verification](./verification.md): Formal verification guide
+- [Contributing](./contributing.md): How to contribute safely
