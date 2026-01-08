@@ -79,13 +79,6 @@ The field scoring hierarchy is *proven*—Title always beats Heading, Heading al
 
 ## Installation
 
-### Homebrew (macOS)
-
-```bash
-brew tap harryzorus/sorex
-brew install sorex
-```
-
 ### Cargo
 
 ```bash
