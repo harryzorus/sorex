@@ -1,8 +1,8 @@
 use clap::Parser;
 use std::fs;
 
-use sieve::binary::{SieveFooter, SieveHeader, VERSION};
-use sieve::build::run_build;
+use sorex::binary::{SorexFooter, SorexHeader, VERSION};
+use sorex::build::run_build;
 
 mod cli;
 use cli::{Cli, Commands};
@@ -22,7 +22,7 @@ fn main() {
             }
         }
         Commands::Inspect { file } => {
-            inspect_sieve_file(&file);
+            inspect_sorex_file(&file);
         }
     }
 }
@@ -87,14 +87,14 @@ fn title(text: &str) {
     println!("║{}{}{}║", " ".repeat(left_pad), text, " ".repeat(right_pad));
 }
 
-/// Inspect a .sieve file and display its structure diagram
-fn inspect_sieve_file(path: &str) {
+/// Inspect a .sorex file and display its structure diagram
+fn inspect_sorex_file(path: &str) {
     let bytes = fs::read(path).expect("failed to read file");
     let total_size = bytes.len();
 
     // Validate minimum size
     let min_header_size = 36;
-    let min_size = min_header_size + SieveFooter::SIZE;
+    let min_size = min_header_size + SorexFooter::SIZE;
     if total_size < min_size {
         eprintln!("Error: File too small ({} bytes, minimum {})", total_size, min_size);
         std::process::exit(1);
@@ -103,21 +103,21 @@ fn inspect_sieve_file(path: &str) {
     // Read header
     let version = bytes[4];
     let (hdr, header_size) = if version >= 3 {
-        let h = SieveHeader::read(&mut std::io::Cursor::new(&bytes)).expect("failed to read header");
-        (h, SieveHeader::SIZE)
+        let h = SorexHeader::read(&mut std::io::Cursor::new(&bytes)).expect("failed to read header");
+        (h, SorexHeader::SIZE)
     } else {
         let mut cursor = std::io::Cursor::new(&bytes);
         let mut magic = [0u8; 4];
         std::io::Read::read_exact(&mut cursor, &mut magic).expect("failed to read magic");
-        if magic != [0x53, 0x49, 0x46, 0x54] {
+        if magic != [0x53, 0x4F, 0x52, 0x58] {
             eprintln!("Error: Invalid magic bytes");
             std::process::exit(1);
         }
         let mut buf = [0u8; 32];
         std::io::Read::read_exact(&mut cursor, &mut buf).expect("failed to read header");
-        let h = SieveHeader {
+        let h = SorexHeader {
             version: buf[0],
-            flags: sieve::binary::FormatFlags::default(),
+            flags: sorex::binary::FormatFlags::default(),
             doc_count: u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]),
             term_count: u32::from_le_bytes([buf[6], buf[7], buf[8], buf[9]]),
             vocab_len: u32::from_le_bytes([buf[10], buf[11], buf[12], buf[13]]),
@@ -134,9 +134,9 @@ fn inspect_sieve_file(path: &str) {
     };
 
     // Validate footer and CRC32
-    let ftr = SieveFooter::read(&bytes).expect("failed to read footer");
-    let content = &bytes[..bytes.len() - SieveFooter::SIZE];
-    let computed_crc = SieveFooter::compute_crc32(content);
+    let ftr = SorexFooter::read(&bytes).expect("failed to read footer");
+    let content = &bytes[..bytes.len() - SorexFooter::SIZE];
+    let computed_crc = SorexFooter::compute_crc32(content);
     let crc_valid = ftr.crc32 == computed_crc;
 
     // Calculate section offsets
@@ -180,13 +180,13 @@ fn inspect_sieve_file(path: &str) {
         if hdr.dict_table_len > 0 {
             sections.push(Section { name: "DICT TABLES", size: hdr.dict_table_len as usize, offset: wasm_end });
         }
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: dict_table_end });
+        sections.push(Section { name: "FOOTER", size: SorexFooter::SIZE, offset: dict_table_end });
     } else if hdr.version >= 5 {
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: docs_end });
+        sections.push(Section { name: "FOOTER", size: SorexFooter::SIZE, offset: docs_end });
     } else if hdr.version >= 3 {
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: lev_dfa_end });
+        sections.push(Section { name: "FOOTER", size: SorexFooter::SIZE, offset: lev_dfa_end });
     } else {
-        sections.push(Section { name: "FOOTER", size: SieveFooter::SIZE, offset: section_table_end });
+        sections.push(Section { name: "FOOTER", size: SorexFooter::SIZE, offset: section_table_end });
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -194,7 +194,7 @@ fn inspect_sieve_file(path: &str) {
     // ═══════════════════════════════════════════════════════════════════
     println!();
     double_header();
-    title("SIEVE FILE INSPECTOR");
+    title("SOREX FILE INSPECTOR");
     double_divider();
     row_double(&format!("  File:     {}", truncate_path(path, 55)));
     row_double(&format!("  Size:     {}", format_size(total_size)));
@@ -262,7 +262,7 @@ fn inspect_sieve_file(path: &str) {
     if hdr.version >= 7 {
         content_size += hdr.wasm_len + hdr.dict_table_len;
     }
-    let overhead = header_size + SieveFooter::SIZE;
+    let overhead = header_size + SorexFooter::SIZE;
 
     let largest = sections.iter()
         .filter(|s| s.name != "HEADER" && s.name != "FOOTER")

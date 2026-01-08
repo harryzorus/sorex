@@ -7,7 +7,7 @@
 //! - Early-exit optimization → `withinBounds_sound`, `early_exit_correct`
 
 #[cfg(feature = "lean")]
-use sieve_lean_macros::lean_verify;
+use sorex_lean_macros::lean_verify;
 
 /// Check if two strings are within Levenshtein distance `max`.
 ///

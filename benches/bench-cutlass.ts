@@ -3,7 +3,7 @@
  *
  * Prerequisites:
  * 1. Run: npx tsx benches/crawl-cutlass-docs.ts
- * 2. Run: sieve build --input datasets/cutlass --output datasets/cutlass
+ * 2. Run: sorex index --input datasets/cutlass --output datasets/cutlass
  *
  * Usage: npx tsx benches/bench-cutlass.ts
  *
@@ -180,25 +180,25 @@ async function runBenchmarks(documents: Document[]): Promise<BenchmarkResult[]> 
 		results.push({ engine: 'MiniSearch', query: q, timeUs: avgTime, resultCount });
 	}
 
-	// 5. Sieve (via CLI for now)
-	console.log('Testing Sieve...');
-	const sieveIndexPath = join(DATASET_DIR, 'index.sieve');
+	// 5. Sorex (via CLI for now)
+	console.log('Testing Sorex...');
+	const sorexIndexPath = join(DATASET_DIR, 'index.sorex');
 
 	// Check if index exists, if not try to build it
-	const sieveFiles = readdirSync(DATASET_DIR).filter(f => f.endsWith('.sieve'));
-	if (sieveFiles.length === 0) {
-		console.log('  Building Sieve index...');
+	const sorexFiles = readdirSync(DATASET_DIR).filter(f => f.endsWith('.sorex'));
+	if (sorexFiles.length === 0) {
+		console.log('  Building Sorex index...');
 		try {
-			execSync(`sieve build --input "${DATASET_DIR}" --output "${DATASET_DIR}"`, { stdio: 'pipe' });
-			console.log('  Sieve index built successfully');
+			execSync(`sorex index --input "${DATASET_DIR}" --output "${DATASET_DIR}"`, { stdio: 'pipe' });
+			console.log('  Sorex index built successfully');
 		} catch (e) {
-			console.log('  Warning: Could not build Sieve index (sieve CLI not found)');
+			console.log('  Warning: Could not build Sorex index (sorex CLI not found)');
 		}
 	}
 
 	// For now, add placeholder results (WASM benchmarks require browser/Node WASM runtime)
 	for (const { q } of queries) {
-		results.push({ engine: 'Sieve', query: q, timeUs: 0, resultCount: 0 });
+		results.push({ engine: 'Sorex', query: q, timeUs: 0, resultCount: 0 });
 	}
 
 	return results;
@@ -265,7 +265,7 @@ async function main() {
 	for (const query of queries) {
 		console.log(`Query: "${query}"`);
 		const qResults = results
-			.filter((r) => r.query === query && r.engine !== 'Sieve')
+			.filter((r) => r.query === query && r.engine !== 'Sorex')
 			.sort((a, b) => a.timeUs - b.timeUs);
 		for (const r of qResults) {
 			console.log(`  ${r.engine.padEnd(12)} ${r.timeUs.toFixed(0).padStart(8)}μs  (${r.resultCount} results)`);

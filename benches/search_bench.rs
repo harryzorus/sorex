@@ -14,7 +14,7 @@
 //! - simsearch: Simple in-memory fuzzy search
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use sieve::{
+use sorex::{
     build_hybrid_index, build_index, build_inverted_index, build_unified_index,
     levenshtein_within, search, search_hybrid, search_unified, FieldBoundary, FieldType,
     IndexMode, IndexThresholds, SearchDoc,

@@ -8,7 +8,7 @@ mod common;
 use common::{assert_index_well_formed, build_test_index};
 use proptest::prelude::*;
 use proptest::strategy::ValueTree;
-use sieve::{field_type_score, levenshtein_within, search, FieldType};
+use sorex::{field_type_score, levenshtein_within, search, FieldType};
 
 // ============================================================================
 // STRATEGIES
@@ -494,7 +494,7 @@ proptest! {
     /// Property: Inverted index posting lists are always sorted.
     #[test]
     fn prop_inverted_index_sorted(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
+        let index = sorex::build_inverted_index(&corpus, &[]);
 
         for (term, list) in &index.terms {
             for i in 1..list.postings.len() {
@@ -513,7 +513,7 @@ proptest! {
     /// Property: Document frequency is correct.
     #[test]
     fn prop_inverted_index_doc_freq(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
+        let index = sorex::build_inverted_index(&corpus, &[]);
 
         for (term, list) in &index.terms {
             let mut unique_docs: Vec<usize> = list.postings.iter()
@@ -533,7 +533,7 @@ proptest! {
     /// Property: All postings point to valid locations.
     #[test]
     fn prop_inverted_index_postings_valid(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
+        let index = sorex::build_inverted_index(&corpus, &[]);
 
         for (term, list) in &index.terms {
             let term_len = term.len();
@@ -558,24 +558,24 @@ proptest! {
     /// Property: Total docs matches corpus size.
     #[test]
     fn prop_inverted_index_total_docs(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
+        let index = sorex::build_inverted_index(&corpus, &[]);
         prop_assert_eq!(index.total_docs, corpus.len());
     }
 
     /// Property: Every non-stop word in corpus appears in index.
     #[test]
     fn prop_inverted_index_complete(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
+        let index = sorex::build_inverted_index(&corpus, &[]);
 
         for (doc_id, text) in corpus.iter().enumerate() {
             for word in text.split_whitespace() {
-                let normalized = sieve::normalize(word);
+                let normalized = sorex::normalize(word);
                 if normalized.is_empty() {
                     continue;
                 }
 
                 // Stop words are intentionally filtered from the index
-                if sieve::is_stop_word(&normalized) {
+                if sorex::is_stop_word(&normalized) {
                     continue;
                 }
 
@@ -599,8 +599,8 @@ proptest! {
     /// Property: Validated inverted index accepts well-formed index.
     #[test]
     fn prop_validated_inverted_index(corpus in corpus_strategy()) {
-        let index = sieve::build_inverted_index(&corpus, &[]);
-        let result = sieve::ValidatedInvertedIndex::new(index, &corpus);
+        let index = sorex::build_inverted_index(&corpus, &[]);
+        let result = sorex::ValidatedInvertedIndex::new(index, &corpus);
 
         prop_assert!(
             result.is_ok(),
@@ -617,10 +617,10 @@ proptest! {
         prefix in proptest::bool::ANY,
         fuzzy in proptest::bool::ANY
     ) {
-        let thresholds = sieve::IndexThresholds::default();
+        let thresholds = sorex::IndexThresholds::default();
 
-        let mode1 = sieve::select_index_mode(doc_count, bytes, prefix, fuzzy, &thresholds);
-        let mode2 = sieve::select_index_mode(doc_count, bytes, prefix, fuzzy, &thresholds);
+        let mode1 = sorex::select_index_mode(doc_count, bytes, prefix, fuzzy, &thresholds);
+        let mode2 = sorex::select_index_mode(doc_count, bytes, prefix, fuzzy, &thresholds);
 
         prop_assert_eq!(mode1, mode2, "Index mode selection should be deterministic");
     }
@@ -642,8 +642,8 @@ proptest! {
     fn prop_streaming_exact_subset_full(corpus in corpus_strategy(), query in word_strategy()) {
         let index = common::build_hybrid_test_index(&corpus);
 
-        let exact_results = sieve::search_exact(&index, &query);
-        let full_results = sieve::search_hybrid(&index, &query);
+        let exact_results = sorex::search_exact(&index, &query);
+        let full_results = sorex::search_hybrid(&index, &query);
 
         // Every exact result should be in full results
         for exact in &exact_results {
@@ -662,9 +662,9 @@ proptest! {
     fn prop_streaming_expanded_disjoint(corpus in corpus_strategy(), query in word_strategy()) {
         let index = common::build_hybrid_test_index(&corpus);
 
-        let exact_results = sieve::search_exact(&index, &query);
+        let exact_results = sorex::search_exact(&index, &query);
         let exact_ids: Vec<usize> = exact_results.iter().map(|r| r.id).collect();
-        let expanded_results = sieve::search_expanded(&index, &query, &exact_ids);
+        let expanded_results = sorex::search_expanded(&index, &query, &exact_ids);
 
         // No expanded result should be in exact results
         for expanded in &expanded_results {
@@ -684,19 +684,19 @@ proptest! {
         let index = common::build_hybrid_test_index(&corpus);
 
         // Phase 1: Exact match (inverted index)
-        let exact_results = sieve::search_exact(&index, &query);
+        let exact_results = sorex::search_exact(&index, &query);
         let exact_ids: Vec<usize> = exact_results.iter().map(|r| r.id).collect();
 
         // Phase 2: Expanded match (suffix array prefix/substring)
-        let expanded_results = sieve::search_expanded(&index, &query, &exact_ids);
+        let expanded_results = sorex::search_expanded(&index, &query, &exact_ids);
         let mut exclude_ids = exact_ids.clone();
         exclude_ids.extend(expanded_results.iter().map(|r| r.id));
 
         // Phase 3: Fuzzy match (Levenshtein distance)
-        let fuzzy_results = sieve::search_fuzzy(&index, &query, &exclude_ids);
+        let fuzzy_results = sorex::search_fuzzy(&index, &query, &exclude_ids);
 
         // Full search (all 3 tiers)
-        let full_results = sieve::search_hybrid(&index, &query);
+        let full_results = sorex::search_hybrid(&index, &query);
 
         // Union of exact, expanded, and fuzzy
         let mut union_ids: Vec<usize> = exact_ids.clone();
@@ -718,9 +718,9 @@ proptest! {
     fn prop_streaming_empty_query(corpus in corpus_strategy()) {
         let index = common::build_hybrid_test_index(&corpus);
 
-        prop_assert!(sieve::search_exact(&index, "").is_empty());
-        prop_assert!(sieve::search_expanded(&index, "", &[]).is_empty());
-        prop_assert!(sieve::search_hybrid(&index, "").is_empty());
+        prop_assert!(sorex::search_exact(&index, "").is_empty());
+        prop_assert!(sorex::search_expanded(&index, "", &[]).is_empty());
+        prop_assert!(sorex::search_hybrid(&index, "").is_empty());
     }
 }
 
@@ -740,7 +740,7 @@ fn section_id_strategy() -> impl Strategy<Value = String> {
 }
 
 /// Strategy for generating a list of non-overlapping sections.
-fn sections_strategy(doc_length: usize) -> impl Strategy<Value = Vec<sieve::Section>> {
+fn sections_strategy(doc_length: usize) -> impl Strategy<Value = Vec<sorex::Section>> {
     if doc_length == 0 {
         return Just(vec![]).boxed();
     }
@@ -765,7 +765,7 @@ fn sections_strategy(doc_length: usize) -> impl Strategy<Value = Vec<sieve::Sect
             prop::collection::vec(section_id_strategy(), num_sections).prop_map(move |ids| {
                 ids.into_iter()
                     .enumerate()
-                    .map(|(i, id)| sieve::Section {
+                    .map(|(i, id)| sorex::Section {
                         id,
                         start_offset: boundaries[i],
                         end_offset: boundaries[i + 1],
@@ -835,7 +835,7 @@ proptest! {
     #[test]
     fn prop_section_ids_valid(id in section_id_strategy()) {
         // Create a section with this ID
-        let section = sieve::Section {
+        let section = sorex::Section {
             id: id.clone(),
             start_offset: 0,
             end_offset: 10,
@@ -865,7 +865,7 @@ proptest! {
         for section in &sections {
             // Check a point in the middle of the section
             let mid = (section.start_offset + section.end_offset) / 2;
-            let found = sieve::find_section_at_offset(&sections, mid);
+            let found = sorex::find_section_at_offset(&sections, mid);
 
             prop_assert_eq!(
                 found, Some(section.id.as_str()),
@@ -887,7 +887,7 @@ proptest! {
             .unwrap()
             .current();
 
-        let result = sieve::validate_sections(&sections, doc_length);
+        let result = sorex::validate_sections(&sections, doc_length);
         prop_assert!(
             result.is_ok(),
             "validate_sections rejected valid sections: {:?}",
@@ -903,7 +903,7 @@ proptest! {
         start in 0usize..1000,
         length in 1usize..100,
     ) {
-        let section = sieve::Section {
+        let section = sorex::Section {
             id: "test".to_string(),
             start_offset: start,
             end_offset: start + length,
@@ -920,7 +920,7 @@ proptest! {
     /// Property: Empty section ID is invalid.
     #[test]
     fn prop_empty_section_id_invalid(_dummy in 0..1i32) {
-        let section = sieve::Section {
+        let section = sorex::Section {
             id: "".to_string(),
             start_offset: 0,
             end_offset: 10,

@@ -1,7 +1,7 @@
 /**
  * Unified Search Library Benchmark - European Countries Dataset
  *
- * Compares Sieve WASM against popular JavaScript search libraries
+ * Compares Sorex WASM against popular JavaScript search libraries
  * using real-world data (30 European country Wikipedia excerpts).
  *
  * Benchmarks:
@@ -86,7 +86,7 @@ interface TierStats extends TimingStats {
   count: number;
 }
 
-interface SieveStreamingTiming {
+interface SorexStreamingTiming {
   tier1: TierStats;
   tier2: TierStats;
   allResults: TierStats;
@@ -141,7 +141,7 @@ interface BenchmarkResults {
   indexSizes: IndexSizeResult[];
 }
 
-interface SieveSearcher {
+interface SorexSearcher {
   search(query: string, limit: number): unknown[];
   search_tier1_exact(query: string, limit: number): Array<{ id?: number }>;
   search_tier2_prefix(query: string, excludeIds: number[], limit: number): Array<{ id?: number }>;
@@ -151,9 +151,9 @@ interface SieveSearcher {
   free(): void;
 }
 
-interface SieveModule {
+interface SorexModule {
   initSync(options: { module: Buffer }): void;
-  SieveSearcher: new (bytes: Uint8Array) => SieveSearcher;
+  SorexSearcher: new (bytes: Uint8Array) => SorexSearcher;
 }
 
 interface Manifest {
@@ -227,7 +227,7 @@ const TEST_QUERIES: TestQuery[] = [
   { name: 'multi_geo', query: 'Mediterranean Sea', category: 'multi' },
   { name: 'multi_concept', query: 'constitutional monarchy', category: 'multi' },
 
-  // Substring - Sieve's killer feature (suffix array)
+  // Substring - Sorex's killer feature (suffix array)
   { name: 'substring_land', query: 'land', category: 'substring' },  // Iceland, Finland, landlocked...
   { name: 'substring_burg', query: 'burg', category: 'substring' },  // Luxembourg, Hamburg...
   { name: 'substring_ian', query: 'ian', category: 'substring' },    // Italian, Croatian, Romanian...
@@ -268,35 +268,35 @@ function loadEuropeanDataset(): Document[] {
 }
 
 /**
- * Load Sieve WASM module and pre-built index.
+ * Load Sorex WASM module and pre-built index.
  */
-async function loadSieveIndex(): Promise<{
-  searcher: SieveSearcher;
-  wasmModule: SieveModule;
+async function loadSorexIndex(): Promise<{
+  searcher: SorexSearcher;
+  wasmModule: SorexModule;
   indexBytes: Buffer;
 }> {
   const outputDir = join(__dirname, '../datasets/output');
   const pkgDir = join(__dirname, '../pkg');
 
-  // Find the .sieve file by globbing
+  // Find the .sorex file by globbing
   const { globSync } = await import('glob');
-  const sieveFiles = globSync(join(outputDir, '*.sieve'));
-  if (sieveFiles.length === 0) {
-    throw new Error(`No .sieve files found in ${outputDir}. Run: sieve index --input datasets --output datasets/output`);
+  const sorexFiles = globSync(join(outputDir, '*.sorex'));
+  if (sorexFiles.length === 0) {
+    throw new Error(`No .sorex files found in ${outputDir}. Run: sorex index --input datasets --output datasets/output`);
   }
-  const indexPath = sieveFiles[0];
+  const indexPath = sorexFiles[0];
   const indexBytes = readFileSync(indexPath);
 
   // Load WASM module from pkg/ directory (built by wasm-pack)
-  const wasmJsPath = join(pkgDir, 'sieve.js');
-  const wasmBinaryPath = join(pkgDir, 'sieve_bg.wasm');
+  const wasmJsPath = join(pkgDir, 'sorex.js');
+  const wasmBinaryPath = join(pkgDir, 'sorex_bg.wasm');
   const wasmBytes = readFileSync(wasmBinaryPath);
 
-  const wasmModule = await import(wasmJsPath) as SieveModule;
+  const wasmModule = await import(wasmJsPath) as SorexModule;
   wasmModule.initSync({ module: wasmBytes });
 
   // Create searcher from binary
-  const searcher = new wasmModule.SieveSearcher(new Uint8Array(indexBytes));
+  const searcher = new wasmModule.SorexSearcher(new Uint8Array(indexBytes));
 
   return { searcher, wasmModule, indexBytes };
 }
@@ -371,7 +371,7 @@ function searchMiniSearch(index: MiniSearch<Document>, query: string, fuzzy = fa
     : index.search(query);
 }
 
-function searchSieve(searcher: SieveSearcher, query: string, limit = 10): unknown[] {
+function searchSorex(searcher: SorexSearcher, query: string, limit = 10): unknown[] {
   return searcher.search(query, limit);
 }
 
@@ -420,11 +420,11 @@ function measureSearchTiming(searchFn: () => unknown[], iterations = 1000): Sear
 }
 
 /**
- * Measure streaming search timing for Sieve.
+ * Measure streaming search timing for Sorex.
  * Uses tier1 (exact) -> tier2 (prefix) -> tier3 (fuzzy) progressive search.
  * This shows the REAL difference between first result and all results.
  */
-function measureSieveStreamingTiming(searcher: SieveSearcher, query: string, iterations = 1000): SieveStreamingTiming {
+function measureSorexStreamingTiming(searcher: SorexSearcher, query: string, iterations = 1000): SorexStreamingTiming {
   const tier1Times: number[] = [];
   const tier2Times: number[] = [];
   const allResultsTimes: number[] = [];
@@ -494,17 +494,17 @@ function measureSieveStreamingTiming(searcher: SieveSearcher, query: string, ite
 
 async function benchTimeToFirstSearch(
   docs: Document[],
-  sieveIndexBytes: Buffer,
-  wasmModule: SieveModule
+  sorexIndexBytes: Buffer,
+  wasmModule: SorexModule
 ): Promise<BenchResult[]> {
   console.log('\n=== TIME TO FIRST SEARCH ===');
   console.log('How long from loading until search is ready?\n');
 
   const bench = new Bench({ time: BENCH_CONFIG.time });
 
-  // Sieve: Load pre-built binary index
-  bench.add('Sieve (load .sieve)', () => {
-    const searcher = new wasmModule.SieveSearcher(new Uint8Array(sieveIndexBytes));
+  // Sorex: Load pre-built binary index
+  bench.add('Sorex (load .sorex)', () => {
+    const searcher = new wasmModule.SorexSearcher(new Uint8Array(sorexIndexBytes));
     searcher.free();  // Clean up
   });
 
@@ -544,7 +544,7 @@ async function benchTimeToFirstSearch(
 
 async function benchQueryLatency(
   docs: Document[],
-  sieveSearcher: SieveSearcher
+  sorexSearcher: SorexSearcher
 ): Promise<Record<string, { query: string; category: string; results: QueryResult[] }>> {
   console.log('\n=== QUERY LATENCY ===');
   console.log('Search performance on European Countries dataset (30 docs)\n');
@@ -561,8 +561,8 @@ async function benchQueryLatency(
     const bench = new Bench({ time: BENCH_CONFIG.time });
     const isTypo = category === 'typo';
 
-    bench.add('Sieve', () => {
-      searchSieve(sieveSearcher, query);
+    bench.add('Sorex', () => {
+      searchSorex(sorexSearcher, query);
     });
 
     bench.add('fuse.js', () => {
@@ -584,7 +584,7 @@ async function benchQueryLatency(
     await bench.run();
 
     // Count results from each library
-    const sieveResults = searchSieve(sieveSearcher, query);
+    const sorexResults = searchSorex(sorexSearcher, query);
     const fuseResults = searchFuse(fuseIndex, query);
     const lunrResults = searchLunr(lunrIndex, query);
     const flexResults = searchFlexSearch(flexIndex, query);
@@ -600,7 +600,7 @@ async function benchQueryLatency(
       category,
       results: bench.tasks.map((t, i) => {
         const counts = [
-          sieveResults.length,
+          sorexResults.length,
           fuseResults.length,
           lunrResults.length,
           flexCount,
@@ -628,7 +628,7 @@ async function benchQueryLatency(
 
 async function benchResultTiming(
   docs: Document[],
-  sieveSearcher: SieveSearcher
+  sorexSearcher: SorexSearcher
 ): Promise<Record<string, { query: string; category: string; results: TimingResultRow[] }>> {
   console.log('\n=== RESULT TIMING (First vs All) ===');
   console.log('Measures time to first result and time to complete search\n');
@@ -653,8 +653,8 @@ async function benchResultTiming(
 
     const iterations = QUICK_MODE ? 100 : 1000;
 
-    // Measure Sieve with STREAMING API (shows real first vs all timing)
-    const sieveStreaming = measureSieveStreamingTiming(sieveSearcher, query, iterations);
+    // Measure Sorex with STREAMING API (shows real first vs all timing)
+    const sorexStreaming = measureSorexStreamingTiming(sorexSearcher, query, iterations);
 
     // Measure JS libraries (synchronous, first ~ all)
     const fuseTiming = measureSearchTiming(
@@ -685,13 +685,13 @@ async function benchResultTiming(
 
     const timingResults: TimingResultRow[] = [
       {
-        library: 'Sieve (streaming)',
-        results: sieveStreaming.totalCount,
-        tier1Us: (sieveStreaming.tier1.mean * 1000).toFixed(1),
-        tier2Us: (sieveStreaming.tier2.mean * 1000).toFixed(1),
-        allUs: (sieveStreaming.allResults.mean * 1000).toFixed(1),
-        p99Us: (sieveStreaming.allResults.p99 * 1000).toFixed(1),
-        breakdown: `${sieveStreaming.tier1.count}+${sieveStreaming.tier2.count}+${sieveStreaming.allResults.count}`,
+        library: 'Sorex (streaming)',
+        results: sorexStreaming.totalCount,
+        tier1Us: (sorexStreaming.tier1.mean * 1000).toFixed(1),
+        tier2Us: (sorexStreaming.tier2.mean * 1000).toFixed(1),
+        allUs: (sorexStreaming.allResults.mean * 1000).toFixed(1),
+        p99Us: (sorexStreaming.allResults.p99 * 1000).toFixed(1),
+        breakdown: `${sorexStreaming.tier1.count}+${sorexStreaming.tier2.count}+${sorexStreaming.allResults.count}`,
       },
       {
         library: 'fuse.js',
@@ -744,8 +744,8 @@ async function benchResultTiming(
 
 async function benchMemoryUsage(
   docs: Document[],
-  sieveIndexBytes: Buffer,
-  wasmModule: SieveModule
+  sorexIndexBytes: Buffer,
+  wasmModule: SorexModule
 ): Promise<MemoryResult[] | null> {
   console.log('\n=== MEMORY USAGE ===');
 
@@ -783,11 +783,11 @@ async function benchMemoryUsage(
 
   const results: Array<{ name: string; sizeKB: number; index: unknown }> = [];
 
-  // Sieve
-  const sieveResult = await measureMemory('Sieve', () => {
-    return new wasmModule.SieveSearcher(new Uint8Array(sieveIndexBytes));
+  // Sorex
+  const sorexResult = await measureMemory('Sorex', () => {
+    return new wasmModule.SorexSearcher(new Uint8Array(sorexIndexBytes));
   });
-  results.push(sieveResult);
+  results.push(sorexResult);
 
   // Fuse.js
   forceGC();
@@ -831,7 +831,7 @@ async function benchMemoryUsage(
 // INDEX SIZE COMPARISON
 // ============================================================================
 
-async function benchIndexSizes(docs: Document[], sieveIndexBytes: Buffer): Promise<IndexSizeResult[]> {
+async function benchIndexSizes(docs: Document[], sorexIndexBytes: Buffer): Promise<IndexSizeResult[]> {
   console.log('\n=== INDEX SIZES ===');
   console.log('Serialized index size (what gets transferred over the network)\n');
 
@@ -839,9 +839,9 @@ async function benchIndexSizes(docs: Document[], sieveIndexBytes: Buffer): Promi
   const rawSize = Buffer.byteLength(rawData, 'utf8');
   const rawGzip = gzipSync(rawData).length;
 
-  // Sieve binary format
-  const sieveSize = sieveIndexBytes.length;
-  const sieveGzip = gzipSync(sieveIndexBytes).length;
+  // Sorex binary format
+  const sorexSize = sorexIndexBytes.length;
+  const sorexGzip = gzipSync(sorexIndexBytes).length;
 
   // Lunr.js (has toJSON)
   const lunrIndex = buildLunrIndex(docs);
@@ -869,7 +869,7 @@ async function benchIndexSizes(docs: Document[], sieveIndexBytes: Buffer): Promi
 
   const results: IndexSizeResult[] = [
     { library: 'Raw Data', rawKB: (rawSize / 1024).toFixed(1), gzipKB: (rawGzip / 1024).toFixed(1), note: '' },
-    { library: 'Sieve (.sieve)', rawKB: (sieveSize / 1024).toFixed(1), gzipKB: (sieveGzip / 1024).toFixed(1), note: 'binary' },
+    { library: 'Sorex (.sorex)', rawKB: (sorexSize / 1024).toFixed(1), gzipKB: (sorexGzip / 1024).toFixed(1), note: 'binary' },
     { library: 'fuse.js', rawKB: (fuseSize / 1024).toFixed(1), gzipKB: (fuseGzip / 1024).toFixed(1), note: 'no index' },
     { library: 'lunr.js', rawKB: (lunrSize / 1024).toFixed(1), gzipKB: (lunrGzip / 1024).toFixed(1), note: '' },
     { library: 'flexsearch', rawKB: (flexSize / 1024).toFixed(1), gzipKB: (flexGzip / 1024).toFixed(1), note: '' },
@@ -917,7 +917,7 @@ function generateMarkdownReport(results: BenchmarkResults): string {
   }
 
   lines.push('');
-  lines.push('*Sieve loads a pre-built binary index. JS libraries build at runtime.*');
+  lines.push('*Sorex loads a pre-built binary index. JS libraries build at runtime.*');
   lines.push('');
   lines.push('---');
   lines.push('');
@@ -930,7 +930,7 @@ function generateMarkdownReport(results: BenchmarkResults): string {
   const categories: Record<string, string> = {
     exact: 'Exact Word Queries',
     multi: 'Multi-Word Queries',
-    substring: 'Substring Queries (Sieve Advantage)',
+    substring: 'Substring Queries (Sorex Advantage)',
     typo: 'Typo Tolerance (Fuzzy)',
   };
 
@@ -1006,10 +1006,10 @@ function generateMarkdownReport(results: BenchmarkResults): string {
   lines.push('');
   lines.push('## Key Takeaways');
   lines.push('');
-  lines.push('1. **Time to First Search**: Sieve loads pre-built indexes instantly (~Xms). JS libraries must build at runtime.');
-  lines.push('2. **Substring Search**: Sieve finds results for substring queries where inverted indexes return 0.');
-  lines.push('3. **Typo Tolerance**: Sieve uses Levenshtein automata for true edit-distance fuzzy matching.');
-  lines.push('4. **Index Size**: Sieve\'s binary format is compact and compresses well.');
+  lines.push('1. **Time to First Search**: Sorex loads pre-built indexes instantly (~Xms). JS libraries must build at runtime.');
+  lines.push('2. **Substring Search**: Sorex finds results for substring queries where inverted indexes return 0.');
+  lines.push('3. **Typo Tolerance**: Sorex uses Levenshtein automata for true edit-distance fuzzy matching.');
+  lines.push('4. **Index Size**: Sorex\'s binary format is compact and compresses well.');
   lines.push('');
 
   return lines.join('\n');
@@ -1027,7 +1027,7 @@ async function main(): Promise<void> {
   console.log('║     European Countries Search Benchmark                      ║');
   console.log('╠══════════════════════════════════════════════════════════════╣');
   console.log('║  Dataset: 30 European country Wikipedia excerpts             ║');
-  console.log('║  Libraries: Sieve (WASM), Fuse.js, Lunr.js, FlexSearch,     ║');
+  console.log('║  Libraries: Sorex (WASM), Fuse.js, Lunr.js, FlexSearch,     ║');
   console.log('║             MiniSearch                                       ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
 
@@ -1042,16 +1042,16 @@ async function main(): Promise<void> {
   const docs = loadEuropeanDataset();
   console.log(`Loaded ${docs.length} documents`);
 
-  console.log('\nLoading Sieve WASM index...');
-  const { searcher: sieveSearcher, wasmModule, indexBytes: sieveIndexBytes } = await loadSieveIndex();
-  console.log(`Sieve index loaded (${sieveSearcher.doc_count()} docs, ${sieveSearcher.vocab_size()} terms)`);
+  console.log('\nLoading Sorex WASM index...');
+  const { searcher: sorexSearcher, wasmModule, indexBytes: sorexIndexBytes } = await loadSorexIndex();
+  console.log(`Sorex index loaded (${sorexSearcher.doc_count()} docs, ${sorexSearcher.vocab_size()} terms)`);
 
   // Run benchmarks
-  const timeToFirst = await benchTimeToFirstSearch(docs, sieveIndexBytes, wasmModule);
-  const queryLatency = await benchQueryLatency(docs, sieveSearcher);
-  const resultTiming = await benchResultTiming(docs, sieveSearcher);
-  const memory = await benchMemoryUsage(docs, sieveIndexBytes, wasmModule);
-  const indexSizes = await benchIndexSizes(docs, sieveIndexBytes);
+  const timeToFirst = await benchTimeToFirstSearch(docs, sorexIndexBytes, wasmModule);
+  const queryLatency = await benchQueryLatency(docs, sorexSearcher);
+  const resultTiming = await benchResultTiming(docs, sorexSearcher);
+  const memory = await benchMemoryUsage(docs, sorexIndexBytes, wasmModule);
+  const indexSizes = await benchIndexSizes(docs, sorexIndexBytes);
 
   // Collect results
   const results: BenchmarkResults = {
@@ -1082,7 +1082,7 @@ async function main(): Promise<void> {
   console.log(`Markdown report saved to: ${mdPath}`);
 
   // Clean up
-  sieveSearcher.free();
+  sorexSearcher.free();
 
   console.log('\n✓ All benchmarks complete\n');
 }

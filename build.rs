@@ -1,4 +1,4 @@
-//! Build script for sieve crate.
+//! Build script for sorex crate.
 //!
 //! When the `embed-wasm` feature is enabled, this script automatically:
 //! 1. Builds the WASM module using wasm-pack
@@ -24,14 +24,13 @@ fn main() {
     }
 
     // Tell rustc where to find the artifacts
-    println!("cargo:rustc-env=SIEVE_OUT_DIR={out_dir}");
+    println!("cargo:rustc-env=SOREX_OUT_DIR={out_dir}");
 }
 
 fn build_wasm(out_dir: &str) {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    // Output WASM to OUT_DIR to avoid modifying source directory
-    let wasm_out_dir = Path::new(out_dir).join("wasm-pkg");
-    let wasm_dest = Path::new(out_dir).join("sieve_bg.wasm");
+    let pkg_dir = Path::new(&manifest_dir).join("pkg");
+    let wasm_dest = Path::new(out_dir).join("sorex_bg.wasm");
 
     // Rerun if source files change
     println!("cargo:rerun-if-changed=src/lib.rs");
@@ -41,8 +40,9 @@ fn build_wasm(out_dir: &str) {
     println!("cargo:rerun-if-changed=src/levenshtein.rs");
     println!("cargo:rerun-if-changed=src/levenshtein_dfa.rs");
 
-    // Build WASM if destination doesn't exist
-    if !wasm_dest.exists() {
+    // Build WASM if pkg doesn't exist
+    let wasm_src = pkg_dir.join("sorex_bg.wasm");
+    if !wasm_src.exists() {
         println!("cargo:warning=Building WASM module with wasm-pack...");
 
         // Use separate target dir to avoid deadlock with outer cargo
@@ -57,9 +57,7 @@ fn build_wasm(out_dir: &str) {
             "--no-default-features",
             "--features",
             "wasm",
-            "--out-dir",
         ])
-        .arg(&wasm_out_dir)
         .current_dir(&manifest_dir)
         .env("CARGO_TARGET_DIR", &wasm_target_dir);
 
@@ -77,20 +75,19 @@ fn build_wasm(out_dir: &str) {
         if !status.success() {
             panic!("wasm-pack build failed");
         }
-
-        // Copy WASM to final location
-        let wasm_src = wasm_out_dir.join("sieve_bg.wasm");
-        fs::copy(&wasm_src, &wasm_dest).expect("Failed to copy WASM to OUT_DIR");
     }
+
+    // Copy WASM to OUT_DIR
+    fs::copy(&wasm_src, &wasm_dest).expect("Failed to copy WASM to OUT_DIR");
 }
 
 fn build_loader(out_dir: &str) {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let loader_src_dir = Path::new(&manifest_dir).join("src/build/loader");
-    let loader_src = Path::new(&manifest_dir).join("target/loader/sieve-loader.js");
-    let loader_map_src = Path::new(&manifest_dir).join("target/loader/sieve-loader.js.map");
-    let loader_dest = Path::new(out_dir).join("sieve-loader.js");
-    let loader_map_dest = Path::new(out_dir).join("sieve-loader.js.map");
+    let loader_src = Path::new(&manifest_dir).join("target/loader/sorex-loader.js");
+    let loader_map_src = Path::new(&manifest_dir).join("target/loader/sorex-loader.js.map");
+    let loader_dest = Path::new(out_dir).join("sorex-loader.js");
+    let loader_map_dest = Path::new(out_dir).join("sorex-loader.js.map");
 
     // Rerun if loader source changes
     println!("cargo:rerun-if-changed=src/build/loader/index.ts");

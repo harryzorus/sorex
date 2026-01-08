@@ -1,9 +1,9 @@
 /**
- * End-to-end test for sieve search
+ * End-to-end test for sorex search
  *
  * Tests the full pipeline:
- * 1. Build index with `sieve index`
- * 2. Load with emitted sieve-loader.js
+ * 1. Build index with `sorex index`
+ * 2. Load with emitted sorex-loader.js
  * 3. Run search queries
  * 4. Verify results
  */
@@ -15,7 +15,7 @@ import { join } from 'path';
 const ROOT = join(import.meta.dir, '..');
 const FIXTURES = join(import.meta.dir, 'fixtures');
 const OUTPUT = join(import.meta.dir, 'output');
-const SIEVE_BIN = join(ROOT, 'target/release/sieve');
+const SOREX_BIN = join(ROOT, 'target/release/sorex');
 
 // Test utilities
 function assert(condition: boolean, message: string) {
@@ -32,7 +32,7 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
 
 // Setup: build CLI and create output directory
 function setup() {
-  console.log('Building sieve CLI...');
+  console.log('Building sorex CLI...');
   execSync('cargo build --release', { cwd: ROOT, stdio: 'inherit' });
 
   if (existsSync(OUTPUT)) {
@@ -44,19 +44,19 @@ function setup() {
 // Build index from fixtures
 function buildIndex(): string {
   console.log('\nBuilding search index...');
-  execSync(`${SIEVE_BIN} index --input ${FIXTURES} --output ${OUTPUT}`, {
+  execSync(`${SOREX_BIN} index --input ${FIXTURES} --output ${OUTPUT}`, {
     cwd: ROOT,
     stdio: 'inherit',
   });
 
-  // Find the generated .sieve file
+  // Find the generated .sorex file
   const files = Bun.file(OUTPUT).name;
-  const sieveFiles = Array.from(
-    new Bun.Glob('*.sieve').scanSync({ cwd: OUTPUT })
+  const sorexFiles = Array.from(
+    new Bun.Glob('*.sorex').scanSync({ cwd: OUTPUT })
   );
-  assert(sieveFiles.length > 0, 'No .sieve file generated');
+  assert(sorexFiles.length > 0, 'No .sorex file generated');
 
-  const indexPath = join(OUTPUT, sieveFiles[0]);
+  const indexPath = join(OUTPUT, sorexFiles[0]);
   console.log(`  Generated: ${indexPath}`);
   return indexPath;
 }
@@ -66,17 +66,17 @@ async function testSearch(indexPath: string) {
   console.log('\nTesting search functionality...');
 
   // Read the loader and index
-  const loaderPath = join(OUTPUT, 'sieve-loader.js');
-  assert(existsSync(loaderPath), 'sieve-loader.js not found');
+  const loaderPath = join(OUTPUT, 'sorex-loader.js');
+  assert(existsSync(loaderPath), 'sorex-loader.js not found');
 
   // Import the loader dynamically
   const loader = await import(loaderPath);
-  assert(typeof loader.loadSieveSync === 'function', 'loadSieveSync not exported');
-  assert(typeof loader.SieveSearcher === 'function', 'SieveSearcher not exported');
+  assert(typeof loader.loadSorexSync === 'function', 'loadSorexSync not exported');
+  assert(typeof loader.SorexSearcher === 'function', 'SorexSearcher not exported');
 
   // Load the index
   const indexBuffer = readFileSync(indexPath);
-  const searcher = loader.loadSieveSync(indexBuffer.buffer);
+  const searcher = loader.loadSorexSync(indexBuffer.buffer);
 
   // Test: Document count
   assertEqual(searcher.doc_count(), 3, 'Document count');
@@ -147,7 +147,7 @@ async function testDemoGeneration() {
   mkdirSync(OUTPUT, { recursive: true });
 
   // Build with --demo flag
-  execSync(`${SIEVE_BIN} index --input ${FIXTURES} --output ${OUTPUT} --demo`, {
+  execSync(`${SOREX_BIN} index --input ${FIXTURES} --output ${OUTPUT} --demo`, {
     cwd: ROOT,
     stdio: 'inherit',
   });
@@ -156,15 +156,15 @@ async function testDemoGeneration() {
   assert(existsSync(demoPath), 'demo.html should be generated with --demo flag');
 
   const demoContent = readFileSync(demoPath, 'utf-8');
-  assert(demoContent.includes('loadSieve'), 'demo.html should use loadSieve');
-  assert(demoContent.includes('sieve-loader.js'), 'demo.html should import sieve-loader.js');
+  assert(demoContent.includes('loadSorex'), 'demo.html should use loadSorex');
+  assert(demoContent.includes('sorex-loader.js'), 'demo.html should import sorex-loader.js');
   console.log('  ✓ demo.html generated and valid');
 }
 
 // Main
 async function main() {
   console.log('='.repeat(60));
-  console.log('Sieve E2E Test Suite');
+  console.log('Sorex E2E Test Suite');
   console.log('='.repeat(60));
 
   try {

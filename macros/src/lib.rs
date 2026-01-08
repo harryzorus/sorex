@@ -21,7 +21,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use sieve_lean_macros::{LeanSpec, LeanProptest, lean_verify, lean_proptest};
+//! use sorex_lean_macros::{LeanSpec, LeanProptest, lean_verify, lean_proptest};
 //!
 //! // Generate both Lean specs and proptest strategies
 //! #[derive(LeanSpec, LeanProptest)]

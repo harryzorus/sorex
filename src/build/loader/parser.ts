@@ -1,5 +1,5 @@
 /**
- * .sieve file parsing and CRC32 validation
+ * .sorex file parsing and CRC32 validation
  */
 
 const HEADER_SIZE = 52;
@@ -24,7 +24,7 @@ export function computeCrc32(data: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-export interface SieveHeader {
+export interface SorexHeader {
   version: number;
   docCount: number;
   termCount: number;
@@ -39,32 +39,32 @@ export interface SieveHeader {
   dictTableLen: number;
 }
 
-export interface ParsedSieve {
+export interface ParsedSorex {
   wasm: Uint8Array;
   index: Uint8Array;
 }
 
 /**
- * Parse a .sieve file and extract WASM + index sections.
+ * Parse a .sorex file and extract WASM + index sections.
  */
-export function parseSieve(buffer: ArrayBuffer): ParsedSieve {
+export function parseSorex(buffer: ArrayBuffer): ParsedSorex {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
 
   // Validate magic
   for (let i = 0; i < 4; i++) {
     if (view.getUint8(i) !== MAGIC[i]) {
-      throw new Error("Invalid .sieve file");
+      throw new Error("Invalid .sorex file");
     }
   }
 
   const version = view.getUint8(4);
   if (version < 7) {
-    throw new Error(`Sieve v${version} does not embed WASM, need v7+`);
+    throw new Error(`Sorex v${version} does not embed WASM, need v7+`);
   }
 
   // Parse header (little-endian u32 fields)
-  const header: SieveHeader = {
+  const header: SorexHeader = {
     version,
     docCount: view.getUint32(6, true),
     termCount: view.getUint32(10, true),

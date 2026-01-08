@@ -148,18 +148,18 @@ async function benchmark(): Promise<void> {
   console.log('\n=== WASM Bundle Sizes ===\n');
   console.log('| Component | Raw | Gzipped |');
   console.log('|-----------|-----|---------|');
-  console.log('| sieve_bg.wasm | 329 KB | 153 KB |');
-  console.log('| sieve-loader.js | 17 KB | 4.5 KB |');
-  console.log('| sieve-loader.js.map | 40 KB | (optional) |');
+  console.log('| sorex_bg.wasm | 329 KB | 153 KB |');
+  console.log('| sorex-loader.js | 17 KB | 4.5 KB |');
+  console.log('| sorex-loader.js.map | 40 KB | (optional) |');
   console.log('| **Total** | **346 KB** | **~153 KB** |');
   console.log('');
-  console.log('Note: .sieve files embed WASM, so total gzipped is ~153KB (compressed together).');
+  console.log('Note: .sorex files embed WASM, so total gzipped is ~153KB (compressed together).');
   console.log('Source map is optional and only needed for debugging.');
 
   console.log('\n=== Comparison with JS Libraries ===\n');
   console.log('| Library | Bundle Size (gzip) |');
   console.log('|---------|-------------------|');
-  console.log('| Sieve (WASM) | 153 KB |');
+  console.log('| Sorex (WASM) | 153 KB |');
   console.log('| Fuse.js | ~24 KB |');
   console.log('| Lunr.js | ~8 KB |');
   console.log('| FlexSearch | ~6 KB |');

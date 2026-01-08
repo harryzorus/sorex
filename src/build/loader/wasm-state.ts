@@ -23,19 +23,19 @@ export interface WasmExports {
   ) => number;
   __wbindgen_export3: (idx: number) => void;
   __wbindgen_export4: (ptr: number, len: number, align: number) => void;
-  __wbg_sievesearcher_free: (ptr: number, flag: number) => void;
-  sievesearcher_new: (retptr: number, ptr: number, len: number) => void;
-  sievesearcher_search: (
+  __wbg_sorexsearcher_free: (ptr: number, flag: number) => void;
+  sorexsearcher_new: (retptr: number, ptr: number, len: number) => void;
+  sorexsearcher_search: (
     retptr: number,
     ptr: number,
     queryPtr: number,
     queryLen: number,
     limit: number
   ) => void;
-  sievesearcher_has_docs: (ptr: number) => number;
-  sievesearcher_doc_count: (ptr: number) => number;
-  sievesearcher_vocab_size: (ptr: number) => number;
-  sievesearcher_has_vocabulary: (ptr: number) => number;
+  sorexsearcher_has_docs: (ptr: number) => number;
+  sorexsearcher_doc_count: (ptr: number) => number;
+  sorexsearcher_vocab_size: (ptr: number) => number;
+  sorexsearcher_has_vocabulary: (ptr: number) => number;
 }
 
 export class WasmState {

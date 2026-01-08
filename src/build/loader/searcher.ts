@@ -1,8 +1,8 @@
 /**
- * SieveSearcher - WASM-backed search interface
+ * SorexSearcher - WASM-backed search interface
  *
- * Wraps the Rust SieveSearcher via wasm-bindgen, providing
- * a type-safe JavaScript API for searching .sieve indexes.
+ * Wraps the Rust SorexSearcher via wasm-bindgen, providing
+ * a type-safe JavaScript API for searching .sorex indexes.
  *
  * @module searcher
  */
@@ -10,7 +10,7 @@
 import type { WasmState } from "./wasm-state";
 
 /**
- * A single search result returned by SieveSearcher.search()
+ * A single search result returned by SorexSearcher.search()
  */
 export interface SearchResult {
   /** URL path to the document */
@@ -24,16 +24,16 @@ export interface SearchResult {
 }
 
 // FinalizationRegistry for automatic cleanup
-const SieveSearcherFinalization =
+const SorexSearcherFinalization =
   typeof FinalizationRegistry === "undefined"
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry((prevent: () => void) => prevent());
 
 /**
- * Search index loaded from a .sieve file.
+ * Search index loaded from a .sorex file.
  * Each instance is bound to a specific WASM version.
  */
-export class SieveSearcher {
+export class SorexSearcher {
   #state: WasmState;
   #ptr: number;
 
@@ -45,7 +45,7 @@ export class SieveSearcher {
     try {
       const ptr0 = state.passArrayToWasm(indexBytes, wasm.__wbindgen_export);
       const len0 = state.vectorLen;
-      wasm.sievesearcher_new(retptr, ptr0, len0);
+      wasm.sorexsearcher_new(retptr, ptr0, len0);
 
       const r0 = state.getDataView().getInt32(retptr + 0, true);
       const r1 = state.getDataView().getInt32(retptr + 4, true);
@@ -56,7 +56,7 @@ export class SieveSearcher {
       }
 
       this.#ptr = r0 >>> 0;
-      SieveSearcherFinalization.register(this, () => this.free(), this);
+      SorexSearcherFinalization.register(this, () => this.free(), this);
     } finally {
       wasm.__wbindgen_add_to_stack_pointer(16);
     }
@@ -69,8 +69,8 @@ export class SieveSearcher {
     if (this.#ptr === 0) return;
     const ptr = this.#ptr;
     this.#ptr = 0;
-    SieveSearcherFinalization.unregister(this);
-    this.#state.wasm.__wbg_sievesearcher_free(ptr, 0);
+    SorexSearcherFinalization.unregister(this);
+    this.#state.wasm.__wbg_sorexsearcher_free(ptr, 0);
   }
 
   /**
@@ -92,7 +92,7 @@ export class SieveSearcher {
       );
       const len0 = state.vectorLen;
 
-      wasm.sievesearcher_search(
+      wasm.sorexsearcher_search(
         retptr,
         this.#ptr,
         ptr0,
@@ -118,27 +118,27 @@ export class SieveSearcher {
    * Check if documents are loaded.
    */
   has_docs(): boolean {
-    return this.#state.wasm.sievesearcher_has_docs(this.#ptr) !== 0;
+    return this.#state.wasm.sorexsearcher_has_docs(this.#ptr) !== 0;
   }
 
   /**
    * Get the number of indexed documents.
    */
   doc_count(): number {
-    return this.#state.wasm.sievesearcher_doc_count(this.#ptr) >>> 0;
+    return this.#state.wasm.sorexsearcher_doc_count(this.#ptr) >>> 0;
   }
 
   /**
    * Get the vocabulary size (number of unique terms).
    */
   vocab_size(): number {
-    return this.#state.wasm.sievesearcher_vocab_size(this.#ptr) >>> 0;
+    return this.#state.wasm.sorexsearcher_vocab_size(this.#ptr) >>> 0;
   }
 
   /**
    * Check if vocabulary is loaded.
    */
   has_vocabulary(): boolean {
-    return this.#state.wasm.sievesearcher_has_vocabulary(this.#ptr) !== 0;
+    return this.#state.wasm.sorexsearcher_has_vocabulary(this.#ptr) !== 0;
   }
 }

@@ -1,8 +1,8 @@
-//! WebAssembly bindings for the Sieve search index.
+//! WebAssembly bindings for the Sorex search index.
 //!
 //! Provides two WASM-accessible index types:
-//! - `SieveProgressiveIndex`: Progressive layer loading for fast initial results
-//! - `SieveSearcher`: Direct binary search (loads .sieve file)
+//! - `SorexProgressiveIndex`: Progressive layer loading for fast initial results
+//! - `SorexSearcher`: Direct binary search (loads .sorex file)
 
 use crate::binary::{LoadedLayer, PostingEntry};
 use crate::hybrid::search_hybrid;
@@ -93,7 +93,7 @@ fn default_content_boost() -> f64 {
 ///
 /// Each layer is a separate HybridIndex that can be loaded independently.
 #[wasm_bindgen]
-pub struct SieveProgressiveIndex {
+pub struct SorexProgressiveIndex {
     /// Document metadata (always present after init)
     docs: Vec<SearchDoc>,
     /// Titles layer (loaded first, smallest)
@@ -105,15 +105,15 @@ pub struct SieveProgressiveIndex {
 }
 
 #[wasm_bindgen]
-impl SieveProgressiveIndex {
+impl SorexProgressiveIndex {
     /// Create a new progressive index from a manifest.
     ///
     /// The manifest contains only document metadata, no search data.
     /// Layers must be loaded separately via `load_layer()`.
     #[wasm_bindgen(constructor)]
-    pub fn new(manifest: JsValue) -> Result<SieveProgressiveIndex, JsValue> {
+    pub fn new(manifest: JsValue) -> Result<SorexProgressiveIndex, JsValue> {
         let docs: Vec<SearchDoc> = from_value(manifest).map_err(|e| e.to_string())?;
-        Ok(SieveProgressiveIndex {
+        Ok(SorexProgressiveIndex {
             docs,
             titles: None,
             headings: None,
@@ -125,7 +125,7 @@ impl SieveProgressiveIndex {
     ///
     /// Valid layer names: "titles", "headings", "content"
     ///
-    /// Binary format (.sieve files) uses:
+    /// Binary format (.sorex files) uses:
     /// - FST vocabulary (5-10x smaller than JSON)
     /// - Block PFOR postings (Lucene-style 128-doc blocks)
     /// - Skip lists for large posting lists
@@ -535,13 +535,13 @@ fn loaded_layer_to_hybrid_index(
 }
 
 // =============================================================================
-// SIEVE SEARCHER (Zero-CPU Fuzzy Search with Precomputed Levenshtein Automata)
+// SOREX SEARCHER (Zero-CPU Fuzzy Search with Precomputed Levenshtein Automata)
 // =============================================================================
 //
 // Implementation of Schulz-Mihov (2002) Universal Levenshtein Automata.
 //
 // Key insight: DFA transition tables are query-independent. We precompute them
-// at build time and embed them in the .sieve binary file. At search time,
+// at build time and embed them in the .sorex binary file. At search time,
 // building query-specific matchers is pure table lookups (~1μs).
 //
 // Performance:
@@ -570,9 +570,9 @@ pub struct FuzzyMatch {
 /// - O(log k) prefix search via suffix array
 /// - O(vocabulary) fuzzy search via Levenshtein DFA (~8ns per term)
 ///
-/// Load from binary .sieve format for best performance.
+/// Load from binary .sorex format for best performance.
 #[wasm_bindgen]
-pub struct SieveSearcher {
+pub struct SorexSearcher {
     /// Document metadata
     docs: Vec<SearchDoc>,
     /// Section ID string table (for deep linking, v6+)
@@ -583,19 +583,19 @@ pub struct SieveSearcher {
     suffix_array: Vec<(u32, u32)>,
     /// Postings: term_idx → posting entries (doc_id + section_idx)
     postings: Vec<Vec<PostingEntry>>,
-    /// Precomputed Levenshtein DFA (loaded from .sieve file)
+    /// Precomputed Levenshtein DFA (loaded from .sorex file)
     lev_dfa: Option<ParametricDFA>,
 }
 
 #[wasm_bindgen]
-impl SieveSearcher {
-    /// Create a new searcher from binary .sieve format.
+impl SorexSearcher {
+    /// Create a new searcher from binary .sorex format.
     ///
     /// The binary format is 5-7x smaller than JSON and loads ~3-5x faster.
     /// Since v5, document metadata is embedded in the binary (no separate load_docs call needed).
     /// Since v6, section_ids are stored per-posting for deep linking to specific sections.
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> Result<SieveSearcher, JsValue> {
+    pub fn new(bytes: &[u8]) -> Result<SorexSearcher, JsValue> {
         let layer =
             LoadedLayer::from_bytes(bytes).map_err(|e| format!("Failed to parse binary: {}", e))?;
 
@@ -623,7 +623,7 @@ impl SieveSearcher {
             })
             .collect();
 
-        Ok(SieveSearcher {
+        Ok(SorexSearcher {
             docs,
             section_table: layer.section_table,
             vocabulary: layer.vocabulary,

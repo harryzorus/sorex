@@ -9,7 +9,7 @@
   },
   "timeToFirst": [
     {
-      "library": "Sieve (load .sieve)",
+      "library": "Sorex (load .sorex)",
       "opsPerSec": 4959,
       "meanMs": 0.202,
       "samples": 24798
@@ -45,7 +45,7 @@
       "category": "exact",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 82327,
           "meanUs": 12.1,
           "resultsFound": 10
@@ -81,7 +81,7 @@
       "category": "exact",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 81114,
           "meanUs": 12.3,
           "resultsFound": 10
@@ -117,7 +117,7 @@
       "category": "exact",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 144529,
           "meanUs": 6.9,
           "resultsFound": 10
@@ -153,7 +153,7 @@
       "category": "exact",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 15173,
           "meanUs": 65.9,
           "resultsFound": 1
@@ -189,7 +189,7 @@
       "category": "multi",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 31474,
           "meanUs": 31.8,
           "resultsFound": 0
@@ -225,7 +225,7 @@
       "category": "multi",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 34726,
           "meanUs": 28.8,
           "resultsFound": 0
@@ -261,7 +261,7 @@
       "category": "multi",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 30151,
           "meanUs": 33.2,
           "resultsFound": 0
@@ -297,7 +297,7 @@
       "category": "substring",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 16066,
           "meanUs": 62.2,
           "resultsFound": 10
@@ -333,7 +333,7 @@
       "category": "substring",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 16403,
           "meanUs": 61,
           "resultsFound": 10
@@ -369,7 +369,7 @@
       "category": "substring",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 21975,
           "meanUs": 45.5,
           "resultsFound": 4
@@ -405,7 +405,7 @@
       "category": "typo",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 14057,
           "meanUs": 71.1,
           "resultsFound": 10
@@ -441,7 +441,7 @@
       "category": "typo",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 14657,
           "meanUs": 68.2,
           "resultsFound": 0
@@ -477,7 +477,7 @@
       "category": "typo",
       "results": [
         {
-          "library": "Sieve",
+          "library": "Sorex",
           "opsPerSec": 23372,
           "meanUs": 42.8,
           "resultsFound": 8
@@ -515,7 +515,7 @@
       "category": "Many results",
       "results": [
         {
-          "library": "Sieve (streaming)",
+          "library": "Sorex (streaming)",
           "results": 30,
           "tier1Us": "10.1",
           "tier2Us": "21.5",
@@ -566,7 +566,7 @@
       "category": "Substring match",
       "results": [
         {
-          "library": "Sieve (streaming)",
+          "library": "Sorex (streaming)",
           "results": 18,
           "tier1Us": "0.6",
           "tier2Us": "5.6",
@@ -617,7 +617,7 @@
       "category": "Fuzzy match",
       "results": [
         {
-          "library": "Sieve (streaming)",
+          "library": "Sorex (streaming)",
           "results": 8,
           "tier1Us": "0.4",
           "tier2Us": "1.0",
@@ -673,7 +673,7 @@
       "note": ""
     },
     {
-      "library": "Sieve (.sieve)",
+      "library": "Sorex (.sorex)",
       "rawKB": "347.1",
       "gzipKB": "167.6",
       "note": "binary"

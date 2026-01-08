@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
-    name = "sieve",
+    name = "sorex",
     about = "Formally verified full-text search index builder",
     version
 )]
@@ -19,7 +19,7 @@ pub enum Commands {
         #[arg(short, long)]
         input: String,
 
-        /// Output directory for .sieve files
+        /// Output directory for .sorex files
         #[arg(short, long)]
         output: String,
 
@@ -28,9 +28,9 @@ pub enum Commands {
         demo: bool,
     },
 
-    /// Inspect a .sieve file structure
+    /// Inspect a .sorex file structure
     Inspect {
-        /// Path to .sieve file
+        /// Path to .sorex file
         file: String,
     },
 }

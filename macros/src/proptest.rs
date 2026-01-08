@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use sieve_lean_macros::{LeanSpec, LeanProptest, lean_proptest};
+//! use sorex_lean_macros::{LeanSpec, LeanProptest, lean_proptest};
 //!
 //! #[derive(LeanSpec, LeanProptest)]
 //! #[lean(name = "SuffixEntry")]

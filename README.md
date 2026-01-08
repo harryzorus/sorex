@@ -1,17 +1,17 @@
-# Sieve
+# Sorex
 
 A full-text search engine with fuzzy and substring search, built to power search on [harryzorus.xyz](https://harryzorus.xyz). Fast enough for real-time search, small enough for browsers, correct enough to prove it.
 
 ## What This Is
 
-Sieve builds compact binary search indices (`.sieve` format) that load instantly in WebAssembly. The algorithms are formally verified in Lean 4—not "we wrote some tests" verified, but mathematically proven correct.
+Sorex builds compact binary search indices (`.sorex` format) that load instantly in WebAssembly. The algorithms are formally verified in Lean 4—not "we wrote some tests" verified, but mathematically proven correct.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                                                                          │
 │   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐            │
 │   │ Content │ ──► │  Index  │ ──► │  WASM   │ ──► │ Browser │            │
-│   │  .json  │     │  .sieve │     │  153KB  │     │  <1ms   │            │
+│   │  .json  │     │  .sorex │     │  153KB  │     │  <1ms   │            │
 │   └─────────┘     └─────────┘     └─────────┘     └─────────┘            │
 │                                                                          │
 │   Your docs       Binary index    Loads anywhere  Instant search         │
@@ -23,11 +23,11 @@ Sieve builds compact binary search indices (`.sieve` format) that load instantly
 
 ## Why This Exists
 
-The client-side search space is crowded—FlexSearch, Lunr.js, Fuse.js, MiniSearch, and others all solve this problem. Sieve makes a deliberate tradeoff: **search capability and correctness over payload size and query syntax**.
+The client-side search space is crowded—FlexSearch, Lunr.js, Fuse.js, MiniSearch, and others all solve this problem. Sorex makes a deliberate tradeoff: **search capability and correctness over payload size and query syntax**.
 
-Most libraries use inverted indexes that can't find "script" inside "typescript". They're small and fast, but users expect substring matching. Sieve uses suffix arrays and Levenshtein automata to deliver true fuzzy and substring search—at the cost of a larger WASM bundle (153KB gzipped vs 6-25KB for pure JS alternatives).
+Most libraries use inverted indexes that can't find "script" inside "typescript". They're small and fast, but users expect substring matching. Sorex uses suffix arrays and Levenshtein automata to deliver true fuzzy and substring search—at the cost of a larger WASM bundle (153KB gzipped vs 6-25KB for pure JS alternatives).
 
-The other bet: formal verification. Instead of hoping the ranking logic is correct, Sieve proves it in Lean 4.
+The other bet: formal verification. Instead of hoping the ranking logic is correct, Sorex proves it in Lean 4.
 
 - **Suffix array** for O(log n) prefix search—find "auth" in "authentication" instantly
 - **Levenshtein automata** (Schulz-Mihov 2002) for typo-tolerant fuzzy matching without per-query DFA construction
@@ -50,9 +50,9 @@ The result: a ~150KB WASM bundle that handles real-time search on thousands of d
 | **Field Ranking** | Title > Heading > Content, mathematically proven | Compile-time verified |
 | **Deep Linking** | Section IDs in results for #anchor navigation | Zero overhead |
 
-### Binary Format (`.sieve` v7)
+### Binary Format (`.sorex` v7)
 
-The index format is designed for fast memory-mapped loading. **v7 is self-contained**: a single `.sieve` file includes the search index, document metadata, and the WASM runtime.
+The index format is designed for fast memory-mapped loading. **v7 is self-contained**: a single `.sorex` file includes the search index, document metadata, and the WASM runtime.
 
 - **Vocabulary**: Length-prefixed UTF-8, lexicographically sorted
 - **Suffix Array**: Term index + offset pairs for prefix search
@@ -82,21 +82,21 @@ The field scoring hierarchy is *proven*—Title always beats Heading, Heading al
 ### Homebrew (macOS)
 
 ```bash
-brew tap harryzorus/sieve
-brew install sieve
+brew tap harryzorus/sorex
+brew install sorex
 ```
 
 ### Cargo
 
 ```bash
-cargo install sieve-search
+cargo install sorex
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/harryzorus/sieve.git
-cd sieve
+git clone https://github.com/harryzorus/sorex.git
+cd sorex
 cargo build --profile release-native
 ```
 
@@ -115,18 +115,18 @@ cargo deb --profile release-native --install
 
 ```bash
 # Build index from a directory of JSON documents
-sieve index --input ./docs --output ./search-output
+sorex index --input ./docs --output ./search-output
 
 # Inspect an existing index
-sieve inspect ./search-output/index-*.sieve
+sorex inspect ./search-output/index-*.sorex
 
 # Build with demo HTML page
-sieve index --input ./docs --output ./search-output --demo
+sorex index --input ./docs --output ./search-output --demo
 ```
 
 ### Input Directory Format
 
-Sieve reads a directory containing a `manifest.json` and per-document JSON files:
+Sorex reads a directory containing a `manifest.json` and per-document JSON files:
 
 ```
 docs/
@@ -164,13 +164,13 @@ docs/
 
 ### Browser Integration
 
-The `.sieve` file is self-contained with embedded WASM. Use the generated `sieve-loader.js`:
+The `.sorex` file is self-contained with embedded WASM. Use the generated `sorex-loader.js`:
 
 ```javascript
-import { loadSieve } from './sieve-loader.js';
+import { loadSorex } from './sorex-loader.js';
 
 // Load index (extracts and initializes WASM automatically)
-const searcher = await loadSieve('./index-a1b2c3d4.sieve');
+const searcher = await loadSorex('./index-a1b2c3d4.sorex');
 
 // Search
 const results = searcher.search('query', 10);
@@ -185,7 +185,7 @@ results.forEach(r => {
 searcher.free();
 ```
 
-The loader is fully self-contained with no external dependencies. Multiple `.sieve` files with different WASM versions can coexist on the same page.
+The loader is fully self-contained with no external dependencies. Multiple `.sorex` files with different WASM versions can coexist on the same page.
 
 ---
 
@@ -206,7 +206,7 @@ Comparison with alternatives (100 documents, 500KB text):
 
 | Library | Index Size | Query Time | Bundle Size |
 |---------|------------|------------|-------------|
-| **Sieve** | 85KB | <1ms | 153KB |
+| **Sorex** | 85KB | <1ms | 153KB |
 | Lunr.js | 240KB | 15ms | 8KB |
 | FlexSearch | 180KB | 3ms | 22KB |
 | Fuse.js | N/A | 30ms | 24KB |
@@ -218,7 +218,7 @@ Comparison with alternatives (100 documents, 500KB text):
 The codebase is organized around what things *do*, not what they *are*:
 
 ```
-sieve/
+sorex/
 ├── src/
 │   ├── types.rs          # Core data structures
 │   ├── index.rs          # Suffix array construction
@@ -227,7 +227,7 @@ sieve/
 │   ├── levenshtein.rs    # Edit distance computation
 │   ├── levenshtein_dfa.rs # Parametric automata (Schulz-Mihov)
 │   ├── inverted.rs       # Inverted index + posting lists
-│   ├── binary.rs         # .sieve format encoding/decoding
+│   ├── binary.rs         # .sorex format encoding/decoding
 │   ├── wasm.rs           # WebAssembly bindings
 │   ├── verified.rs       # Type-level invariant wrappers
 │   └── contracts.rs      # Runtime debug assertions

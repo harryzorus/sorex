@@ -5,7 +5,7 @@
 Three ideas shape every technical decision:
 
 1. **Precompute everything possible:** Build-time work is free; query-time work is expensive. If you can compute it once, do it at index time.
-2. **Compact binary format:** Smaller indices load faster and cache better. Every byte in `.sieve` files earns its place.
+2. **Compact binary format:** Smaller indices load faster and cache better. Every byte in `.sorex` files earns its place.
 3. **Proven correctness:** Formal verification catches bugs that tests miss. The field hierarchy is mathematically proven, not just tested.
 
 The goal: instant search in browsers without sacrificing accuracy or features. A ~150KB WASM bundle shouldn't feel like a compromise.
@@ -19,8 +19,8 @@ The goal: instant search in browsers without sacrificing accuracy or features. A
 ```mermaid
 flowchart LR
     subgraph Build["Build Time"]
-        src[Markdown/HTML] --> cli[sieve build]
-        cli --> idx[".sieve file"]
+        src[Markdown/HTML] --> cli[sorex build]
+        cli --> idx[".sorex file"]
     end
 
     subgraph Runtime["Browser Runtime"]
@@ -51,16 +51,16 @@ flowchart LR
 
     subgraph WW["Web Worker"]
         direction TB
-        sieve[SieveSearcher]
+        sorex[SorexSearcher]
     end
 
     ui -->|"postMessage(query)"| WW
-    sieve -->|"T1: exact"| ui
-    sieve -->|"T2: prefix"| ui
-    sieve -->|"T3: fuzzy"| ui
+    sorex -->|"T1: exact"| ui
+    sorex -->|"T2: prefix"| ui
+    sorex -->|"T3: fuzzy"| ui
 
     style ui fill:#0d9488,color:#fff,stroke:#0f766e
-    style sieve fill:#64748b,color:#fff,stroke:#475569
+    style sorex fill:#64748b,color:#fff,stroke:#475569
 ```
 
 **Why Web Workers?**
@@ -115,7 +115,7 @@ flowchart TB
 ```
 BUILD TIME                                   RUNTIME (WASM)
 ──────────────                               ──────────────
-JSON Payload                                 .sieve binary
+JSON Payload                                 .sorex binary
     │                                             │
     ▼                                             ▼
 ┌───────────────────────────┐              ┌────────────────────────────┐
@@ -130,7 +130,7 @@ JSON Payload                                 .sieve binary
 └───────────────────────────┘              └────────────────────────────┘
           │                                             │
           ▼                                             ▼
-     .sieve file                                 SearchResult[]
+     .sorex file                                 SearchResult[]
      (~15% overhead                              with section_ids
       vs raw text)                               for deep linking
 ```
@@ -139,7 +139,7 @@ JSON Payload                                 .sieve binary
 
 ## Parallel Build (MapReduce)
 
-The `sieve index` CLI uses a MapReduce-style architecture for maximum throughput on multi-core machines:
+The `sorex index` CLI uses a MapReduce-style architecture for maximum throughput on multi-core machines:
 
 ```
 INPUT                          MAP PHASE                         REDUCE PHASE
@@ -193,10 +193,10 @@ manifest.json
 │ PHASE 3: Sequential Output (single thread)                      │
 │                                                                 │
 │  hash = crc32(index.bytes)                                      │
-│  write "index-{hash}.sieve"     ← WASM embedded                 │
+│  write "index-{hash}.sorex"     ← WASM embedded                 │
 │                                                                 │
-│  write sieve-loader.js          ← JS loader for browser         │
-│  write sieve-loader.js.map      ← Source map (for debugging)    │
+│  write sorex-loader.js          ← JS loader for browser         │
+│  write sorex-loader.js.map      ← Source map (for debugging)    │
 │                                                                 │
 │  if --demo:                                                     │
 │    write demo.html              ← Demo page                     │
@@ -206,9 +206,9 @@ manifest.json
 OUTPUT
 ──────
 output/
-├── index-a1b2c3d4.sieve      ← Self-contained (index + WASM)
-├── sieve-loader.js           ← Extracts WASM from .sieve
-├── sieve-loader.js.map       ← Source map (for debugging)
+├── index-a1b2c3d4.sorex      ← Self-contained (index + WASM)
+├── sorex-loader.js           ← Extracts WASM from .sorex
+├── sorex-loader.js.map       ← Source map (for debugging)
 └── demo.html                 ← (if --demo)
 ```
 
@@ -224,7 +224,7 @@ The Levenshtein DFA is built once (~1.2KB precomputed automaton with ~70 states)
 
 ---
 
-## Binary Format (`.sieve` v7)
+## Binary Format (`.sorex` v7)
 
 <aside class="skip-note">
 
@@ -234,11 +234,11 @@ The Levenshtein DFA is built once (~1.2KB precomputed automaton with ~70 states)
 
 The format is designed for memory-mapped loading with minimal parsing. Validation happens once at load time; after that, all operations are direct pointer arithmetic.
 
-**v7 is self-contained** - a single `.sieve` file includes everything needed: the search index, document metadata, and the WASM runtime. No separate JS/WASM files needed.
+**v7 is self-contained** - a single `.sorex` file includes everything needed: the search index, document metadata, and the WASM runtime. No separate JS/WASM files needed.
 
 ### Why Embed WASM?
 
-Each `.sieve` file embeds its own WASM runtime to avoid backwards compatibility concerns.
+Each `.sorex` file embeds its own WASM runtime to avoid backwards compatibility concerns.
 
 The binary format evolves: new compression schemes, additional metadata fields, changed section layouts. If the WASM runtime were separate, every format change would require either:
 - Maintaining multiple runtime versions
@@ -250,7 +250,7 @@ By embedding the runtime, each index is self-contained and frozen in time. A v7 
 <aside class="callout callout-neutral">
 <div class="callout-title">Size Tradeoff</div>
 
-~150KB (gzipped) added to each index. For most sites with a single search index, this is negligible. If you need multiple indexes without duplicated WASM, [file an issue](https://github.com/harryzorus/sieve/issues).
+~150KB (gzipped) added to each index. For most sites with a single search index, this is negligible. If you need multiple indexes without duplicated WASM, [file an issue](https://github.com/harryzorus/sorex/issues).
 
 </aside>
 
@@ -263,11 +263,11 @@ Several techniques in this format are inspired by [Apache Lucene](https://lucene
 - **Varint encoding** for compact integer storage
 - **Term dictionary** with binary search (similar to Lucene's BlockTree)
 
-The suffix array and Levenshtein DFA components are Sieve-specific additions that enable substring and fuzzy search capabilities beyond traditional inverted indexes.
+The suffix array and Levenshtein DFA components are Sorex-specific additions that enable substring and fuzzy search capabilities beyond traditional inverted indexes.
 
 <aside class="sidenote">
 
-Lucene's approach prioritizes server-side search with large heaps and persistent storage. Sieve inverts this for client-side WASM: everything precomputed, everything in one memory-mapped blob, no runtime allocations during search.
+Lucene's approach prioritizes server-side search with large heaps and persistent storage. Sorex inverts this for client-side WASM: everything precomputed, everything in one memory-mapped blob, no runtime allocations during search.
 
 </aside>
 
@@ -328,8 +328,8 @@ Lucene's approach prioritizes server-side search with large heaps and persistent
 │     tags: array of dictionary indices (v7)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │ WASM (v7)                                                       │
-│   Embedded WebAssembly runtime (sieve_bg.wasm)                  │
-│   ~150KB gzipped, makes .sieve fully self-contained             │
+│   Embedded WebAssembly runtime (sorex_bg.wasm)                  │
+│   ~150KB gzipped, makes .sorex fully self-contained             │
 │   Client-side loader extracts and instantiates                  │
 ├─────────────────────────────────────────────────────────────────┤
 │ DICTIONARY TABLES (v7)                                          │
@@ -421,7 +421,7 @@ Query: "auth"
 
 ### Vocabulary Suffix Array
 
-Rather than a suffix array over the full text (expensive), Sieve uses a suffix array over the vocabulary - the unique terms:
+Rather than a suffix array over the full text (expensive), Sorex uses a suffix array over the vocabulary - the unique terms:
 
 ```
 Vocabulary: ["apple", "application", "apply", "banana"]
@@ -442,7 +442,7 @@ For a 100KB blog with 10K unique words, this is ~50K suffix entries (vs ~500K fo
 
 ### Levenshtein DFA (Schulz-Mihov 2002)
 
-Traditional fuzzy search computes edit distance per-term at query time: O(query_len × term_len × vocabulary_size). Sieve precomputes a universal DFA at index time:
+Traditional fuzzy search computes edit distance per-term at query time: O(query_len × term_len × vocabulary_size). Sorex precomputes a universal DFA at index time:
 
 ```
 Parametric DFA Structure:
@@ -490,7 +490,7 @@ regardless of position. The hierarchy is absolute, not heuristic.
 
 ## Index Types
 
-Sieve supports multiple index configurations:
+Sorex supports multiple index configurations:
 
 ### Union Index (Default)
 
@@ -624,19 +624,19 @@ Output: ~150KB gzipped (WASM + JS loader).
 
 ### JavaScript Loader
 
-The `sieve-loader.js` is generated from TypeScript modules in `src/build/loader/`:
+The `sorex-loader.js` is generated from TypeScript modules in `src/build/loader/`:
 
 ```
 src/build/loader/
-├── index.ts      # Public API: loadSieve, loadSieveSync
-├── parser.ts     # .sieve parsing + CRC32 validation
-├── searcher.ts   # SieveSearcher class wrapper
+├── index.ts      # Public API: loadSorex, loadSorexSync
+├── parser.ts     # .sorex parsing + CRC32 validation
+├── searcher.ts   # SorexSearcher class wrapper
 ├── wasm-state.ts # Per-instance WASM state (heap, memory)
 ├── imports.ts    # wasm-bindgen import bindings
 └── build.ts      # Bundles to target/loader/
 ```
 
-Build with `cd src/build/loader && bun run build.ts`. Output goes to `target/loader/sieve-loader.js` (and `.map`), which is embedded in the Rust CLI via `include_str!`.
+Build with `cd src/build/loader && bun run build.ts`. Output goes to `target/loader/sorex-loader.js` (and `.map`), which is embedded in the Rust CLI via `include_str!`.
 
 **Key features:**
 - **Self-contained**: No external dependencies, all wasm-bindgen glue code inlined
@@ -646,11 +646,11 @@ Build with `cd src/build/loader && bun run build.ts`. Output goes to `target/loa
 ### JavaScript Interface
 
 ```typescript
-// Load a .sieve file
-async function loadSieve(url: string): Promise<SieveSearcher>;
-function loadSieveSync(buffer: ArrayBuffer): SieveSearcher;
+// Load a .sorex file
+async function loadSorex(url: string): Promise<SorexSearcher>;
+function loadSorexSync(buffer: ArrayBuffer): SorexSearcher;
 
-class SieveSearcher {
+class SorexSearcher {
   search(query: string, limit?: number): SearchResult[];
   has_docs(): boolean;
   doc_count(): number;
@@ -698,7 +698,7 @@ Total index overhead: ~15-20% on top of document metadata.
 ## Related Documentation
 
 - [Integration](./integration.md): WASM setup, browser integration examples
-- [CLI Reference](./cli.md): Build indexes with `sieve index`
+- [CLI Reference](./cli.md): Build indexes with `sorex index`
 - [TypeScript API](./typescript.md): WASM bindings for browser search
 - [Rust API](./rust.md): Library API for programmatic use
 - [Algorithms](./algorithms.md): Suffix arrays, Levenshtein automata, Block PFOR

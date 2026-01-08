@@ -1,6 +1,6 @@
 //! Document compression benchmarking
 //!
-//! Compares different approaches for embedding docs in .sieve binary:
+//! Compares different approaches for embedding docs in .sorex binary:
 //! 1. JSON (current baseline)
 //! 2. Custom binary format (length-prefixed strings, 1-bit type)
 

@@ -1,27 +1,27 @@
 ---
 title: CLI Reference
-description: Command-line interface for building and inspecting Sieve search indexes
+description: Command-line interface for building and inspecting Sorex search indexes
 order: 3
 ---
 
 # CLI Reference
 
-Sieve provides a command-line interface for building search indexes and inspecting `.sieve` files.
+Sorex provides a command-line interface for building search indexes and inspecting `.sorex` files.
 
 ## Installation
 
 ```bash
-cargo install sieve-search
+cargo install sorex
 ```
 
 ## Commands
 
-### `sieve index`
+### `sorex index`
 
 Build a search index from a directory of JSON document files.
 
 ```bash
-sieve index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo]
+sorex index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo]
 ```
 
 **Arguments:**
@@ -29,7 +29,7 @@ sieve index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo]
 | Flag | Description |
 |------|-------------|
 | `-i, --input <DIR>` | Input directory containing `manifest.json` and document files |
-| `-o, --output <DIR>` | Output directory for `.sieve` files |
+| `-o, --output <DIR>` | Output directory for `.sorex` files |
 | `--demo` | Generate a demo HTML page showing integration example |
 
 **Input Format:**
@@ -68,34 +68,34 @@ Each document file (e.g., `0.json`) follows this schema:
 
 **Output:**
 
-- `index-{hash}.sieve` - Binary search index with embedded WASM runtime
-- `sieve-loader.js` - JavaScript loader for browser integration
-- `sieve-loader.js.map` - Source map for debugging
+- `index-{hash}.sorex` - Binary search index with embedded WASM runtime
+- `sorex-loader.js` - JavaScript loader for browser integration
+- `sorex-loader.js.map` - Source map for debugging
 - `demo.html` (if `--demo` flag) - Integration example
 
 **Example:**
 
 ```bash
 # Build index from markdown-derived JSON
-sieve index --input .build-input --output dist/search
+sorex index --input .build-input --output dist/search
 
 # With demo page
-sieve index --input .build-input --output dist/search --demo
+sorex index --input .build-input --output dist/search --demo
 ```
 
-### `sieve inspect`
+### `sorex inspect`
 
-Inspect the structure of a `.sieve` file.
+Inspect the structure of a `.sorex` file.
 
 ```bash
-sieve inspect <FILE>
+sorex inspect <FILE>
 ```
 
 **Arguments:**
 
 | Argument | Description |
 |----------|-------------|
-| `<FILE>` | Path to `.sieve` file to inspect |
+| `<FILE>` | Path to `.sorex` file to inspect |
 
 **Output:**
 
@@ -110,12 +110,12 @@ Displays index metadata including:
 **Example:**
 
 ```bash
-sieve inspect dist/search/index-868342ec.sieve
+sorex inspect dist/search/index-868342ec.sorex
 ```
 
 Output:
 ```
-Sieve Index v7
+Sorex Index v7
   Documents: 23
   Vocabulary: 4148 terms
   Suffix Array: 12847 entries
@@ -136,7 +136,7 @@ Sieve Index v7
 
 ## Environment Variables
 
-Sieve respects standard Rust environment variables:
+Sorex respects standard Rust environment variables:
 
 | Variable | Description |
 |----------|-------------|
@@ -144,7 +144,7 @@ Sieve respects standard Rust environment variables:
 
 ## See Also
 
-- [Integration Guide](./integration.md) - How to integrate Sieve into your site
+- [Integration Guide](./integration.md) - How to integrate Sorex into your site
 - [TypeScript API](./typescript.md) - Browser WASM bindings reference
 - [Rust API](./rust.md) - Library API for programmatic use
 - [Architecture](./architecture.md) - How the index format works

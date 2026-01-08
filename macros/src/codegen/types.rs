@@ -27,7 +27,7 @@ use syn::Type;
 ///
 /// ```ignore
 /// use syn::parse_quote;
-/// use sieve_lean_macros::codegen::rust_type_to_lean;
+/// use sorex_lean_macros::codegen::rust_type_to_lean;
 ///
 /// let ty: syn::Type = parse_quote!(Vec<String>);
 /// assert_eq!(rust_type_to_lean(&ty), "Array String");

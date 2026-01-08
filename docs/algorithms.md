@@ -1,6 +1,6 @@
 # Algorithms
 
-A detailed look at the data structures and algorithms that make Sieve fast. Skip this if you just want to use the library - read it if you want to understand *why* things work.
+A detailed look at the data structures and algorithms that make Sorex fast. Skip this if you just want to use the library - read it if you want to understand *why* things work.
 
 ---
 
@@ -38,7 +38,7 @@ All suffixes sorted:
 
 ### Vocabulary Suffix Array
 
-Full-text suffix arrays are expensive - O(text_length) entries. Sieve builds suffix arrays over the *vocabulary* instead:
+Full-text suffix arrays are expensive - O(text_length) entries. Sorex builds suffix arrays over the *vocabulary* instead:
 
 ```
 Vocabulary: 10,000 unique terms (~50KB)
@@ -268,7 +268,7 @@ That's 100x faster, and the gap widens with vocabulary size.
 
 Posting lists can be huge. A common term like "the" might appear in every document. Naive storage wastes space:
 
-> **Note:** Block PFOR is a technique popularized by [Apache Lucene](https://lucene.apache.org/) (Lucene 4.0+). Sieve's implementation follows the same principles: 128-document blocks, bit-packing, and exception handling for outliers.
+> **Note:** Block PFOR is a technique popularized by [Apache Lucene](https://lucene.apache.org/) (Lucene 4.0+). Sorex's implementation follows the same principles: 128-document blocks, bit-packing, and exception handling for outliers.
 
 ```
 Posting list for "the": [0, 1, 2, 3, 4, ...]
@@ -424,7 +424,7 @@ Reduces intersection from O(n + m) to O(n log m) for imbalanced lists.
 
 ## Hybrid Index
 
-Sieve combines inverted index + vocabulary suffix array:
+Sorex combines inverted index + vocabulary suffix array:
 
 ```
 HybridIndex

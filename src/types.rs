@@ -1,4 +1,4 @@
-//! Core type definitions for the Sieve search index.
+//! Core type definitions for the Sorex search index.
 //!
 //! # Lean Correspondence
 //!
@@ -23,7 +23,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "lean")]
-use sieve_lean_macros::{LeanProptest, LeanSpec};
+use sorex_lean_macros::{LeanProptest, LeanSpec};
 
 /// Document metadata for search results.
 ///

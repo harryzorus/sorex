@@ -1,18 +1,18 @@
 /**
- * Test script for the sieve-loader.js parsing logic
+ * Test script for the sorex-loader.js parsing logic
  *
- * This creates a synthetic v7 .sieve file and verifies the loader correctly
+ * This creates a synthetic v7 .sorex file and verifies the loader correctly
  * extracts the WASM and index sections.
  */
 
 const HEADER_SIZE = 52;
-const MAGIC = [0x53, 0x49, 0x46, 0x54]; // "SIFT"
-const FOOTER_MAGIC = [0x54, 0x46, 0x49, 0x53]; // "TFIS"
+const MAGIC = [0x53, 0x4F, 0x52, 0x58]; // "SORX"
+const FOOTER_MAGIC = [0x58, 0x52, 0x4F, 0x53]; // "XROS"
 
 /**
- * Create a minimal v7 .sieve file for testing
+ * Create a minimal v7 .sorex file for testing
  */
-function createTestSieveFile(): Uint8Array {
+function createTestSorexFile(): Uint8Array {
   // Section lengths (all minimal)
   const vocabLen = 10;
   const saLen = 8;
@@ -86,19 +86,19 @@ function createTestSieveFile(): Uint8Array {
 }
 
 /**
- * Parse .sieve header (same logic as sieve-loader.js)
+ * Parse .sorex header (same logic as sorex-loader.js)
  */
 function parseHeader(view: DataView) {
   // Validate magic
   for (let i = 0; i < 4; i++) {
     if (view.getUint8(i) !== MAGIC[i]) {
-      throw new Error('Invalid .sieve file');
+      throw new Error('Invalid .sorex file');
     }
   }
 
   const version = view.getUint8(4);
   if (version < 7) {
-    throw new Error(`Sieve v${version} does not embed WASM, need v7+`);
+    throw new Error(`Sorex v${version} does not embed WASM, need v7+`);
   }
 
   return {
@@ -118,10 +118,10 @@ function parseHeader(view: DataView) {
 }
 
 // Run tests
-console.log('Testing sieve-loader parsing logic...\n');
+console.log('Testing sorex-loader parsing logic...\n');
 
 // Test 1: Create and parse test file
-const testFile = createTestSieveFile();
+const testFile = createTestSorexFile();
 const view = new DataView(testFile.buffer);
 const header = parseHeader(view);
 

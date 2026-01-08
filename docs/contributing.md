@@ -1,6 +1,6 @@
-# Contributing to Sieve
+# Contributing to Sorex
 
-Sieve has formal verification. This is both a feature and a constraint - it means certain bugs are impossible, but it also means you can't just change things without updating proofs.
+Sorex has formal verification. This is both a feature and a constraint - it means certain bugs are impossible, but it also means you can't just change things without updating proofs.
 
 This guide explains how to contribute safely.
 
@@ -10,8 +10,8 @@ This guide explains how to contribute safely.
 
 ```bash
 # Clone and verify the baseline
-git clone https://github.com/harryzorus/sieve.git
-cd sieve
+git clone https://github.com/harryzorus/sorex.git
+cd sorex
 cargo xtask verify
 ```
 

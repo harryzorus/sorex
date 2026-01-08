@@ -5,7 +5,7 @@
 mod common;
 
 use common::assert_index_well_formed;
-use sieve::{build_index, search, FieldBoundary, FieldType, SearchDoc, SearchIndex};
+use sorex::{build_index, search, FieldBoundary, FieldType, SearchDoc, SearchIndex};
 use std::fs;
 
 // ============================================================================
@@ -221,7 +221,7 @@ fn test_multi_term_search() {
 
 #[test]
 fn test_fuzzy_matching() {
-    use sieve::{build_hybrid_index, search_hybrid};
+    use sorex::{build_hybrid_index, search_hybrid};
 
     let docs = vec![SearchDoc {
         id: 0,

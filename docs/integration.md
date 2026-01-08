@@ -1,6 +1,6 @@
 # Integration Guide
 
-This guide covers integrating Sieve into your frontend application. Sieve compiles to WebAssembly, so it runs entirely in the browser - no backend required.
+This guide covers integrating Sorex into your frontend application. Sorex compiles to WebAssembly, so it runs entirely in the browser - no backend required.
 
 ---
 
@@ -10,21 +10,21 @@ This guide covers integrating Sieve into your frontend application. Sieve compil
 
 ```bash
 # Build index from a directory of JSON documents
-sieve index --input ./docs --output ./search-output
+sorex index --input ./docs --output ./search-output
 ```
 
 This produces:
-- `index-{hash}.sieve` - Self-contained binary with embedded WASM (~153KB gzipped)
-- `sieve-loader.js` - JavaScript loader module (17KB)
-- `sieve-loader.js.map` - Source map for debugging (optional, 40KB)
+- `index-{hash}.sorex` - Self-contained binary with embedded WASM (~153KB gzipped)
+- `sorex-loader.js` - JavaScript loader module (17KB)
+- `sorex-loader.js.map` - Source map for debugging (optional, 40KB)
 
 ### 2. Load and Search
 
 ```typescript
-import { loadSieve } from './sieve-loader.js';
+import { loadSorex } from './sorex-loader.js';
 
 // Load index (extracts and initializes WASM automatically)
-const searcher = await loadSieve('./index-a1b2c3d4.sieve');
+const searcher = await loadSorex('./index-a1b2c3d4.sorex');
 
 // Search!
 const results = searcher.search('query', 10);
@@ -42,25 +42,25 @@ That's it! The loader handles WASM extraction and initialization automatically.
 
 ## Index Formats
 
-Sieve supports two search modes, depending on your needs:
+Sorex supports two search modes, depending on your needs:
 
-### SieveSearcher (Recommended)
+### SorexSearcher (Recommended)
 
-A single `.sieve` binary file containing everything. Best for most use cases.
+A single `.sorex` binary file containing everything. Best for most use cases.
 
 ```typescript
-const searcher = new SieveSearcher(bytes);
+const searcher = new SorexSearcher(bytes);
 const results = searcher.search('query');
 ```
 
 **When to use**: You want simplicity. One file, one load, done.
 
-### SieveProgressiveIndex
+### SorexProgressiveIndex
 
 Three separate layer files loaded incrementally. Best for very large sites where you want results before the full index loads.
 
 ```typescript
-const index = new SieveProgressiveIndex(manifest);
+const index = new SorexProgressiveIndex(manifest);
 await index.load_layer_binary('titles', titleBytes);
 // User can start searching now, with title-only results
 
@@ -161,10 +161,10 @@ const url = result.sectionId
 
 ## JavaScript API
 
-### SieveSearcher
+### SorexSearcher
 
 ```typescript
-class SieveSearcher {
+class SorexSearcher {
   constructor(bytes: Uint8Array);
 
   search(query: string, limit?: number): SearchResult[];
@@ -178,10 +178,10 @@ class SieveSearcher {
 }
 ```
 
-### SieveProgressiveIndex
+### SorexProgressiveIndex
 
 ```typescript
-class SieveProgressiveIndex {
+class SorexProgressiveIndex {
   constructor(manifest: SearchDoc[]);
 
   load_layer_binary(name: 'titles' | 'headings' | 'content', bytes: Uint8Array): void;
@@ -232,16 +232,16 @@ interface BoostOptions {
 ```tsx
 // useSearch.ts
 import { useState, useEffect, useCallback } from 'react';
-import { loadSieve, SieveSearcher, SearchResult } from './sieve-loader.js';
+import { loadSorex, SorexSearcher, SearchResult } from './sorex-loader.js';
 
 export function useSearch() {
-  const [searcher, setSearcher] = useState<SieveSearcher | null>(null);
+  const [searcher, setSearcher] = useState<SorexSearcher | null>(null);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    loadSieve('/search/index.sieve').then(s => {
+    loadSorex('/search/index.sorex').then(s => {
       if (mounted) {
         setSearcher(s);
         setIsLoading(false);
@@ -298,12 +298,12 @@ export function SearchModal() {
 
 ```html
 <script type="module">
-  import { loadSieve } from './sieve-loader.js';
+  import { loadSorex } from './sorex-loader.js';
 
   let searcher;
 
   async function initSearch() {
-    searcher = await loadSieve('/search/index.sieve');
+    searcher = await loadSorex('/search/index.sorex');
     document.getElementById('search-input')
       .addEventListener('input', handleSearch);
   }
@@ -348,10 +348,10 @@ async function initProgressiveSearch() {
 
   // Load manifest (document metadata only)
   const manifest = await fetch('/search/manifest.json').then(r => r.json());
-  const index = new SieveProgressiveIndex(manifest);
+  const index = new SorexProgressiveIndex(manifest);
 
   // Load titles layer first (~5KB) - enables title-only search
-  const titlesBytes = await fetch('/search/titles.sieve')
+  const titlesBytes = await fetch('/search/titles.sorex')
     .then(r => r.arrayBuffer())
     .then(b => new Uint8Array(b));
   index.load_layer_binary('titles', titlesBytes);
@@ -361,8 +361,8 @@ async function initProgressiveSearch() {
 
   // Load remaining layers in background
   const [headingsBytes, contentBytes] = await Promise.all([
-    fetch('/search/headings.sieve').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
-    fetch('/search/content.sieve').then(r => r.arrayBuffer()).then(b => new Uint8Array(b))
+    fetch('/search/headings.sorex').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
+    fetch('/search/content.sorex').then(r => r.arrayBuffer()).then(b => new Uint8Array(b))
   ]);
 
   index.load_layer_binary('headings', headingsBytes);
@@ -378,7 +378,7 @@ async function initProgressiveSearch() {
 For even faster perceived performance, use the two-phase streaming API:
 
 ```typescript
-async function streamingSearch(index: SieveProgressiveIndex, query: string) {
+async function streamingSearch(index: SorexProgressiveIndex, query: string) {
   // Phase 1: Exact matches (O(1), instant)
   const exactResults = index.search_exact(query);
   renderResults(exactResults);  // Show immediately
@@ -420,14 +420,14 @@ Index loading is the expensive operation. Do it once at app startup, not per sea
 
 ```typescript
 // Good: Initialize once
-const searcher = await loadSieve('/search/index.sieve');
+const searcher = await loadSorex('/search/index.sorex');
 document.addEventListener('keydown', (e) => {
   if (e.key === '/') searchModal.open(searcher);
 });
 
 // Bad: Initialize per search
 searchButton.onclick = async () => {
-  const searcher = await loadSieve('/search/index.sieve');  // Slow!
+  const searcher = await loadSorex('/search/index.sorex');  // Slow!
   searcher.search(query);
 };
 ```
@@ -466,7 +466,7 @@ Load the index before the user opens search:
 
 ```typescript
 // Preload on page load
-let searcherPromise = loadSieve('/search/index.sieve');
+let searcherPromise = loadSorex('/search/index.sorex');
 
 // Use when needed
 async function openSearch() {
@@ -491,7 +491,7 @@ Always call `searcher.free()` when done with a searcher in SPAs to prevent memor
 The index file is corrupted or in the wrong format. Regenerate it:
 
 ```bash
-sieve index --input ./docs --output ./search-output
+sorex index --input ./docs --output ./search-output
 ```
 
 ### Empty Results
@@ -533,7 +533,7 @@ onUnmount(() => {
 
 ## Related Documentation
 
-- [CLI Reference](./cli.md): Build indexes with `sieve index`
+- [CLI Reference](./cli.md): Build indexes with `sorex index`
 - [TypeScript API](./typescript.md): Full API reference for WASM bindings
 - [Rust API](./rust.md): Library API for programmatic use
 - [Architecture](./architecture.md): Binary format, algorithm details

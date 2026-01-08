@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use sieve::{build_index, build_hybrid_index, FieldBoundary, FieldType, HybridIndex, SearchDoc, SearchIndex};
+use sorex::{build_index, build_hybrid_index, FieldBoundary, FieldType, HybridIndex, SearchDoc, SearchIndex};
 
 /// Create a simple test document.
 pub fn make_doc(id: usize, title: &str) -> SearchDoc {

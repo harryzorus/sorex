@@ -1,38 +1,38 @@
 ---
 title: TypeScript API
-description: WASM bindings for browser-based search with SieveSearcher and SieveProgressiveIndex
+description: WASM bindings for browser-based search with SorexSearcher and SorexProgressiveIndex
 order: 4
 ---
 
 # TypeScript API
 
-Sieve provides WebAssembly bindings for browser-based search. Two classes are exported:
+Sorex provides WebAssembly bindings for browser-based search. Two classes are exported:
 
-- **`SieveSearcher`**: Load a `.sieve` file and search immediately (recommended)
-- **`SieveProgressiveIndex`**: Progressive layer loading for faster initial results
+- **`SorexSearcher`**: Load a `.sorex` file and search immediately (recommended)
+- **`SorexProgressiveIndex`**: Progressive layer loading for faster initial results
 
 ## Installation
 
-The WASM module is embedded in `.sieve` files built with `sieve index`. The generated `sieve-loader.js` handles initialization:
+The WASM module is embedded in `.sorex` files built with `sorex index`. The generated `sorex-loader.js` handles initialization:
 
 ```typescript
-import { loadSieve } from './sieve-loader.js';
+import { loadSorex } from './sorex-loader.js';
 
-const searcher = await loadSieve('/search/index-868342ec.sieve');
+const searcher = await loadSorex('/search/index-868342ec.sorex');
 const results = searcher.search('query');
 ```
 
-## SieveSearcher
+## SorexSearcher
 
-The main search interface. Load a `.sieve` file and search immediately.
+The main search interface. Load a `.sorex` file and search immediately.
 
 ### Constructor
 
 ```typescript
-new SieveSearcher(bytes: Uint8Array): SieveSearcher
+new SorexSearcher(bytes: Uint8Array): SorexSearcher
 ```
 
-Creates a searcher from binary `.sieve` format. Document metadata is embedded in v5+ files.
+Creates a searcher from binary `.sorex` format. Document metadata is embedded in v5+ files.
 
 ### Methods
 
@@ -108,14 +108,14 @@ Returns `true` if vocabulary is available for fuzzy search.
 
 Releases WASM memory. Also available via `Symbol.dispose` for `using` syntax.
 
-## SieveProgressiveIndex
+## SorexProgressiveIndex
 
 Progressive layer loading for faster initial results. Load titles first (~5KB), then headings (~20KB), then content (~200KB).
 
 ### Constructor
 
 ```typescript
-new SieveProgressiveIndex(manifest: DocManifest[]): SieveProgressiveIndex
+new SorexProgressiveIndex(manifest: DocManifest[]): SorexProgressiveIndex
 ```
 
 Creates an index with document metadata only. Layers must be loaded separately.
@@ -188,7 +188,7 @@ Returns the number of indexed documents.
 For progressive UX, show exact matches immediately, then expand:
 
 ```typescript
-async function* streamingSearch(searcher: SieveSearcher, query: string) {
+async function* streamingSearch(searcher: SorexSearcher, query: string) {
   // Phase 1: Exact matches (instant)
   const exact = searcher.search_tier1_exact(query, 10);
   if (exact.length > 0) yield { tier: 1, results: exact };
@@ -208,7 +208,7 @@ async function* streamingSearch(searcher: SieveSearcher, query: string) {
 ## See Also
 
 - [Integration Guide](./integration.md) - Full integration examples with React, Svelte, vanilla JS
-- [CLI Reference](./cli.md) - Building indexes with `sieve index`
+- [CLI Reference](./cli.md) - Building indexes with `sorex index`
 - [Rust API](./rust.md) - Library API for building indexes programmatically
 - [Architecture](./architecture.md) - Index format internals
 - [Algorithms](./algorithms.md) - How three-tier search works

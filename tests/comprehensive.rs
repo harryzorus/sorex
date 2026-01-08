@@ -6,7 +6,7 @@
 mod common;
 
 use common::{assert_index_well_formed, build_test_index, build_test_index_with_fields, make_doc};
-use sieve::{build_index, search, FieldBoundary, FieldType};
+use sorex::{build_index, search, FieldBoundary, FieldType};
 
 // ============================================================================
 // BINARY SEARCH EDGE CASES

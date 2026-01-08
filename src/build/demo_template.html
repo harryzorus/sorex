@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sieve Search Demo</title>
+  <title>Sorex Search Demo</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -62,8 +62,8 @@
   </style>
 </head>
 <body>
-  <h1>Sieve Search</h1>
-  <p class="subtitle">Self-contained search from a single .sieve file</p>
+  <h1>Sorex Search</h1>
+  <p class="subtitle">Self-contained search from a single .sorex file</p>
 
   <input type="text" id="search" placeholder="Type to search..." disabled>
   <div class="stats" id="stats"></div>
@@ -73,7 +73,7 @@
 
   <script type="module">
     // Self-contained loader - no external dependencies
-    import { loadSieve } from './sieve-loader.js';
+    import { loadSorex } from './sorex-loader.js';
 
     const searchInput = document.getElementById('search');
     const resultsDiv = document.getElementById('results');
@@ -83,8 +83,8 @@
 
     async function initSearch() {
       try {
-        // Load .sieve file (contains both WASM and index)
-        searcher = await loadSieve('./{{INDEX_FILE}}');
+        // Load .sorex file (contains both WASM and index)
+        searcher = await loadSorex('./{{INDEX_FILE}}');
 
         // Enable search
         searchInput.disabled = false;

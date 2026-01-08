@@ -1,23 +1,23 @@
 /**
- * Sieve Loader - Self-contained search loader for .sieve files
+ * Sorex Loader - Self-contained search loader for .sorex files
  *
- * This module provides a complete, self-contained loader for .sieve files.
+ * This module provides a complete, self-contained loader for .sorex files.
  * All wasm-bindgen glue code is inlined - no external dependencies required.
  *
  * Features:
- * - Automatic WASM extraction from .sieve files
+ * - Automatic WASM extraction from .sorex files
  * - Per-version isolation (multiple WASM versions can coexist)
  * - CRC32 validation after index reconstruction
  * - FinalizationRegistry for automatic cleanup
  *
- * @module sieve-loader
+ * @module sorex-loader
  *
  * @example
  * ```typescript
- * import { loadSieve } from './sieve-loader.js';
+ * import { loadSorex } from './sorex-loader.js';
  *
  * // Load and search
- * const searcher = await loadSieve('./index.sieve');
+ * const searcher = await loadSorex('./index.sorex');
  * const results = searcher.search('query', 10);
  *
  * // Results include deep linking info
@@ -32,11 +32,11 @@
  */
 
 import { WasmState } from "./wasm-state";
-import { SieveSearcher } from "./searcher";
-import { parseSieve } from "./parser";
+import { SorexSearcher } from "./searcher";
+import { parseSorex } from "./parser";
 
 export type { SearchResult } from "./searcher";
-export { SieveSearcher } from "./searcher";
+export { SorexSearcher } from "./searcher";
 
 // Instance cache for WASM version isolation
 const instances = new Map<number, WasmState>();
@@ -69,45 +69,45 @@ function getOrCreateInstance(wasmBytes: Uint8Array): WasmState {
 }
 
 /**
- * Load a .sieve file and create a searcher.
+ * Load a .sorex file and create a searcher.
  *
- * Multiple .sieve files with different WASM versions can coexist on the same page.
+ * Multiple .sorex files with different WASM versions can coexist on the same page.
  * Each unique WASM version gets its own isolated instance.
  *
- * @param url - URL to the .sieve file
+ * @param url - URL to the .sorex file
  * @returns Promise that resolves to an initialized searcher
  *
  * @example
  * ```typescript
- * const searcher = await loadSieve('./index.sieve');
+ * const searcher = await loadSorex('./index.sorex');
  * const results = searcher.search('hello world', 10);
  * ```
  */
-export async function loadSieve(url: string): Promise<SieveSearcher> {
+export async function loadSorex(url: string): Promise<SorexSearcher> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.status}`);
   }
 
   const buffer = await response.arrayBuffer();
-  return loadSieveSync(buffer);
+  return loadSorexSync(buffer);
 }
 
 /**
  * Load from an ArrayBuffer (for use with pre-fetched data).
  *
- * @param buffer - The .sieve file contents
+ * @param buffer - The .sorex file contents
  * @returns Initialized searcher
  *
  * @example
  * ```typescript
- * const response = await fetch('./index.sieve');
+ * const response = await fetch('./index.sorex');
  * const buffer = await response.arrayBuffer();
- * const searcher = loadSieveSync(buffer);
+ * const searcher = loadSorexSync(buffer);
  * ```
  */
-export function loadSieveSync(buffer: ArrayBuffer): SieveSearcher {
-  const { wasm: wasmBytes, index } = parseSieve(buffer);
+export function loadSorexSync(buffer: ArrayBuffer): SorexSearcher {
+  const { wasm: wasmBytes, index } = parseSorex(buffer);
   const state = getOrCreateInstance(wasmBytes);
-  return new SieveSearcher(state, index);
+  return new SorexSearcher(state, index);
 }

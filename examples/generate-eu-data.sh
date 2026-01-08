@@ -1,5 +1,5 @@
 #!/bin/bash
-# Generate European Countries example dataset for Sieve CLI testing
+# Generate European Countries example dataset for Sorex CLI testing
 # Contains realistic Wikipedia-style content for each country
 
 DIR="$(dirname "$0")/eu-countries"
@@ -607,4 +607,4 @@ echo ""
 echo "Generated 30 country files in $DIR"
 echo ""
 echo "To test the CLI:"
-echo "  cargo run -- index --input examples/eu-countries --output /tmp/sieve-output"
+echo "  cargo run -- index --input examples/eu-countries --output /tmp/sorex-output"

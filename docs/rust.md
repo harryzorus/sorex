@@ -1,18 +1,18 @@
 ---
 title: Rust API
-description: Library API for building and searching Sieve indexes programmatically
+description: Library API for building and searching Sorex indexes programmatically
 order: 5
 ---
 
 # Rust API
 
-Sieve's Rust API provides building blocks for search indexes with formal verification.
+Sorex's Rust API provides building blocks for search indexes with formal verification.
 
 ## Installation
 
 ```toml
 [dependencies]
-sieve-search = "0.7"
+sorex = "0.2.5"
 ```
 
 ## Core Types
@@ -75,7 +75,7 @@ pub struct SearchResult {
 Basic suffix array for prefix search:
 
 ```rust
-use sieve::{build_index, search, SearchDoc, FieldBoundary};
+use sorex::{build_index, search, SearchDoc, FieldBoundary};
 
 let docs = vec![
     SearchDoc {
@@ -111,7 +111,7 @@ let results = search(&index, "rust");
 Combines inverted index (exact) + suffix array (prefix) + Levenshtein (fuzzy):
 
 ```rust
-use sieve::{build_hybrid_index, search_hybrid};
+use sorex::{build_hybrid_index, search_hybrid};
 
 let index = build_hybrid_index(docs, texts, boundaries);
 let results = search_hybrid(&index, "rust"); // All three tiers
@@ -122,7 +122,7 @@ let results = search_hybrid(&index, "rust"); // All three tiers
 For large document sets, use Rayon parallelism:
 
 ```rust
-use sieve::build_hybrid_index_parallel;
+use sorex::build_hybrid_index_parallel;
 
 // Builds vocabulary and suffix array in parallel
 let index = build_hybrid_index_parallel(docs, texts, boundaries);
@@ -133,7 +133,7 @@ let index = build_hybrid_index_parallel(docs, texts, boundaries);
 ### Basic Search
 
 ```rust
-use sieve::search;
+use sorex::search;
 
 let results = search(&index, "query");
 for result in results {
@@ -146,7 +146,7 @@ for result in results {
 Three-tier strategy with fuzzy matching:
 
 ```rust
-use sieve::{search_hybrid, search_exact, search_expanded};
+use sorex::{search_hybrid, search_exact, search_expanded};
 
 // Full search (all tiers)
 let all_results = search_hybrid(&index, "query");
@@ -162,7 +162,7 @@ let expanded = search_expanded(&index, "query", &exclude_ids);
 Direct fuzzy search with edit distance:
 
 ```rust
-use sieve::{search_fuzzy, levenshtein_within};
+use sorex::{search_fuzzy, levenshtein_within};
 
 // Fuzzy search with max edit distance 2
 let fuzzy_results = search_fuzzy(&index, "query", 2);
@@ -178,7 +178,7 @@ if levenshtein_within("rust", "ruts", 1) {
 Precomputed automaton for O(1) fuzzy matching:
 
 ```rust
-use sieve::{ParametricDFA, QueryMatcher};
+use sorex::{ParametricDFA, QueryMatcher};
 
 // Build DFA once (expensive, ~10ms)
 let dfa = ParametricDFA::new(2); // max edit distance 2
@@ -196,10 +196,10 @@ for term in vocabulary {
 
 ## Verification
 
-Sieve includes type-level invariants for correctness:
+Sorex includes type-level invariants for correctness:
 
 ```rust
-use sieve::{WellFormedIndex, SortedSuffixArray, ValidatedSuffixEntry};
+use sorex::{WellFormedIndex, SortedSuffixArray, ValidatedSuffixEntry};
 
 // Validated index with compile-time guarantees
 let validated: WellFormedIndex = index.validate()?;
@@ -219,7 +219,7 @@ for entry: ValidatedSuffixEntry in sorted.entries() {
 Check index invariants at runtime:
 
 ```rust
-use sieve::VerificationReport;
+use sorex::VerificationReport;
 
 let report = VerificationReport::from_index(&index);
 assert!(report.suffix_array_sorted);
@@ -233,7 +233,7 @@ assert!(report.field_boundaries_valid);
 Serialize indexes to compact binary format:
 
 ```rust
-use sieve::binary::LoadedLayer;
+use sorex::binary::LoadedLayer;
 
 // Deserialize from bytes
 let layer = LoadedLayer::from_bytes(&bytes)?;
@@ -249,18 +249,18 @@ let section_table: &[String] = &layer.section_table;
 
 ```toml
 [dependencies]
-sieve-search = { version = "0.7", features = ["wasm", "serde_json"] }
+sorex = { version = "0.2.5", features = ["wasm", "serde_json"] }
 ```
 
 | Feature | Description |
 |---------|-------------|
-| `wasm` | WebAssembly bindings (SieveSearcher, SieveProgressiveIndex) |
+| `wasm` | WebAssembly bindings (SorexSearcher, SorexProgressiveIndex) |
 | `serde_json` | JSON serialization for build pipeline integration |
 | `embed-wasm` | Embed WASM runtime in CLI binary |
 
 ## See Also
 
-- [CLI Reference](./cli.md) - Build indexes with `sieve index`
+- [CLI Reference](./cli.md) - Build indexes with `sorex index`
 - [TypeScript API](./typescript.md) - Browser WASM bindings
 - [Architecture](./architecture.md) - Index format details
 - [Algorithms](./algorithms.md) - Search algorithm explanations

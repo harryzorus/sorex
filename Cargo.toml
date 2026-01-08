@@ -2,11 +2,11 @@
 members = [".", "macros", "xtask"]
 
 [package]
-name = "sieve"
-version = "0.2.4"
+name = "sorex"
+version = "0.2.5"
 edition = "2021"
 description = "Formally verified full-text search with suffix arrays"
-repository = "https://github.com/harryzorus/sieve"
+repository = "https://github.com/harryzorus/sorex"
 license = "Apache-2.0"
 
 [lib]
@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "sieve"
+name = "sorex"
 path = "src/main.rs"
 
 [[bench]]
@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
-sieve-lean-macros = { version = "0.2.4", optional = true }
+sorex-lean-macros = { version = "0.2.5", path = "macros", optional = true }
 crc32fast = "1.4"          # CRC32 checksum for integrity validation
 unicode-normalization = { version = "0.1", optional = true }  # NFD decomposition for diacritic stripping
 # Levenshtein DFA tables implemented in-house (levenshtein_dfa.rs) - Schulz-Mihov 2002
@@ -51,7 +51,7 @@ default = ["parallel", "unicode-normalization", "serde_json", "embed-wasm"]
 parallel = ["rayon", "indicatif"]
 wasm = ["wasm-bindgen", "serde-wasm-bindgen"]  # No unicode-normalization or serde_json for smaller WASM
 embed-wasm = []  # Embed WASM/JS in binary for --demo flag (requires wasm-pack build first)
-lean = ["sieve-lean-macros"]
+lean = ["sorex-lean-macros"]
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
@@ -63,22 +63,22 @@ maintainer = "Harry Tummalachērla <harry@harryzorus.xyz>"
 copyright = "2026, Harry Tummalachērla"
 license-file = ["LICENSE", "0"]
 extended-description = """
-Sieve is a formally verified full-text search engine using suffix arrays.
+Sorex is a formally verified full-text search engine using suffix arrays.
 It provides fast substring and fuzzy search with mathematical guarantees
 of correctness via Lean 4 proofs.
 
-WASM is embedded in every .sieve index file by default.
+WASM is embedded in every .sorex index file by default.
 
 Commands:
-  sieve index --input <dir> --output <dir>   Build search index
-  sieve inspect <file.sieve>                 Inspect index structure
+  sorex index --input <dir> --output <dir>   Build search index
+  sorex inspect <file.sorex>                 Inspect index structure
 
 """
 section = "utils"
 priority = "optional"
 assets = [
-    ["target/release-native/sieve", "usr/bin/sieve", "755"],
-    ["examples/generate-eu-data.sh", "usr/share/sieve/examples/generate-eu-data.sh", "755"],
+    ["target/release-native/sorex", "usr/bin/sorex", "755"],
+    ["examples/generate-eu-data.sh", "usr/share/sorex/examples/generate-eu-data.sh", "755"],
 ]
 maintainer-scripts = "debian/"
 

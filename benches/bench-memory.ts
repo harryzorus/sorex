@@ -2,7 +2,7 @@
 /**
  * Memory footprint benchmark for search libraries
  *
- * Includes Sieve WASM alongside JS libraries.
+ * Includes Sorex WASM alongside JS libraries.
  *
  * Run with: npm run bench:memory
  * Or: bun run bench-memory.ts
@@ -30,14 +30,14 @@ interface Document {
   content: string;
 }
 
-interface SieveSearcher {
+interface SorexSearcher {
   search(query: string, limit: number): unknown[];
   free(): void;
 }
 
-interface SieveModule {
+interface SorexModule {
   initSync(options: { module: Buffer }): void;
-  SieveSearcher: new (bytes: Uint8Array) => SieveSearcher;
+  SorexSearcher: new (bytes: Uint8Array) => SorexSearcher;
 }
 
 interface Manifest {
@@ -67,32 +67,32 @@ interface BenchmarkResult {
 }
 
 // ============================================================================
-// SIEVE WASM LOADING
+// SOREX WASM LOADING
 // ============================================================================
 
-let sieveModule: SieveModule | null = null;
-let sieveIndexBytes: Buffer | null = null;
+let sorexModule: SorexModule | null = null;
+let sorexIndexBytes: Buffer | null = null;
 
-async function loadSieveWasm(): Promise<void> {
+async function loadSorexWasm(): Promise<void> {
   const outputDir = join(__dirname, '../datasets/output');
   const pkgDir = join(__dirname, '../pkg');
 
-  // Find the .sieve file by globbing
+  // Find the .sorex file by globbing
   const { globSync } = await import('glob');
-  const sieveFiles = globSync(join(outputDir, '*.sieve'));
-  if (sieveFiles.length === 0) {
-    throw new Error(`No .sieve files found in ${outputDir}. Run: sieve index --input datasets --output datasets/output`);
+  const sorexFiles = globSync(join(outputDir, '*.sorex'));
+  if (sorexFiles.length === 0) {
+    throw new Error(`No .sorex files found in ${outputDir}. Run: sorex index --input datasets --output datasets/output`);
   }
-  const indexPath = sieveFiles[0];
-  sieveIndexBytes = readFileSync(indexPath);
+  const indexPath = sorexFiles[0];
+  sorexIndexBytes = readFileSync(indexPath);
 
   // Load WASM module from pkg/ directory (built by wasm-pack)
-  const wasmJsPath = join(pkgDir, 'sieve.js');
-  const wasmBinaryPath = join(pkgDir, 'sieve_bg.wasm');
+  const wasmJsPath = join(pkgDir, 'sorex.js');
+  const wasmBinaryPath = join(pkgDir, 'sorex_bg.wasm');
   const wasmBytes = readFileSync(wasmBinaryPath);
 
-  sieveModule = await import(wasmJsPath) as SieveModule;
-  sieveModule.initSync({ module: wasmBytes });
+  sorexModule = await import(wasmJsPath) as SorexModule;
+  sorexModule.initSync({ module: wasmBytes });
 }
 
 // ============================================================================
@@ -124,7 +124,7 @@ function generateCorpus(postCount: number, wordsPerPost: number): Document[] {
 }
 
 /**
- * Load European Countries dataset for Sieve comparison.
+ * Load European Countries dataset for Sorex comparison.
  */
 function loadEuropeanDataset(): Document[] {
   const datasetsDir = join(__dirname, '../datasets');
@@ -305,11 +305,11 @@ async function benchmarkEuropeanDataset(): Promise<BenchmarkResult> {
 
   const results: MemoryResult[] = [];
 
-  // Sieve WASM
-  const sieveResult = await measureMemory('Sieve', () => {
-    return new sieveModule!.SieveSearcher(new Uint8Array(sieveIndexBytes!));
+  // Sorex WASM
+  const sorexResult = await measureMemory('Sorex', () => {
+    return new sorexModule!.SorexSearcher(new Uint8Array(sorexIndexBytes!));
   });
-  results.push(sieveResult);
+  results.push(sorexResult);
   forceGC();
   await new Promise(r => setTimeout(r, 200));
 
@@ -400,17 +400,17 @@ async function main(): Promise<void> {
   console.log(`Platform: ${process.platform} ${process.arch}`);
   console.log('');
 
-  // Load Sieve WASM module
-  console.log('Loading Sieve WASM...');
-  await loadSieveWasm();
-  console.log('Sieve WASM loaded');
+  // Load Sorex WASM module
+  console.log('Loading Sorex WASM...');
+  await loadSorexWasm();
+  console.log('Sorex WASM loaded');
 
   const allResults: BenchmarkResult[] = [];
 
-  // European Countries (with Sieve)
+  // European Countries (with Sorex)
   allResults.push(await benchmarkEuropeanDataset());
 
-  // Synthetic corpora (without Sieve - no pre-built index)
+  // Synthetic corpora (without Sorex - no pre-built index)
   allResults.push(await benchmarkSyntheticCorpus('Small Blog', 20, 500));
   allResults.push(await benchmarkSyntheticCorpus('Medium Blog', 100, 1000));
 

@@ -1,9 +1,9 @@
 [package]
-name = "sieve-lean-macros"
-version = "0.2.4"
+name = "sorex-lean-macros"
+version = "0.2.5"
 edition = "2021"
-description = "Procedural macros for generating Lean 4 specifications from Rust sieve code"
-repository = "https://github.com/harryzorus/sieve"
+description = "Procedural macros for generating Lean 4 specifications from Rust sorex code"
+repository = "https://github.com/harryzorus/sorex"
 license = "Apache-2.0"
 
 [lib]

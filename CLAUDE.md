@@ -1,4 +1,4 @@
-# Sieve - Agent Instructions
+# Sorex - Agent Instructions
 
 **STOP. READ THIS BEFORE MODIFYING ANY CODE.**
 
@@ -436,26 +436,26 @@ Stop and check Lean specs if you see yourself:
 
 ## Build System (CLI & Multi-Index)
 
-### `sieve index` Command
+### `sorex index` Command
 
-The `index` subcommand reads per-document JSON files and constructs a search index. WASM is embedded in the `.sieve` file by default.
+The `index` subcommand reads per-document JSON files and constructs a search index. WASM is embedded in the `.sorex` file by default.
 
 ```bash
-sieve index --input <dir> --output <dir> [--demo]
+sorex index --input <dir> --output <dir> [--demo]
 ```
 
 **Flags:**
 
 - `--input <dir>`: Directory containing `manifest.json` and per-document JSON files
-- `--output <dir>`: Output directory for `.sieve` file
+- `--output <dir>`: Output directory for `.sorex` file
 - `--demo`: Generate demo HTML page showing integration example
 
-### `sieve inspect` Command
+### `sorex inspect` Command
 
-Inspect a `.sieve` file's structure and metadata:
+Inspect a `.sorex` file's structure and metadata:
 
 ```bash
-sieve inspect <file.sieve>
+sorex inspect <file.sorex>
 ```
 
 ### Input Format
@@ -497,12 +497,12 @@ input/
 
 ```
 output/
-├── index-{hash}.sieve               # Self-contained binary (v7 with embedded WASM)
-├── sieve-loader.js                  # JS loader for browser integration
+├── index-{hash}.sorex               # Self-contained binary (v7 with embedded WASM)
+├── sorex-loader.js                  # JS loader for browser integration
 └── demo.html                        # (if --demo)
 ```
 
-Each `.sieve` file is self-contained with embedded WASM (~330KB raw, ~153KB gzipped). The `sieve-loader.js` extracts and initializes the WASM runtime.
+Each `.sorex` file is self-contained with embedded WASM (~330KB raw, ~153KB gzipped). The `sorex-loader.js` extracts and initializes the WASM runtime.
 
 ### Parallel Architecture
 
@@ -519,8 +519,8 @@ Each `.sieve` file is self-contained with embedded WASM (~330KB raw, ~153KB gzip
    - WASM bytes embedded in each index
 
 3. **Phase 3 (Sequential)**: Emit files
-   - Write `.sieve` files (binary format v7 with WASM)
-   - Write `sieve-loader.js`
+   - Write `.sorex` files (binary format v7 with WASM)
+   - Write `sorex-loader.js`
    - Write `demo.html` (if `--demo`)
 
 ### No New Invariants Required
@@ -551,13 +551,13 @@ The build system is a **preprocessing layer** above verified functions:
 
 ### JavaScript Loader
 
-The `sieve-loader.js` file is generated from TypeScript modules:
+The `sorex-loader.js` file is generated from TypeScript modules:
 
 ```
 src/build/loader/
-├── index.ts      # Public API: loadSieve, loadSieveSync
-├── parser.ts     # .sieve parsing + CRC32 validation
-├── searcher.ts   # SieveSearcher class wrapper
+├── index.ts      # Public API: loadSorex, loadSorexSync
+├── parser.ts     # .sorex parsing + CRC32 validation
+├── searcher.ts   # SorexSearcher class wrapper
 ├── wasm-state.ts # WASM instance state management
 ├── imports.ts    # wasm-bindgen import bindings
 └── build.ts      # Bundler script
@@ -575,19 +575,19 @@ cd src/build/loader && bun run build.ts
 cd src/build/loader && bunx tsc --noEmit
 ```
 
-The bundled `sieve-loader.js` is embedded in the Rust CLI via `include_str!` and emitted during `sieve index`.
+The bundled `sorex-loader.js` is embedded in the Rust CLI via `include_str!` and emitted during `sorex index`.
 
 ### Example Usage
 
 ```bash
 # Build index (WASM embedded by default)
-sieve index --input ./search-input --output ./search-output
+sorex index --input ./search-input --output ./search-output
 
 # Build with demo HTML page
-sieve index --input ./search-input --output ./search-output --demo
+sorex index --input ./search-input --output ./search-output --demo
 
 # Inspect built index
-sieve inspect ./search-output/index-*.sieve
+sorex inspect ./search-output/index-*.sorex
 ```
 
 ## More Documentation

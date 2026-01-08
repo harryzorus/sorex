@@ -6,7 +6,7 @@
 mod common;
 
 use common::{assert_index_well_formed, assert_suffix_array_complete, build_test_index};
-use sieve::{field_type_score, FieldType};
+use sorex::{field_type_score, FieldType};
 
 // ============================================================================
 // SCORING INVARIANTS (Scoring.lean)

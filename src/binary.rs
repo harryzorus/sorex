@@ -1,4 +1,4 @@
-//! Binary format for Sieve search indexes.
+//! Binary format for Sorex search indexes.
 //!
 //! Lucene-inspired binary format with:
 //! - Vocabulary (sorted, length-prefixed terms)
@@ -20,7 +20,7 @@
 //! ```text
 //! ┌────────────────────────────────────────────────────────────┐
 //! │ HEADER (52 bytes)                                          │
-//! │   magic: [u8; 4] = "SIFT"                                  │
+//! │   magic: [u8; 4] = "SORX"                                  │
 //! │   version: u8 = 7                                          │
 //! │   flags: u8                                                │
 //! │   doc_count: u32                                           │
@@ -83,7 +83,7 @@
 //! │     category: varint_len + utf8 (empty if none)            │
 //! ├────────────────────────────────────────────────────────────┤
 //! │ WASM SECTION (v7: embedded WebAssembly runtime)            │
-//! │   Raw WASM binary (sieve_bg.wasm)                          │
+//! │   Raw WASM binary (sorex_bg.wasm)                          │
 //! ├────────────────────────────────────────────────────────────┤
 //! │ DICTIONARY TABLES (v7: Parquet-style compression)          │
 //! │   num_tables: u8 (4)                                       │
@@ -94,7 +94,7 @@
 //! ├────────────────────────────────────────────────────────────┤
 //! │ FOOTER (8 bytes)                                           │
 //! │   crc32: u32 (over header + all sections)                  │
-//! │   magic: [u8; 4] = "TFIS" (reversed, marks valid end)      │
+//! │   magic: [u8; 4] = "XROS" (reversed, marks valid end)      │
 //! └────────────────────────────────────────────────────────────┘
 //! ```
 
@@ -109,11 +109,11 @@ use crate::dict_table::DictTables;
 // CONSTANTS
 // ============================================================================
 
-/// Magic bytes: "SIEVE" in ASCII (header)
-pub const MAGIC: [u8; 4] = [0x53, 0x49, 0x46, 0x54];
+/// Magic bytes: "SORX" in ASCII (header)
+pub const MAGIC: [u8; 4] = [0x53, 0x4F, 0x52, 0x58];
 
-/// Footer magic: "TFIS" (reversed, marks valid file end)
-pub const FOOTER_MAGIC: [u8; 4] = [0x54, 0x46, 0x49, 0x53];
+/// Footer magic: "XROS" (reversed, marks valid file end)
+pub const FOOTER_MAGIC: [u8; 4] = [0x58, 0x52, 0x4F, 0x53];
 
 /// Current format version (v7 adds embedded WASM)
 pub const VERSION: u8 = 7;
@@ -182,7 +182,7 @@ impl FormatFlags {
 
 /// Binary format header (52 bytes fixed size, v7)
 #[derive(Debug, Clone)]
-pub struct SieveHeader {
+pub struct SorexHeader {
     pub version: u8,
     pub flags: FormatFlags,
     pub doc_count: u32,
@@ -206,7 +206,7 @@ pub struct SieveHeader {
     pub dict_table_len: u32,
 }
 
-impl SieveHeader {
+impl SorexHeader {
     // 4 (magic) + 1 (version) + 1 (flags) + 11*4 (u32s) + 2 (reserved) = 52
     pub const SIZE: usize = 52;
 
@@ -235,7 +235,7 @@ impl SieveHeader {
         if magic != MAGIC {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid magic: expected SIEVE, got {:?}", magic),
+                format!("Invalid magic: expected SORX, got {:?}", magic),
             ));
         }
 
@@ -267,12 +267,12 @@ impl SieveHeader {
 
 /// Footer with CRC32 checksum and magic number
 #[derive(Debug, Clone)]
-pub struct SieveFooter {
+pub struct SorexFooter {
     /// CRC32 checksum of header + all sections (everything before footer)
     pub crc32: u32,
 }
 
-impl SieveFooter {
+impl SorexFooter {
     pub const SIZE: usize = 8; // 4 bytes CRC32 + 4 bytes magic
 
     pub fn write<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -1037,7 +1037,7 @@ pub fn decode_suffix_array(bytes: &[u8]) -> io::Result<(Vec<(u32, u32)>, usize)>
 /// A complete binary layer
 #[derive(Debug)]
 pub struct BinaryLayer {
-    pub header: SieveHeader,
+    pub header: SorexHeader,
     pub vocab_bytes: Vec<u8>,
     pub sa_bytes: Vec<u8>,
     pub postings_bytes: Vec<u8>,
@@ -1154,7 +1154,7 @@ impl BinaryLayer {
             FormatFlags::new()
         };
 
-        let header = SieveHeader {
+        let header = SorexHeader {
             version: VERSION,
             flags,
             doc_count: doc_count as u32,
@@ -1244,7 +1244,7 @@ impl BinaryLayer {
 
     /// Serialize to bytes (with CRC32 footer)
     pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        let content_size = SieveHeader::SIZE
+        let content_size = SorexHeader::SIZE
             + self.vocab_bytes.len()
             + self.sa_bytes.len()
             + self.postings_bytes.len()
@@ -1254,7 +1254,7 @@ impl BinaryLayer {
             + self.docs_bytes.len()
             + self.wasm_bytes.len()
             + self.dict_table_bytes.len();
-        let total_size = content_size + SieveFooter::SIZE;
+        let total_size = content_size + SorexFooter::SIZE;
 
         let mut buf = Vec::with_capacity(total_size);
         self.header.write(&mut buf)?;
@@ -1269,8 +1269,8 @@ impl BinaryLayer {
         buf.extend_from_slice(&self.dict_table_bytes);
 
         // Compute CRC32 over everything written so far
-        let crc32 = SieveFooter::compute_crc32(&buf);
-        let footer = SieveFooter { crc32 };
+        let crc32 = SorexFooter::compute_crc32(&buf);
+        let footer = SorexFooter { crc32 };
         footer.write(&mut buf)?;
 
         Ok(buf)
@@ -1282,10 +1282,10 @@ impl BinaryLayer {
     ///
     /// This method performs comprehensive validation:
     /// 1. File size is within limits (MAX_FILE_SIZE)
-    /// 2. Header magic is valid ("SIEVE")
+    /// 2. Header magic is valid ("SORX")
     /// 3. Version is supported
     /// 4. Section lengths don't exceed file size
-    /// 5. Footer magic is valid ("TFIS")
+    /// 5. Footer magic is valid ("XROS")
     /// 6. CRC32 checksum matches
     pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
         // Security: Check file size limits
@@ -1301,7 +1301,7 @@ impl BinaryLayer {
         }
 
         // Minimum size: header + footer
-        let min_size = SieveHeader::SIZE + SieveFooter::SIZE;
+        let min_size = SorexHeader::SIZE + SorexFooter::SIZE;
         if bytes.len() < min_size {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
@@ -1314,9 +1314,9 @@ impl BinaryLayer {
         }
 
         // Verify footer magic and read CRC32
-        let footer = SieveFooter::read(bytes)?;
-        let content = &bytes[..bytes.len() - SieveFooter::SIZE];
-        let computed_crc32 = SieveFooter::compute_crc32(content);
+        let footer = SorexFooter::read(bytes)?;
+        let content = &bytes[..bytes.len() - SorexFooter::SIZE];
+        let computed_crc32 = SorexFooter::compute_crc32(content);
 
         if footer.crc32 != computed_crc32 {
             return Err(io::Error::new(
@@ -1330,7 +1330,7 @@ impl BinaryLayer {
 
         // Parse header
         let mut cursor = io::Cursor::new(bytes);
-        let header = SieveHeader::read(&mut cursor)?;
+        let header = SorexHeader::read(&mut cursor)?;
 
         // Validate version
         if header.version != VERSION {
@@ -1365,7 +1365,7 @@ impl BinaryLayer {
         }
 
         // Calculate expected content size and validate
-        let expected_content_size = SieveHeader::SIZE
+        let expected_content_size = SorexHeader::SIZE
             + header.vocab_len as usize
             + header.sa_len as usize
             + header.postings_len as usize
@@ -1388,7 +1388,7 @@ impl BinaryLayer {
         }
 
         // Extract sections with bounds checking
-        let mut pos = SieveHeader::SIZE;
+        let mut pos = SorexHeader::SIZE;
 
         let vocab_end = pos.checked_add(header.vocab_len as usize).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "Vocabulary length overflow")
@@ -2090,7 +2090,7 @@ mod tests {
 
     #[test]
     fn test_header_roundtrip() {
-        let header = SieveHeader {
+        let header = SorexHeader {
             version: VERSION,
             flags: FormatFlags::new().with_skip_lists(),
             doc_count: 1000,
@@ -2108,9 +2108,9 @@ mod tests {
 
         let mut buf = Vec::new();
         header.write(&mut buf).unwrap();
-        assert_eq!(buf.len(), SieveHeader::SIZE);
+        assert_eq!(buf.len(), SorexHeader::SIZE);
 
-        let decoded = SieveHeader::read(&mut io::Cursor::new(&buf)).unwrap();
+        let decoded = SorexHeader::read(&mut io::Cursor::new(&buf)).unwrap();
         assert_eq!(decoded.version, header.version);
         assert_eq!(decoded.doc_count, header.doc_count);
         assert_eq!(decoded.term_count, header.term_count);
@@ -2143,7 +2143,7 @@ mod tests {
         let mut bytes = layer.to_bytes().unwrap();
 
         // Corrupt a byte in the middle (not the CRC itself)
-        let corruption_idx = SieveHeader::SIZE + 5;
+        let corruption_idx = SorexHeader::SIZE + 5;
         bytes[corruption_idx] ^= 0xFF;
 
         // Should fail CRC check
@@ -2183,7 +2183,7 @@ mod tests {
 
     #[test]
     fn test_invalid_magic_rejected() {
-        let mut bytes = vec![0u8; SieveHeader::SIZE + SieveFooter::SIZE];
+        let mut bytes = vec![0u8; SorexHeader::SIZE + SorexFooter::SIZE];
         // Wrong header magic
         bytes[0..4].copy_from_slice(b"NOPE");
         // Valid footer magic at the end
@@ -2208,25 +2208,25 @@ mod tests {
     fn test_footer_magic_validated() {
         // Create bytes that are too small
         let small = vec![0u8; 4];
-        let result = SieveFooter::read(&small);
+        let result = SorexFooter::read(&small);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_footer_roundtrip() {
         let data = b"Hello, world!";
-        let crc32 = SieveFooter::compute_crc32(data);
+        let crc32 = SorexFooter::compute_crc32(data);
 
-        let footer = SieveFooter { crc32 };
+        let footer = SorexFooter { crc32 };
         let mut buf = Vec::new();
         footer.write(&mut buf).unwrap();
-        assert_eq!(buf.len(), SieveFooter::SIZE);
+        assert_eq!(buf.len(), SorexFooter::SIZE);
 
         // Append footer to data and verify
         let mut full = data.to_vec();
         full.extend_from_slice(&buf);
 
-        let parsed = SieveFooter::read(&full).unwrap();
+        let parsed = SorexFooter::read(&full).unwrap();
         assert_eq!(parsed.crc32, crc32);
     }
 
@@ -2260,7 +2260,7 @@ mod tests {
         let bytes = layer.to_bytes().unwrap();
 
         // Verify header wasm_len is correct
-        let header = SieveHeader::read(&mut &bytes[..]).unwrap();
+        let header = SorexHeader::read(&mut &bytes[..]).unwrap();
         assert_eq!(header.version, VERSION);
         assert_eq!(header.wasm_len, 8); // Our test WASM bytes
 
@@ -2314,10 +2314,10 @@ mod tests {
         .unwrap();
 
         let bytes = layer.to_bytes().unwrap();
-        let header = SieveHeader::read(&mut &bytes[..]).unwrap();
+        let header = SorexHeader::read(&mut &bytes[..]).unwrap();
 
         // Calculate expected WASM offset
-        let wasm_offset = SieveHeader::SIZE
+        let wasm_offset = SorexHeader::SIZE
             + header.vocab_len as usize
             + header.sa_len as usize
             + header.postings_len as usize

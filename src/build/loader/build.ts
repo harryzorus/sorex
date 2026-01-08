@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Build script for sieve-loader.js
+ * Build script for sorex-loader.js
  *
  * Bundles TypeScript modules into a single self-contained JS file with external source map.
- * Output: target/loader/sieve-loader.js (included by Rust via include_str!)
- *         target/loader/sieve-loader.js.map (for debugging)
+ * Output: target/loader/sorex-loader.js (included by Rust via include_str!)
+ *         target/loader/sorex-loader.js.map (for debugging)
  *
  * Usage: cd src/build/loader && bun run build.ts
  */
@@ -19,7 +19,7 @@ await mkdir(outdir, { recursive: true });
 const result = await build({
   entrypoints: ["./index.ts"],
   outdir,
-  naming: "sieve-loader.js",
+  naming: "sorex-loader.js",
   target: "browser",
   format: "esm",
   minify: false, // Keep readable for debugging
@@ -35,22 +35,22 @@ if (!result.success) {
 }
 
 // Read the output and add header comment
-const output = await Bun.file(`${outdir}/sieve-loader.js`).text();
+const output = await Bun.file(`${outdir}/sorex-loader.js`).text();
 const header = `/**
- * Sieve Loader - Self-contained search loader
+ * Sorex Loader - Self-contained search loader
  *
  * AUTO-GENERATED FILE - Do not edit directly!
  * Source: src/build/loader/*.ts
  * Rebuild: cd src/build/loader && bun run build.ts
  *
  * Usage:
- *   import { loadSieve, SieveSearcher } from './sieve-loader.js';
- *   const searcher = await loadSieve('./index.sieve');
+ *   import { loadSorex, SorexSearcher } from './sorex-loader.js';
+ *   const searcher = await loadSorex('./index.sorex');
  *   const results = searcher.search('query');
  */
 
 `;
 
-await Bun.write(`${outdir}/sieve-loader.js`, header + output);
-console.log("Built target/loader/sieve-loader.js");
-console.log("Built target/loader/sieve-loader.js.map");
+await Bun.write(`${outdir}/sorex-loader.js`, header + output);
+console.log("Built target/loader/sorex-loader.js");
+console.log("Built target/loader/sorex-loader.js.map");

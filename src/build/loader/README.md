@@ -1,14 +1,14 @@
-# Sieve Loader
+# Sorex Loader
 
-Self-contained JavaScript loader for `.sieve` files.
+Self-contained JavaScript loader for `.sorex` files.
 
 ## Structure
 
 ```
 loader/
-├── index.ts      # Public API: loadSieve, loadSieveSync, SieveSearcher
-├── parser.ts     # .sieve file parsing, CRC32 validation
-├── searcher.ts   # SieveSearcher wrapper class
+├── index.ts      # Public API: loadSorex, loadSorexSync, SorexSearcher
+├── parser.ts     # .sorex file parsing, CRC32 validation
+├── searcher.ts   # SorexSearcher wrapper class
 ├── wasm-state.ts # WASM instance state (heap, memory, text encoding)
 ├── imports.ts    # wasm-bindgen import functions
 ├── build.ts      # Bundle script
@@ -24,7 +24,7 @@ cd src/build/loader
 bun run build.ts
 ```
 
-This generates `target/loader/sieve-loader.js` which is embedded in the Rust CLI via `include_str!`.
+This generates `target/loader/sorex-loader.js` which is embedded in the Rust CLI via `include_str!`.
 
 **Important:** You must run the build script before `cargo build`.
 
@@ -37,7 +37,7 @@ bunx tsc --noEmit
 
 ## How It Works
 
-1. **Parser** extracts WASM bytes and index data from `.sieve` files
+1. **Parser** extracts WASM bytes and index data from `.sorex` files
 2. **WasmState** manages per-instance heap and memory views
 3. **Imports** provides wasm-bindgen glue functions bound to each instance
 4. **Searcher** wraps the WASM search API with JS types

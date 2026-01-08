@@ -28,7 +28,7 @@ use crate::utils::common_prefix_len_chars;
 use rayon::prelude::*;
 
 #[cfg(feature = "lean")]
-use sieve_lean_macros::{lean_proptest_verify, lean_verify};
+use sorex_lean_macros::{lean_proptest_verify, lean_verify};
 
 /// Pre-computed character-to-byte offset mapping for a text.
 /// Enables O(1) slicing by character offset.

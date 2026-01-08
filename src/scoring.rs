@@ -32,7 +32,7 @@
 use crate::types::{FieldBoundary, FieldType, SearchIndex};
 
 #[cfg(feature = "lean")]
-use sieve_lean_macros::lean_property;
+use sorex_lean_macros::lean_property;
 
 /// Get the field type for a given position in a document.
 pub fn get_field_type(index: &SearchIndex, doc_id: usize, offset: usize) -> FieldType {

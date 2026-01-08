@@ -62,7 +62,7 @@ async function fetchHtmlPage(url: string): Promise<string | null> {
 		console.log(`  Fetching ${url}...`);
 		const res = await fetch(url, {
 			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; SieveCrawler/1.0)',
+				'User-Agent': 'Mozilla/5.0 (compatible; SorexCrawler/1.0)',
 				Accept: 'text/html'
 			}
 		});
@@ -360,7 +360,7 @@ async function main() {
 	console.log(`Total documents: ${allDocs.length}`);
 	console.log(`Categories: ${summary.categories.join(', ')}`);
 	console.log(`\nOutput written to: ${OUTPUT_DIR}/`);
-	console.log(`\nBuild index with: sieve build --input ${OUTPUT_DIR} --output ${OUTPUT_DIR}`);
+	console.log(`\nBuild index with: sorex index --input ${OUTPUT_DIR} --output ${OUTPUT_DIR}`);
 }
 
 main().catch(console.error);

@@ -146,7 +146,7 @@ pub fn build_indexes_parallel(
     // Always embed WASM when feature is enabled
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
-        Arc::new(include_bytes!(concat!(env!("SIEVE_OUT_DIR"), "/sieve_bg.wasm")).to_vec());
+        Arc::new(include_bytes!(concat!(env!("SOREX_OUT_DIR"), "/sorex_bg.wasm")).to_vec());
 
     // Build each index in parallel
     index_defs
@@ -179,7 +179,7 @@ pub fn build_indexes_with_progress(
     // Always embed WASM when feature is enabled
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
-        Arc::new(include_bytes!(concat!(env!("SIEVE_OUT_DIR"), "/sieve_bg.wasm")).to_vec());
+        Arc::new(include_bytes!(concat!(env!("SOREX_OUT_DIR"), "/sorex_bg.wasm")).to_vec());
 
     let counter = AtomicUsize::new(0);
     let _total = index_defs.len();
@@ -461,7 +461,7 @@ mod tests {
         let filtered: Vec<&Document> = docs.iter().filter(|d| def.include.matches(d)).collect();
 
         // After remapping, the new IDs should be 0, 1
-        for (new_id, doc) in filtered.iter().enumerate() {
+        for (new_id, _doc) in filtered.iter().enumerate() {
             assert_eq!(new_id, new_id); // Just checking the structure
         }
     }

@@ -40,7 +40,7 @@
 mod common;
 
 use common::assert_index_well_formed;
-use sieve::{
+use sorex::{
     build_hybrid_index, build_index, search, search_hybrid, FieldBoundary, FieldType, SearchDoc,
 };
 
@@ -1038,7 +1038,7 @@ fn make_doc(id: usize) -> SearchDoc {
     }
 }
 
-fn build_test_index(texts: &[String]) -> sieve::SearchIndex {
+fn build_test_index(texts: &[String]) -> sorex::SearchIndex {
     let docs: Vec<SearchDoc> = texts.iter().enumerate().map(|(i, _)| make_doc(i)).collect();
     // Raw text - tests suffix array invariants across all scripts
     build_index(docs, texts.to_vec(), vec![])
@@ -1046,7 +1046,7 @@ fn build_test_index(texts: &[String]) -> sieve::SearchIndex {
 
 fn build_test_index_with_fields(
     docs_data: &[(String, Vec<(String, FieldType)>)],
-) -> sieve::SearchIndex {
+) -> sorex::SearchIndex {
     let docs: Vec<SearchDoc> = docs_data
         .iter()
         .enumerate()

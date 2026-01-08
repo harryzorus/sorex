@@ -1,11 +1,11 @@
-# Sieve
+# Sorex
 
 **Search that actually finds things.**
 
-Most search libraries can't find "auth" in "authentication." Sieve can. It handles typos, finds substrings, and proves its ranking correct.
+Most search libraries can't find "auth" in "authentication." Sorex can. It handles typos, finds substrings, and proves its ranking correct.
 
 - **v0.3.0** · 153 KB WASM · 4.5 KB JS
-- [GitHub](https://github.com/harryzorus/sieve) · [Documentation](index.md)
+- [GitHub](https://github.com/harryzorus/sorex) · [Documentation](index.md)
 
 ## Features
 
@@ -39,9 +39,9 @@ Levenshtein DFA with edit distance ≤2.
 - **Property tested** with proptest fuzzing
 - **25 languages** via Unicode segmentation
 
-## When to Use Sieve
+## When to Use Sorex
 
-**Use Sieve when:**
+**Use Sorex when:**
 - Users search for substrings (`auth` → `authentication`)
 - Typos are common (`epilouge` → `epilogue`)
 - You need provably correct ranking
@@ -58,27 +58,27 @@ Levenshtein DFA with edit distance ≤2.
 ### 1. Install the CLI
 
 ```bash
-cargo install sieve-search
+cargo install sorex
 ```
 
 ### 2. Build an index
 
 ```bash
-sieve index --input ./docs --output ./search
+sorex index --input ./docs --output ./search
 ```
 
 ### 3. Search in the browser
 
 ```typescript
-import { loadSieve } from './sieve-loader.js';
+import { loadSorex } from './sorex-loader.js';
 
-const searcher = await loadSieve('./index.sieve');
+const searcher = await loadSorex('./index.sorex');
 const results = searcher.search('query', 10);
 ```
 
 ## Specifications
 
-- Index format: `.sieve` v7
+- Index format: `.sorex` v7
 - Max edit distance: 2
 - License: Apache-2.0
 

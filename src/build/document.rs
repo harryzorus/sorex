@@ -26,6 +26,7 @@ pub struct Document {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     fn make_doc() -> Document {
         Document {
             id: 0,
