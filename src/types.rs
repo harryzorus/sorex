@@ -1,35 +1,190 @@
-//! Core type definitions for the Sorex search index.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! The building blocks of a search index.
+//!
+//! These types define how documents, field boundaries, and suffix entries fit together.
+//! Every struct here has a corresponding Lean specification in `SearchVerified/Types.lean`,
+//! so if something seems overly constrained, there's probably a theorem depending on it.
 //!
 //! # Lean Correspondence
 //!
-//! These types correspond to specifications in `SearchVerified/Types.lean`:
-//! - `SearchDoc` → `SearchDoc` structure
-//! - `FieldBoundary` → `FieldBoundary` structure
-//! - `FieldType` → `FieldType` inductive
-//! - `SuffixEntry` → `SuffixEntry` structure
-//! - `SearchIndex` → `SearchIndex` structure
+//! | Rust Type        | Lean Type        | Purpose                          |
+//! |------------------|------------------|----------------------------------|
+//! | `SearchDoc`      | `SearchDoc`      | Document metadata for results    |
+//! | `FieldBoundary`  | `FieldBoundary`  | Title/heading/content regions    |
+//! | `FieldType`      | `FieldType`      | Title > Heading > Content        |
+//! | `SuffixEntry`    | `SuffixEntry`    | Pointer into the suffix array    |
+//! | `SearchIndex`    | `SearchIndex`    | The complete searchable index    |
 //!
-//! # INVARIANTS
-//!
-//! These types have well-formedness conditions that MUST be maintained:
+//! # Invariants (the stuff that breaks if you ignore it)
 //!
 //! - **SuffixEntry**: `doc_id < texts.len() ∧ offset < texts[doc_id].len()`
-//! - **SearchIndex**: `docs.len() = texts.len() ∧ lcp.len() = suffix_array.len()`
-//! - **FieldBoundary**: `doc_id < texts.len() ∧ start < end ∧ end ≤ texts[doc_id].len()`
+//!   Every suffix points somewhere valid. Strict inequality because suffixes are non-empty.
 //!
-//! Use `ValidatedSuffixEntry` and `WellFormedIndex` from `verified.rs` for
-//! compile-time enforcement of these invariants.
+//! - **SearchIndex**: `docs.len() = texts.len() ∧ lcp.len() = suffix_array.len()`
+//!   The arrays must line up. Off-by-one here means garbage results.
+//!
+//! - **FieldBoundary**: `doc_id < texts.len() ∧ start < end ∧ end ≤ texts[doc_id].len()`
+//!   Non-empty, non-overlapping regions within valid documents.
+//!
+//! Rather than trusting yourself to remember these, use `ValidatedSuffixEntry` and
+//! `WellFormedIndex` from `verify` - they enforce invariants at the type level.
 
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "lean")]
 use sorex_lean_macros::{LeanProptest, LeanSpec};
 
-/// Document metadata for search results.
+// =============================================================================
+// NEWTYPES: Type-safe indices and offsets
+// =============================================================================
+
+/// Type-safe document identifier.
+///
+/// Prevents accidentally passing a character offset where a document ID is expected.
+/// Use `DocId::new()` for runtime-validated construction, or `.into()` for trusted sources.
+///
+/// **Lean Correspondence**: `doc_id` fields in `Types.lean`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct DocId(pub u32);
+
+impl DocId {
+    /// Create a new DocId, validating it's within bounds.
+    #[inline]
+    pub fn new(id: u32, num_docs: usize) -> Option<Self> {
+        if (id as usize) < num_docs {
+            Some(DocId(id))
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying value.
+    #[inline]
+    pub fn get(self) -> u32 {
+        self.0
+    }
+
+    /// Convert to usize for array indexing.
+    #[inline]
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl From<u32> for DocId {
+    fn from(id: u32) -> Self {
+        DocId(id)
+    }
+}
+
+impl From<DocId> for usize {
+    fn from(id: DocId) -> Self {
+        id.0 as usize
+    }
+}
+
+/// Character offset within normalized document text.
+///
+/// This is an offset into the Unicode scalar values of the text, NOT a byte offset.
+/// The distinction matters for UTF-8 text where byte position ≠ character position.
+///
+/// **Lean Correspondence**: `offset` fields in `Types.lean`
+/// **Invariant**: `offset < text.chars().count()` (for non-empty suffixes)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct CharOffset(pub u32);
+
+impl CharOffset {
+    /// Create a new CharOffset, validating it's within text bounds.
+    #[inline]
+    pub fn new(offset: u32, text_len: usize) -> Option<Self> {
+        if (offset as usize) < text_len {
+            Some(CharOffset(offset))
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying value.
+    #[inline]
+    pub fn get(self) -> u32 {
+        self.0
+    }
+
+    /// Convert to usize for string slicing.
+    #[inline]
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl From<u32> for CharOffset {
+    fn from(offset: u32) -> Self {
+        CharOffset(offset)
+    }
+}
+
+impl From<CharOffset> for usize {
+    fn from(offset: CharOffset) -> Self {
+        offset.0 as usize
+    }
+}
+
+/// Byte offset within UTF-8 encoded text.
+///
+/// This is a raw byte position in the UTF-8 representation.
+/// Must be used with care to ensure it falls on a valid UTF-8 boundary.
+///
+/// Prefer `CharOffset` for search-related operations since the suffix array
+/// and field boundaries work with character positions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct ByteOffset(pub usize);
+
+impl ByteOffset {
+    /// Create a new ByteOffset, validating it's within byte bounds.
+    #[inline]
+    pub fn new(offset: usize, byte_len: usize) -> Option<Self> {
+        if offset <= byte_len {
+            Some(ByteOffset(offset))
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying value.
+    #[inline]
+    pub fn get(self) -> usize {
+        self.0
+    }
+}
+
+impl From<usize> for ByteOffset {
+    fn from(offset: usize) -> Self {
+        ByteOffset(offset)
+    }
+}
+
+impl From<ByteOffset> for usize {
+    fn from(offset: ByteOffset) -> Self {
+        offset.0
+    }
+}
+
+// =============================================================================
+// DOCUMENT TYPES
+// =============================================================================
+
+/// What users see when they get a search result.
+///
+/// The `id` field indexes into the texts array - everything else is metadata
+/// for displaying and filtering results. We keep this lean (pun intended)
+/// because it gets serialized into the index and loaded on every search.
 ///
 /// **Lean Specification**: `SearchDoc` in `Types.lean`
-/// - `id`: indexes into the texts array
-/// - All string fields are searchable metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "lean", derive(LeanSpec, LeanProptest))]
 #[cfg_attr(feature = "lean", lean(name = "SearchDoc"))]
@@ -60,13 +215,19 @@ pub struct SearchDoc {
     pub tags: Vec<String>,
 }
 
-/// Field type within a document.
+/// Where in a document did the match occur?
+///
+/// Title matches beat heading matches beat content matches. The gap between
+/// tiers is deliberately large (100 vs 10 vs 1) so position bonuses can't
+/// accidentally promote a content match above a title match.
 ///
 /// **Lean Specification**: `FieldType` in `Types.lean`
-/// - Title: highest priority (base score 100)
-/// - Heading: medium priority (base score 10)
-/// - Content: lowest priority (base score 1)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+/// - Theorem `title_beats_heading` proves the gap is sufficient
+///
+/// **Gotcha**: The derived `Ord` is lexicographic (Title < Heading < Content),
+/// which is backwards from score order. Don't use `Ord` for ranking - use
+/// `field_type_score()` instead. We keep `Ord` for deterministic serialization.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
     Title,
@@ -74,12 +235,86 @@ pub enum FieldType {
     Content,
 }
 
-/// Field boundary within a document text.
+impl FieldType {
+    /// Convert to lowercase string representation.
+    ///
+    /// Matches the serde `rename_all = "lowercase"` convention.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FieldType::Title => "title",
+            FieldType::Heading => "heading",
+            FieldType::Content => "content",
+        }
+    }
+}
+
+/// Hierarchical bucket for ranking based on where in the document structure a match occurred.
+///
+/// This is the primary sort key for results. Within each bucket, numeric scores
+/// break ties, but a Section match will never outrank a Title match regardless
+/// of how good the content score looks.
+///
+/// The hierarchy: Title > Section > Subsection > Subsubsection > Content
+///
+/// **Lean Specification**: `MatchType` in `SearchVerified/MatchType.lean`
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchType {
+    Title,         // Document title (heading_level=0, e.g. <title> or front-matter)
+    Section,       // h1 or h2 heading (heading_level=1-2)
+    Subsection,    // h3 heading (heading_level=3)
+    Subsubsection, // h4 heading (heading_level=4)
+    Content,       // h5+, or implicit content section (heading_level=5+)
+}
+
+impl MatchType {
+    /// Convert heading level (0-6) to MatchType bucket.
+    ///
+    /// - 0: Document title (highest rank) - the `<title>` or front-matter title
+    /// - 1-2: Section heading (h1/h2) - major section headings
+    /// - 3: Subsection (h3)
+    /// - 4: Subsubsection (h4)
+    /// - 5+: Content (lowest rank)
+    ///
+    /// This ensures document titles always rank above content headings,
+    /// even if both are h1-level structurally.
+    #[inline]
+    pub fn from_heading_level(level: u8) -> Self {
+        match level {
+            0 => MatchType::Title,
+            1 | 2 => MatchType::Section,
+            3 => MatchType::Subsection,
+            4 => MatchType::Subsubsection,
+            _ => MatchType::Content,
+        }
+    }
+
+    /// Convert MatchType to numeric value for JavaScript serialization.
+    /// - 0: Title
+    /// - 1: Section
+    /// - 2: Subsection
+    /// - 3: Subsubsection
+    /// - 4: Content
+    pub fn to_u8(self) -> u8 {
+        match self {
+            MatchType::Title => 0,
+            MatchType::Section => 1,
+            MatchType::Subsection => 2,
+            MatchType::Subsubsection => 3,
+            MatchType::Content => 4,
+        }
+    }
+}
+
+/// A contiguous region of text with a specific field type.
+///
+/// Documents are divided into non-overlapping boundaries: title, headings, and content.
+/// Each boundary knows its byte range and can optionally link to a section anchor for
+/// deep linking (so search results can jump directly to `#optimization` instead of
+/// just the page).
 ///
 /// **Lean Specification**: `FieldBoundary` in `Types.lean`
-/// - Well-formedness: `start < end ∧ end ≤ text_len`
-/// - Represents a contiguous region of a specific field type
-/// - `section_id`: Optional section ID for deep linking (None for title, Some for heading/content)
+/// - Invariant: `start < end ∧ end ≤ text_len` (non-empty, in bounds)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "lean", derive(LeanSpec, LeanProptest))]
 #[cfg_attr(
@@ -109,14 +344,30 @@ pub struct FieldBoundary {
     /// **Verified by**: `prop_title_has_no_section_id`, `prop_content_inherits_section`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section_id: Option<String>,
+    /// Heading level for hierarchical ranking (v8 bucketing)
+    /// - 0 or 1: Title/h1
+    /// - 2: h2 section
+    /// - 3: h3 subsection
+    /// - 4: h4 subsubsection
+    /// - 5+: h5+ / content
+    ///
+    /// Populated by: HarryZorus build pipeline (src/build/scripts/search.ts)
+    /// Default: 0 (title level, for backward compatibility)
+    #[serde(default)]
+    #[cfg_attr(feature = "lean", lean(bounds = "0u8..10"))]
+    pub heading_level: u8,
 }
 
-/// Suffix array entry pointing into document text.
+/// A pointer to a suffix in the document corpus.
+///
+/// Every position in every document gets a suffix entry. When sorted lexicographically,
+/// these form a suffix array that enables O(log n) binary search for any prefix.
+/// It's a classic data structure, but the "classic" papers don't mention how annoying
+/// the edge cases are.
 ///
 /// **Lean Specification**: `SuffixEntry` in `Types.lean`
-/// - Well-formedness: `doc_id < texts.size ∧ offset < texts[doc_id].length`
-/// - The suffix array is sorted lexicographically by `suffixAt texts entry`
-/// - This enables O(log n) binary search for prefix matching
+/// - Invariant: `doc_id < texts.size ∧ offset < texts[doc_id].length`
+/// - Strict `<` for offset because we index non-empty suffixes
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "lean", derive(LeanSpec, LeanProptest))]
 #[cfg_attr(
@@ -134,10 +385,14 @@ pub struct SuffixEntry {
     pub offset: usize,
 }
 
-/// The complete search index containing suffix array and metadata.
+/// The complete search index: suffix array, LCP array, docs, and field boundaries.
+///
+/// This is the basic index type - good for learning the codebase or small datasets.
+/// For production use, consider `HybridIndex` (adds fuzzy search) or `UnionIndex`
+/// (multi-site search).
 ///
 /// **Lean Specification**: `SearchIndex` in `Types.lean`
-/// - Well-formedness: `docs.size = texts.size ∧ lcp.size = suffix_array.size`
+/// - Invariant: `docs.size = texts.size ∧ lcp.size = suffix_array.size`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "lean", derive(LeanSpec))]
 #[cfg_attr(
@@ -174,12 +429,15 @@ pub(crate) struct ScoredDoc {
 // INVERTED INDEX TYPES (Hybrid Search Extension)
 // =============================================================================
 
-/// A posting in the inverted index: location where a term occurs.
+/// A single occurrence of a term in the corpus.
+///
+/// Every time a word appears, we record where (doc, offset), what kind of field
+/// (title/heading/content), and precompute a score. Postings are sorted by score
+/// descending, so retrieving the top-k results for a single term is O(k).
 ///
 /// **Lean Specification**: `Posting` in `InvertedIndex.lean`
-/// - Well-formedness: `doc_id < texts.size ∧ offset + term_len ≤ texts[doc_id].length`
-/// - Postings for the same term are sorted by (doc_id, offset) for efficient intersection
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+/// - Invariant: `doc_id < texts.size ∧ offset + term_len ≤ texts[doc_id].length`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "lean", derive(LeanSpec, LeanProptest))]
 #[cfg_attr(
     feature = "lean",
@@ -208,36 +466,56 @@ pub struct Posting {
     /// Looked up from FieldBoundary.section_id at index time
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section_id: Option<String>,
+    /// Heading level for hierarchical ranking (v8 bucketing)
+    /// - 0 or 1: Title/h1
+    /// - 2: h2 section
+    /// - 3: h3 subsection
+    /// - 4: h4 subsubsection
+    /// - 5+: h5+ / content
+    ///
+    /// Copied from FieldBoundary.heading_level at index time.
+    #[serde(default)]
+    #[cfg_attr(feature = "lean", lean(bounds = "0u8..10"))]
+    pub heading_level: u8,
+    /// Precomputed relevance score for fast top-k retrieval.
+    /// Computed at index time from field_type and position_bonus.
+    /// Posting lists are sorted by score DESC for O(k) single-term queries.
+    #[serde(default)]
+    pub score: f64,
 }
 
-/// A posting list for a single term: all documents containing that term.
+/// All occurrences of a single term across the corpus.
+///
+/// Sorted by score descending for O(k) top-k retrieval. The `doc_freq` is cached
+/// because counting unique doc_ids in a sorted list is surprisingly expensive
+/// when you're doing it thousands of times per search.
 ///
 /// **Lean Specification**: `PostingList` in `InvertedIndex.lean`
-/// - Well-formedness: `∀ p ∈ postings. Posting.WellFormed p texts`
-/// - Invariant: postings are sorted by (doc_id, offset)
-/// - Document frequency is always equal to the count of unique doc_ids
+/// - Invariant: postings sorted by (score DESC, doc_id ASC)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "lean", derive(LeanSpec))]
 #[cfg_attr(
     feature = "lean",
     lean(
         name = "PostingList",
-        invariant = "postings_sorted ∧ doc_freq = unique_doc_ids.size"
+        invariant = "postings_sorted_by_score ∧ doc_freq = unique_doc_ids.size"
     )
 )]
 #[serde(rename_all = "camelCase")]
 pub struct PostingList {
-    /// Sorted list of postings (by doc_id, then offset)
+    /// Sorted list of postings by (score DESC, doc_id ASC) for O(k) top-k retrieval
     pub postings: Vec<Posting>,
     /// Number of unique documents containing this term
     pub doc_freq: usize,
 }
 
-/// The inverted index: maps terms to their posting lists.
+/// The inverted index: term → posting list.
+///
+/// O(1) exact term lookup via HashMap. This is the workhorse for single-word queries
+/// and the foundation for boolean AND/OR. The `total_docs` field is cached for
+/// IDF calculations.
 ///
 /// **Lean Specification**: `InvertedIndex` in `InvertedIndex.lean`
-/// - Well-formedness: `∀ (term, pl) ∈ index. PostingList.WellFormed pl texts ∧ term_exists_in_docs`
-/// - This enables O(1) term lookup and efficient boolean queries
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "lean", derive(LeanSpec))]
 #[cfg_attr(
@@ -331,22 +609,19 @@ pub struct VocabSuffixEntry {
     pub offset: usize,
 }
 
-/// Hybrid search index: inverted index + suffix array over vocabulary.
+/// The production search index: inverted index + vocabulary suffix array.
 ///
-/// This combines the best of both approaches:
-/// - **Exact word lookup**: O(1) via inverted index hash map
-/// - **Prefix search**: O(log k) via suffix array over vocabulary keys
-/// - **Fuzzy search**: O(vocabulary) via Levenshtein distance iteration
-/// - **Posting list intersection**: Efficient AND queries
+/// Combines the best of both worlds:
+/// - **Exact**: O(1) via inverted index HashMap
+/// - **Prefix**: O(log k) via suffix array over vocabulary terms
+/// - **Fuzzy**: O(vocabulary) via Levenshtein DFA traversal
 ///
-/// The key insight is that the suffix array is built over the vocabulary
-/// (unique terms) rather than the full text. For a typical blog:
-/// - Full text: ~500KB (would need ~500K suffix entries)
-/// - Vocabulary: ~10K unique words (needs only ~50K suffix entries)
+/// The trick is building the suffix array over vocabulary terms (10K unique words)
+/// instead of full text (500KB). Same algorithmic complexity, 100x smaller index.
 ///
 /// **Lean Specification**: `HybridIndex` in `HybridIndex.lean`
-/// - Invariant: All vocabulary terms exist as keys in the inverted index
-/// - Invariant: vocab_suffix_array is sorted lexicographically
+/// - Invariant: All vocabulary terms exist in the inverted index
+/// - Invariant: `vocab_suffix_array` is sorted lexicographically
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HybridIndex {
@@ -385,8 +660,8 @@ pub enum SearchSource {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
-    /// The matched document
-    pub doc: SearchDoc,
+    /// Document ID (for efficient storage - avoids cloning SearchDoc)
+    pub doc_id: usize,
     /// Which index the match came from
     pub source: SearchSource,
     /// Relevance score (higher is better)
@@ -394,6 +669,13 @@ pub struct SearchResult {
     /// Section ID for deep linking (None for title matches, Some for heading/content)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section_id: Option<String>,
+    /// Search tier: 1=exact, 2=prefix, 3=fuzzy
+    #[serde(default = "default_tier")]
+    pub tier: u8,
+}
+
+fn default_tier() -> u8 {
+    1
 }
 
 /// Union index combining separate indexes for titles, headings, and content.
@@ -431,16 +713,18 @@ pub struct UnionIndex {
 // SECTION NAVIGATION (Deep Linking)
 // =============================================================================
 
-/// A section represents a heading and its content region in a document.
+/// A heading and its content region, for deep-linking search results.
+///
+/// Instead of linking to `/posts/rust-search`, we can link directly to
+/// `/posts/rust-search#optimization`. Users land exactly where the match is,
+/// not at the top of a 5000-word post.
+///
+/// Sections must be non-overlapping and cover the entire document. If that
+/// sounds like a partition, it is - and the Lean proofs verify it.
 ///
 /// **Lean Specification**: `Section` in `Section.lean`
-/// - Well-formedness: `start_offset < end_offset` (non-empty region)
-/// - Invariant: Sections in a document are non-overlapping
-/// - Invariant: Every text offset maps to exactly one section
-///
-/// Used for deep-linking search results to specific headings within a document.
-/// For example, searching for "optimization" might link to `/posts/2024/03/rust-search#optimization`
-/// instead of just `/posts/2024/03/rust-search`.
+/// - Invariant: `start_offset < end_offset` (non-empty)
+/// - Invariant: Sections are non-overlapping and cover [0, doc_length)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Section {

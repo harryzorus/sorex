@@ -1,16 +1,30 @@
 [workspace]
 members = [".", "macros", "xtask"]
 
+# Shared dependencies across workspace members
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+
 [package]
 name = "sorex"
-version = "0.2.5"
+version = "1.0.7"
 edition = "2021"
 description = "Formally verified full-text search with suffix arrays"
 repository = "https://github.com/harryzorus/sorex"
 license = "Apache-2.0"
+keywords = ["search", "fuzzy", "suffix-array", "wasm", "formal-verification"]
+categories = ["algorithms", "text-processing", "wasm"]
+authors = ["Harry Tummalacherla <harry@harryzorus.xyz>"]
+documentation = "https://github.com/harryzorus/sorex/tree/main/docs"
+homepage = "https://github.com/harryzorus/sorex"
+readme = "README.md"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 path = "src/lib.rs"
 
 [[bin]]
@@ -21,17 +35,39 @@ path = "src/main.rs"
 name = "search_bench"
 harness = false
 
+[[bench]]
+name = "bench_wasm"
+harness = false
+required-features = ["deno-runtime"]
+
+[[bench]]
+name = "bench_searcher"
+harness = false
+required-features = ["bench-datasets"]
+
+[[bench]]
+name = "decode_sections"
+harness = false
+required-features = ["bench-datasets"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-rayon = { version = "1.11.0", optional = true }
+rayon = { version = "1.10", optional = true }
 indicatif = { version = "0.17", optional = true }
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-rayon = { version = "1.2", optional = true }  # Rayon for WASM via Web Workers
 serde-wasm-bindgen = { version = "0.6", optional = true }
-sorex-lean-macros = { version = "0.2.5", path = "macros", optional = true }
+js-sys = { version = "0.3", optional = true }  # JS interop for Function callbacks
+sorex-lean-macros = { version = "1.0.0", path = "macros", optional = true }
 crc32fast = "1.4"          # CRC32 checksum for integrity validation
+parking_lot = { version = "0.12", optional = true }  # Fast RwLock for incremental loading
+brotli = "6.0"             # Brotli compression for size comparison
+atty = "0.2"               # TTY detection for colored output
 unicode-normalization = { version = "0.1", optional = true }  # NFD decomposition for diacritic stripping
+deno_core = { version = "0.377", optional = true }  # Deno runtime for --wasm flag
+tokio = { version = "1", features = ["rt"], optional = true }  # Required by deno_core
 # Levenshtein DFA tables implemented in-house (levenshtein_dfa.rs) - Schulz-Mihov 2002
 # FST removed: vocabulary stored directly as Vec<String>, no benefit from automaton for ~150 terms
 
@@ -39,6 +75,7 @@ unicode-normalization = { version = "0.1", optional = true }  # NFD decompositio
 proptest = "1.0"
 criterion = "0.5"
 brotli = "6.0"             # Brotli compression for testing
+tempfile = "3"             # Temporary directories for build system tests
 
 # Comparison libraries for benchmarking
 tantivy = "0.22"           # Full-text search engine (Lucene-like)
@@ -47,14 +84,26 @@ fuzzy-matcher = "0.3"      # FZF-style fuzzy matching
 simsearch = "0.2"          # Simple in-memory fuzzy search
 
 [features]
-default = ["parallel", "unicode-normalization", "serde_json", "embed-wasm"]
-parallel = ["rayon", "indicatif"]
-wasm = ["wasm-bindgen", "serde-wasm-bindgen"]  # No unicode-normalization or serde_json for smaller WASM
+# Note: embed-wasm requires nightly Rust for WASM threading (build-std)
+default = ["parallel", "unicode-normalization", "serde_json", "embed-wasm", "deno-runtime"]
+parallel = ["rayon", "indicatif", "parking_lot"]
+bench-datasets = []  # Enable tests that require Cutlass/PyTorch datasets (built via cargo xtask bench-e2e)
+# Multi-threaded WASM via Web Workers (requires SharedArrayBuffer + COOP/COEP headers)
+# This is the default for WASM builds since parallel search is the core feature
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "rayon", "wasm-bindgen-rayon", "parking_lot"]
+# Single-threaded WASM fallback (no SharedArrayBuffer required, works in all browsers)
+wasm-single-threaded = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+wasm-simd = ["wasm"]  # WASM with portable_simd SIMD acceleration (requires nightly)
+# Legacy alias for wasm-threads (now just "wasm")
+wasm-threads = ["wasm"]
 embed-wasm = []  # Embed WASM/JS in binary for --demo flag (requires wasm-pack build first)
 lean = ["sorex-lean-macros"]
+deno-runtime = ["deno_core", "tokio"]  # Enable Deno runtime for --wasm flag in CLI
 
+# wasm-pack wasm-opt config - disabled since wasm-opt 125 has compatibility issues with wasm-pack
+# Use `cargo xtask build-wasm` which handles wasm-opt manually after wasm-pack build
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+wasm-opt = false
 
 # Debian package configuration (cargo-deb)
 # Build with: wasm-pack build --release && cargo deb --profile release-native
@@ -82,13 +131,13 @@ assets = [
 ]
 maintainer-scripts = "debian/"
 
-# Release profile optimized for WASM size
+# Release profile optimized for WASM speed
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = true          # Link-Time Optimization for dead code elimination
+opt-level = 3       # Optimize for speed
+lto = "thin"        # Thin LTO for faster compilation with good optimization
 codegen-units = 1   # Single codegen unit for better LTO
 panic = "abort"     # No unwinding = smaller binary
-strip = true        # Strip symbols
+strip = false       # Keep symbols for wasm-bindgen
 
 # Native CLI release profile (for deb packages)
 # Use: cargo build --profile release-native
@@ -96,10 +145,13 @@ strip = true        # Strip symbols
 inherits = "release"
 opt-level = 3       # Optimize for speed, not size
 panic = "unwind"    # Allow proper error handling
+strip = true        # Strip symbols for smaller binary
 
 # Lints for code quality
 [lints.rust]
 unsafe_code = "forbid"
+# Allow Kani model checking cfg (used for formal verification proofs)
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

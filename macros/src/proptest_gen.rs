@@ -1,8 +1,15 @@
-//! Automatic property test generation from Lean specifications.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Turning Lean predicates into executable tests.
 //!
-//! This module translates Lean-style predicates into executable Rust property tests.
-//! It parses the `ensures` and `requires` clauses from `#[lean_verify]` annotations
-//! and generates proptest code that verifies these properties at runtime.
+//! `#[lean_proptest_verify]` does double duty: Lean specs and proptest code
+//! from the same annotations. This module handles the test side: parsing
+//! `ensures` and `requires` and emitting assertions.
+//!
+//! The translation is conservative. Universal quantification, implication,
+//! comparisons. These work. Anything fancier and you're on your own. Better
+//! to fail loudly than generate subtly wrong tests.
 //!
 //! # Predicate Translation
 //!

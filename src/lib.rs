@@ -1,107 +1,127 @@
-//! Suffix array-based full-text search with formal verification.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+// Enable portable_simd for WASM SIMD acceleration
+// This is a safe API - no unsafe code required
+#![cfg_attr(
+    all(target_arch = "wasm32", feature = "wasm-simd"),
+    feature(portable_simd)
+)]
+
+//! Full-text search with suffix arrays, fuzzy matching, and formal verification.
 //!
-//! This crate provides a search index using suffix arrays for O(log n) prefix matching.
-//! The implementation is formally specified in Lean 4 and verified via property testing.
+//! Sorex is a search library built for the browser. The index is a single `.sorex`
+//! file that contains everything needed to search: suffix arrays for prefix matching,
+//! inverted indexes for exact lookups, and a Levenshtein DFA for typo tolerance.
+//! It runs as WASM in browsers, native Rust on servers, or via CLI.
 //!
-//! # Architecture
+//! The core algorithms are formally specified in Lean 4. If you change the scoring
+//! function and the Lean proofs fail, you broke something - trust the proofs.
 //!
-//! ```text
-//! ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-//! │   types.rs  │────▶│  index.rs    │────▶│  search.rs  │
-//! │  (SearchDoc,│     │ (build_index,│     │  (search)   │
-//! │ SuffixEntry)│     │  suffix_at)  │     │             │
-//! └─────────────┘     └──────────────┘     └─────────────┘
-//!        │                   │                    │
-//!        ▼                   ▼                    ▼
-//! ┌─────────────────────────────────────────────────────┐
-//! │                    verified.rs                       │
-//! │  (ValidatedSuffixEntry, SortedSuffixArray,          │
-//! │   WellFormedIndex - type-level invariants)          │
-//! └─────────────────────────────────────────────────────┘
-//! ```
+//! # Pick Your Index Type
+//!
+//! | Type          | Use Case                        | Exact | Prefix | Fuzzy |
+//! |---------------|---------------------------------|-------|--------|-------|
+//! | `SearchIndex` | Learning, debugging             | ~     | O(lg n)| -     |
+//! | `HybridIndex` | **Production (recommended)**    | O(1)  | O(lg k)| O(k)  |
+//! | `UnionIndex`  | Multi-site search               | O(1)  | O(lg k)| O(k)  |
+//!
+//! Most users should start with `HybridIndex`. It has O(1) exact word lookup,
+//! O(log k) prefix search (where k = vocabulary size, much smaller than corpus),
+//! and O(k) fuzzy search via Levenshtein DFA.
 //!
 //! # Lean Correspondence
 //!
-//! Each module corresponds to Lean specifications:
+//! Each module has a Lean counterpart in `SearchVerified/`:
 //!
-//! | Rust Module     | Lean File                    | Key Properties           |
-//! |-----------------|------------------------------|--------------------------|
-//! | `types`         | `Types.lean`                 | Type definitions         |
-//! | `index`         | `SuffixArray.lean`           | Sorted, Complete, LCP    |
-//! | `search`        | `BinarySearch.lean`          | Search correctness       |
-//! | `scoring`       | `Scoring.lean`               | Field hierarchy          |
-//! | `levenshtein`   | `Levenshtein.lean`           | Edit distance bounds     |
-//! | `verified`      | All                          | Type-level invariants    |
+//! | Rust          | Lean                 | What's Verified                    |
+//! |---------------|----------------------|------------------------------------|
+//! | `types`       | `Types.lean`         | Type definitions match             |
+//! | `index`       | `SuffixArray.lean`   | Sorted, complete, LCP correct      |
+//! | `search`      | `BinarySearch.lean`  | Binary search correctness          |
+//! | `scoring`     | `Scoring.lean`       | Field hierarchy (title > content)  |
+//! | `fuzzy`       | `Levenshtein.lean`   | Edit distance bounds               |
 //!
-//! # Usage
+//! # Example
 //!
 //! ```ignore
-//! use search::{build_index, search, SearchDoc, FieldBoundary};
+//! use sorex::{build_hybrid_index, search_hybrid, SearchDoc};
 //!
-//! let docs = vec![SearchDoc { ... }];
-//! let texts = vec!["document text".to_string()];
-//! let index = build_index(docs, texts, vec![]);
+//! let docs = vec![SearchDoc { id: 0, title: "Rust".into(), ... }];
+//! let texts = vec!["rust programming language".to_string()];
+//! let index = build_hybrid_index(docs, texts, vec![]);
 //!
-//! let results = search(&index, "query");
+//! // Exact match for "rust", fuzzy match for "ruts" typo
+//! let results = search_hybrid(&index, "ruts");
 //! ```
 
 // Module declarations
 pub mod binary;
-#[cfg(feature = "serde_json")]
+#[cfg(all(feature = "serde_json", not(target_arch = "wasm32")))]
 pub mod build;
-pub mod contracts;
-pub mod dict_table;
-pub mod docs_compression;
-pub mod fst_index;
-mod hybrid;
+pub mod verify;
+mod util;
 mod index;
-mod inverted;
-mod levenshtein;
-pub mod levenshtein_dfa;
-mod sais;
+mod fuzzy;
 mod scoring;
 mod search;
 mod types;
-mod union;
-mod utils;
-pub mod verified;
 
-#[cfg(feature = "wasm")]
-mod wasm;
+// Test utilities (always compiled, hidden from docs)
+pub mod testing;
+
+// Re-export utility modules at crate root for backwards compatibility
+pub use util::dict_table;
+pub use util::docs_compression;
+pub use util::simd;
+
+// Re-export fuzzy::dfa as levenshtein_dfa for backwards compatibility
+pub use fuzzy::dfa as levenshtein_dfa;
+
+// Re-export search::tiered as tiered_search for backwards compatibility
+pub use search::tiered as tiered_search;
+
+mod runtime;
+
+// Re-export runtime modules
+pub use runtime::deno as deno_runtime;
 
 // Re-exports for public API
-pub use fst_index::{build_fst_index, FstIndex};
-pub use hybrid::{
-    build_hybrid_index, build_hybrid_index_parallel, search_exact, search_expanded, search_fuzzy,
-    search_hybrid,
-};
-pub use index::{build_index, is_suffix_array_sorted, suffix_at};
-pub use inverted::{
+pub use index::fst::{build_fst_index, FstIndex};
+pub use index::hybrid::{build_hybrid_index, build_hybrid_index_parallel};
+pub use search::hybrid::{search_exact, search_expanded, search_fuzzy, search_hybrid};
+pub use index::{
+    build_index, is_suffix_array_sorted, suffix_at,
     build_inverted_index, build_inverted_index_parallel, build_unified_index, is_stop_word,
     select_index_mode, IndexThresholds,
 };
-pub use levenshtein::levenshtein_within;
-pub use levenshtein_dfa::{ParametricDFA, QueryMatcher, MAX_K, NUM_CHAR_CLASSES};
+pub use fuzzy::levenshtein_within;
+pub use fuzzy::dfa::{ParametricDFA, QueryMatcher, MAX_K, NUM_CHAR_CLASSES};
+pub use scoring::ranking::compare_results;
 pub use scoring::{field_type_score, get_field_type};
 pub use search::{search, search_unified};
+pub use search::tiered::{
+    fuzzy_search_vocabulary, prefix_search_vocabulary, FuzzyMatch, SearchResult as TierSearchResult,
+    TierSearcher,
+};
 pub use types::{
     find_section_at_offset, validate_sections, FieldBoundary, FieldType, HybridIndex, IndexMode,
-    InvertedIndex, Posting, PostingList, SearchDoc, SearchIndex, SearchResult, SearchSource,
-    Section, SuffixEntry, UnifiedIndex, UnionIndex, VocabSuffixEntry,
+    InvertedIndex, MatchType, Posting, PostingList, SearchDoc, SearchIndex, SearchResult,
+    SearchSource, Section, SuffixEntry, UnifiedIndex, UnionIndex, VocabSuffixEntry,
 };
-pub use union::{
+pub use search::union::{
     build_union_index, build_union_index_parallel, search_union, search_union_grouped,
     UnionIndexInput,
 };
-pub use utils::normalize;
-pub use verified::{
+pub use util::normalize::normalize;
+pub use verify::{
     InvariantError, SortedSuffixArray, ValidatedInvertedIndex, ValidatedPosting,
     ValidatedPostingList, ValidatedSuffixEntry, VerificationReport, WellFormedIndex,
 };
 
 // Internal re-exports for tests
 #[cfg(test)]
-pub(crate) use utils::common_prefix_len;
+pub(crate) use util::normalize::common_prefix_len;
 
 #[cfg(test)]
 mod tests {
@@ -176,6 +196,7 @@ mod tests {
                         end: normalized_title.len(),
                         field_type: FieldType::Title,
                         section_id: None,
+                        heading_level: 0,
                     },
                     FieldBoundary {
                         doc_id,
@@ -183,6 +204,7 @@ mod tests {
                         end: total_len,
                         field_type: FieldType::Content,
                         section_id: None,
+                        heading_level: 0,
                     },
                 ]
             })
@@ -231,8 +253,9 @@ mod tests {
                     doc_id,
                     start,
                     end: offset,
-                    field_type: field_type.clone(),
+                    field_type: *field_type,
                     section_id: None,
+                    heading_level: 0,
                 });
             }
 
@@ -478,7 +501,9 @@ mod tests {
 
         #[test]
         fn fuzzy_search_tolerates_small_typos(texts in text_vec_strategy()) {
-            use crate::hybrid::{build_hybrid_index, search_hybrid};
+            use crate::index::hybrid::build_hybrid_index;
+            use crate::search::hybrid::search_hybrid;
+            use crate::is_stop_word;
 
             let normalized: Vec<String> = texts.iter().map(|text| normalize(text)).collect();
             let docs: Vec<SearchDoc> = normalized
@@ -501,6 +526,8 @@ mod tests {
                 let text = &index.texts[doc_id];
                 let word = text.split(' ').next().unwrap_or("");
                 prop_assume!(word.len() > 3);
+                // Skip stop words - they get filtered during indexing
+                prop_assume!(!is_stop_word(word));
                 let typo = mutate_term(word);
                 prop_assume!(typo != word);
                 let results = search_hybrid(&index, &typo);
@@ -546,4 +573,5 @@ mod tests {
             prop_assert!(title_score > content_score);
         }
     }
+
 }

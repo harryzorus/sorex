@@ -1,8 +1,15 @@
-//! Property testing derivation from Lean specifications.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Property testing from Lean annotations.
 //!
-//! This module provides macros to automatically generate proptest strategies
-//! and property tests from Lean annotations, enabling runtime verification
-//! that the Rust implementation satisfies its formal specifications.
+//! `#[derive(LeanProptest)]` reads the bounds you specified for Lean and
+//! generates proptest strategies that respect them. `#[lean_proptest]` wraps
+//! your test in a harness that runs thousands of cases.
+//!
+//! The payoff: you wrote Lean specs, now you get tests for free. The fuzzer
+//! hammers the Rust with random inputs satisfying your invariants. Not a
+//! proof, but it catches bugs that proofs didn't think to look for.
 //!
 //! # Architecture
 //!

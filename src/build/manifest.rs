@@ -1,3 +1,13 @@
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Input manifest parsing for the build pipeline.
+//!
+//! The manifest tells us which documents to index and how to filter them. You can
+//! build a single index with all documents (`include: "*"`) or multiple filtered
+//! indexes (`include: {"category": "engineering"}`). The filtering happens at
+//! build time, not query time, so you pay the cost once.
+
 use serde::Deserialize;
 use std::collections::HashMap;
 

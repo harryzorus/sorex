@@ -254,7 +254,7 @@ sorex = { version = "0.2.5", features = ["wasm", "serde_json"] }
 
 | Feature | Description |
 |---------|-------------|
-| `wasm` | WebAssembly bindings (SorexSearcher, SorexProgressiveIndex) |
+| `wasm` | WebAssembly bindings (SorexSearcher with callback-based search) |
 | `serde_json` | JSON serialization for build pipeline integration |
 | `embed-wasm` | Embed WASM runtime in CLI binary |
 

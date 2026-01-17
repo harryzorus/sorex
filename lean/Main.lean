@@ -1,10 +1,15 @@
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
+
 /-
-  Main.lean - Entry point for proof checking.
+  Entry point for proof checking.
 
-  Run with: lake build
-  Or: lake exe check_proofs
+  Run `lake build` to verify all proofs compile. Run `lake exe check_proofs`
+  for a status report on what's proven vs. what's axiomatized.
 
-  This executable reports on the proof status of the search verification.
+  The proven theorems are the ones where Lean says "yes, that's true."
+  The pending ones are marked with `sorry`. They're conjectures until
+  someone fills in the proof.
 -/
 
 import SearchVerified

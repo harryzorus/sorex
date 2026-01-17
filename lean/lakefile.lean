@@ -1,3 +1,6 @@
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
+
 import Lake
 open Lake DSL
 

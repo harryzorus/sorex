@@ -1,5 +1,5 @@
 [package]
-name = "sift-fuzz"
+name = "sorex-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -11,7 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-[dependencies.sift]
+[dependencies.sorex]
 path = ".."
 
 # Prevent this from interfering with workspaces
@@ -34,3 +34,67 @@ path = "fuzz_targets/heading_id_validation.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "binary_parsing"
+path = "fuzz_targets/binary_parsing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "levenshtein_matching"
+path = "fuzz_targets/levenshtein_matching.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "search_queries"
+path = "fuzz_targets/search_queries.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "varint_codec"
+path = "fuzz_targets/varint_codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vocabulary_codec"
+path = "fuzz_targets/vocabulary_codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "section_table_codec"
+path = "fuzz_targets/section_table_codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bucketed_ranking"
+path = "fuzz_targets/bucketed_ranking.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "score_calculation"
+path = "fuzz_targets/score_calculation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tier_merging"
+path = "fuzz_targets/tier_merging.rs"
+test = false
+doc = false
+bench = false
+

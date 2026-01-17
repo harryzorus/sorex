@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "documents": ["eng-0.json", "eng-1.json", "adv-0.json"],
+  "indexes": {
+    "engineering": { "include": { "category": "engineering" } },
+    "all": { "include": "*" }
+  }
+}

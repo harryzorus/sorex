@@ -1,7 +1,16 @@
-//! Implementation of the `#[derive(LeanSpec)]` macro.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! The `#[derive(LeanSpec)]` macro.
 //!
-//! This macro generates Lean 4 structure definitions from Rust structs,
-//! including field type translations and optional well-formedness predicates.
+//! Point it at a Rust struct, get a Lean 4 structure definition. Field types
+//! translate mechanically: `usize` → `Nat`, `Vec<T>` → `Array T`, references
+//! get stripped. Add `#[lean(invariant = "...")]` and you get a well-formedness
+//! predicate too.
+//!
+//! The generated Lean lives in a const string. Copy-paste into your `.lean`
+//! files. The translation is conservative: unclear mappings fail at compile
+//! time, not silently.
 
 use proc_macro::TokenStream;
 use quote::quote;

@@ -1,3 +1,17 @@
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Parallel document loading and index construction.
+//!
+//! The expensive parts of building a search index are (1) loading JSON files
+//! from disk and (2) building the inverted index. Both are embarrassingly parallel.
+//! Rayon makes this trivial: `par_iter()` over documents, `par_iter()` over indexes.
+//!
+//! The one tricky bit is the Levenshtein DFA. It's expensive to build (~50ms) but
+//! identical for all indexes. We build it once, wrap it in an `Arc`, and share it
+//! across parallel index builds. Same for the embedded WASM bytes when that feature
+//! is enabled.
+
 use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -8,10 +22,10 @@ use std::sync::Arc;
 use indicatif::ProgressBar;
 
 use crate::binary::{encode_docs_binary, BinaryLayer, DocMetaInput, PostingEntry};
-use crate::dict_table::{extract_href_prefix, DictTables};
-use crate::fst_index::build_fst_index;
-use crate::levenshtein_dfa::ParametricDFA;
-use crate::{FieldBoundary, FieldType, SearchDoc};
+use crate::util::dict_table::{extract_href_prefix, DictTables};
+use crate::index::fst::build_fst_index;
+use crate::fuzzy::dfa::ParametricDFA;
+use crate::{FieldBoundary, SearchDoc};
 
 use super::{Document, InputManifest, NormalizedIndexDefinition};
 
@@ -256,11 +270,7 @@ fn build_single_index(
             // Filter boundaries by fields criteria if specified
             if let Some(ref field_filter) = def.fields {
                 // Check if this boundary's field type is in the allowed list
-                let field_name = match boundary.field_type {
-                    FieldType::Title => "title",
-                    FieldType::Heading => "heading",
-                    FieldType::Content => "content",
-                };
+                let field_name = boundary.field_type.as_str();
 
                 if !field_filter.iter().any(|f| f == field_name) {
                     continue; // Skip this boundary
@@ -271,14 +281,15 @@ fn build_single_index(
                 doc_id: new_id,
                 start: boundary.start,
                 end: boundary.end,
-                field_type: boundary.field_type.clone(),
+                field_type: boundary.field_type,
                 section_id: boundary.section_id.clone(),
+                heading_level: boundary.heading_level,
             });
         }
     }
 
     // 4. Build index using existing verified code
-    let fst_index = build_fst_index(search_docs.clone(), texts, all_boundaries);
+    let fst_index = build_fst_index(search_docs.clone(), texts, all_boundaries.clone());
 
     // 5. Convert to binary format
     let vocabulary = fst_index.vocabulary;
@@ -290,16 +301,31 @@ fn build_single_index(
         .map(|e| (e.term_idx as u32, e.offset as u32))
         .collect();
 
-    // Build section_id table (deduplicated)
-    let mut section_id_set: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for pl in fst_index.inverted_index.terms.values() {
-        for posting in &pl.postings {
-            if let Some(ref id) = posting.section_id {
-                section_id_set.insert(id.clone());
-            }
+    // Build section_id table (deduplicated) and extract heading levels
+    let mut section_id_map_with_levels: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+
+    // Extract heading levels from field boundaries for each section_id
+    for boundary in &all_boundaries {
+        if let Some(ref section_id) = boundary.section_id {
+            // Use the heading_level from the boundary (always set by build pipeline)
+            let heading_level = boundary.heading_level;
+
+            // Store the minimum heading level for each section_id
+            // (section heading level determines bucket rank for all content under it)
+            section_id_map_with_levels
+                .entry(section_id.clone())
+                .and_modify(|h| {
+                    // Keep the lowest value (Title=0 < h1=1 < h2=2 < ... for better rank)
+                    if heading_level < *h {
+                        *h = heading_level;
+                    }
+                })
+                .or_insert(heading_level);
         }
     }
-    let section_table: Vec<String> = section_id_set.into_iter().collect();
+
+    let mut section_table: Vec<String> = section_id_map_with_levels.keys().cloned().collect();
+    section_table.sort(); // Sort for deterministic ordering
 
     // Create section_id -> index mapping (1-indexed, 0 = no section)
     let section_idx_map: std::collections::HashMap<&str, u32> = section_table
@@ -308,7 +334,7 @@ fn build_single_index(
         .map(|(i, id)| (id.as_str(), (i + 1) as u32))
         .collect();
 
-    // Convert inverted index to postings array with section_id indices
+    // Convert inverted index to postings array with section_id indices and heading levels
     let postings: Vec<Vec<PostingEntry>> = vocabulary
         .iter()
         .map(|term| {
@@ -320,15 +346,16 @@ fn build_single_index(
                     pl.postings
                         .iter()
                         .map(|p| {
-                            let section_idx = p
-                                .section_id
-                                .as_ref()
-                                .and_then(|id| section_idx_map.get(id.as_str()))
-                                .copied()
-                                .unwrap_or(0);
+                            let section_idx = if let Some(ref section_id) = p.section_id {
+                                section_idx_map.get(section_id.as_str()).copied().unwrap_or(0)
+                            } else {
+                                0 // No section = title
+                            };
+
                             PostingEntry {
                                 doc_id: p.doc_id as u32,
                                 section_idx,
+                                heading_level: p.heading_level,
                             }
                         })
                         .collect()
@@ -358,8 +385,14 @@ fn build_single_index(
     let mut dict_table_bytes = Vec::new();
     dict_tables.encode(&mut dict_table_bytes);
 
-    // Build binary layer with section_id support (v6)
-    let mut layer = BinaryLayer::build_v6(
+    // Get WASM bytes (embedded when feature enabled, empty otherwise)
+    #[cfg(feature = "embed-wasm")]
+    let wasm_bytes_vec = (*wasm_bytes).clone();
+    #[cfg(not(feature = "embed-wasm"))]
+    let wasm_bytes_vec: Vec<u8> = Vec::new();
+
+    // Build binary layer with v7 features: section_id support, heading_level, dict tables, WASM
+    let mut layer = BinaryLayer::build_v7(
         &vocabulary,
         &suffix_array,
         &postings,
@@ -367,19 +400,13 @@ fn build_single_index(
         search_docs.len(),
         (*lev_dfa_bytes).clone(),
         docs_bytes,
+        wasm_bytes_vec,
     )
     .expect("failed to build binary layer");
 
     // Add dictionary tables to the layer (v7 compression)
     layer.header.dict_table_len = dict_table_bytes.len() as u32;
     layer.dict_table_bytes = dict_table_bytes;
-
-    // Add embedded WASM (v7) - always embedded when feature is enabled
-    #[cfg(feature = "embed-wasm")]
-    {
-        layer.header.wasm_len = wasm_bytes.len() as u32;
-        layer.wasm_bytes = (*wasm_bytes).clone();
-    }
 
     let bytes = layer.to_bytes().expect("failed to serialize binary layer");
 
@@ -414,10 +441,8 @@ mod tests {
 
     #[test]
     fn test_filter_all() {
-        let docs = vec![
-            make_doc(0, "a", Some("eng")),
-            make_doc(1, "b", Some("adventures")),
-        ];
+        let docs = [make_doc(0, "a", Some("eng")),
+            make_doc(1, "b", Some("adventures"))];
 
         let def = NormalizedIndexDefinition {
             include: IncludeFilter::All,
@@ -430,11 +455,9 @@ mod tests {
 
     #[test]
     fn test_filter_by_category() {
-        let docs = vec![
-            make_doc(0, "a", Some("eng")),
+        let docs = [make_doc(0, "a", Some("eng")),
             make_doc(1, "b", Some("adventures")),
-            make_doc(2, "c", Some("eng")),
-        ];
+            make_doc(2, "c", Some("eng"))];
 
         let mut filters = std::collections::HashMap::new();
         filters.insert("category".to_string(), "eng".to_string());
@@ -451,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_doc_id_remapping() {
-        let docs = vec![make_doc(0, "a", None), make_doc(1, "b", None)];
+        let docs = [make_doc(0, "a", None), make_doc(1, "b", None)];
 
         let def = NormalizedIndexDefinition {
             include: IncludeFilter::All,

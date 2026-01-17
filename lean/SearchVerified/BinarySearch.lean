@@ -1,8 +1,13 @@
-/-
-  BinarySearch.lean - Binary search correctness specifications.
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
 
-  The search algorithm finds all suffixes that start with the query string
-  using binary search to find the first match, then walking forward.
+/-
+  Binary search correctness.
+
+  Find the first suffix ≥ the query, then walk forward collecting matches.
+  The invariant: if a matching suffix exists, binary search lands in the
+  right range. Proving this requires showing the suffix array is sorted,
+  which is why `SuffixArray.lean` exists.
 -/
 
 import SearchVerified.Types
@@ -108,5 +113,88 @@ axiom search_correct
     (entry : SuffixEntry) :
     entry ∈ search sa texts query →
       (∃ i : Nat, i < sa.size ∧ sa[i]! = entry ∧ isMatch texts entry query = true)
+
+/-! ## Prefix Search via Vocabulary Suffix Array
+
+The vocabulary suffix array enables O(log k) queryPrefix search where k is vocabulary size.
+This is used in Tier 2 of the three-tier search to find terms matching a query queryPrefix.
+
+### Algorithm
+1. Binary search to find first vocabulary suffix matching the queryPrefix
+2. Walk forward to collect all matching terms
+3. Return term indices (not suffix positions)
+-/
+
+/-- Vocabulary suffix entry: position within a term -/
+structure VocabSuffixEntry where
+  /-- Index into vocabulary array -/
+  term_idx : Nat
+  /-- Offset within the term string -/
+  offset : Nat
+  deriving DecidableEq, Repr, Inhabited
+
+/-- Get suffix string at a vocabulary suffix entry -/
+def vocabSuffixAt (vocabulary : Array String) (entry : VocabSuffixEntry) : String :=
+  if h : entry.term_idx < vocabulary.size then
+    (vocabulary[entry.term_idx]).drop entry.offset
+  else
+    ""
+
+/-- Prefix search finds first matching suffix via binary search.
+
+    Returns the smallest index where the vocabulary suffix starts with the queryPrefix.
+    If no match exists, returns vocab_sa.size. -/
+def queryPrefix_search_start (vocab_sa : Array VocabSuffixEntry) (vocabulary : Array String)
+    (queryPrefix : String) : Nat :=
+  go 0 vocab_sa.size
+where
+  go (lo hi : Nat) : Nat :=
+    if lo >= hi then lo
+    else
+      let mid := (lo + hi) / 2
+      if h : mid < vocab_sa.size then
+        let suffix := vocabSuffixAt vocabulary vocab_sa[mid]
+        if suffix < queryPrefix then
+          go (mid + 1) hi
+        else
+          go lo mid
+      else lo
+  termination_by hi - lo
+
+/-- All terms before queryPrefix_search_start don't match.
+
+    Verified by: prop_queryPrefix_search_lower_bound in tests/property.rs -/
+axiom queryPrefix_search_lower_bound (vocab_sa : Array VocabSuffixEntry)
+    (vocabulary : Array String) (queryPrefix : String) :
+    ∀ i : Nat, i < queryPrefix_search_start vocab_sa vocabulary queryPrefix →
+      i < vocab_sa.size →
+      let entry := vocab_sa[i]!
+      let suffix := vocabSuffixAt vocabulary entry
+      ¬queryPrefix.isPrefixOf suffix
+
+/-- Term at queryPrefix_search_start matches (if in bounds).
+
+    Verified by: prop_queryPrefix_search_finds_match in tests/property.rs -/
+axiom queryPrefix_search_finds_match (vocab_sa : Array VocabSuffixEntry)
+    (vocabulary : Array String) (queryPrefix : String) :
+    let start := queryPrefix_search_start vocab_sa vocabulary queryPrefix
+    start < vocab_sa.size →
+      let entry := vocab_sa[start]!
+      let suffix := vocabSuffixAt vocabulary entry
+      queryPrefix.isPrefixOf suffix ∨ suffix < queryPrefix
+
+/-- Prefix search returns all matching terms.
+
+    For any term that starts with the queryPrefix, there exists an entry
+    in the vocabulary suffix array with offset 0 that points to it.
+
+    Verified by: prop_queryPrefix_search_complete in tests/property.rs -/
+axiom queryPrefix_search_complete (vocab_sa : Array VocabSuffixEntry)
+    (vocabulary : Array String) (queryPrefix : String) (term_idx : Nat) :
+    term_idx < vocabulary.size →
+    queryPrefix.isPrefixOf vocabulary[term_idx]! →
+    ∃ i : Nat, i < vocab_sa.size ∧
+      vocab_sa[i]!.term_idx = term_idx ∧
+      vocab_sa[i]!.offset = 0
 
 end SearchVerified.BinarySearch

@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc a2af39a93f11dd909dfcb1c388a5d83eeb669a87e74ed1b6ead5355110c57456 # shrinks to corpus = ["af"], query = "bf"
 cc 40e1beb8794a541c1f2fa2b2bf46e476f7fd926052e721292bab384a612a9233 # shrinks to corpus = ["if"]
+cc db82625595b5c27f4cac4f692834dfbf2fc319c95c539ad0d53c88fcc2513310 # shrinks to corpus = ["a0 3x", "3x"]

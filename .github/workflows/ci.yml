@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Skip deno-runtime (v8 linking issues on Linux) and embed-wasm (requires WASM built first)
+  CI_FEATURES: "parallel,unicode-normalization,serde_json"
+
+jobs:
+  # Fast checks first - fail fast on obvious issues
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check
+        run: cargo check --all-targets --no-default-features --features $CI_FEATURES
+      - name: cargo clippy
+        run: cargo clippy --all-targets --no-default-features --features $CI_FEATURES -- -D warnings
+
+  # Unit tests (fast)
+  test-unit:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run unit tests
+        run: cargo test --test unit --no-default-features --features $CI_FEATURES
+
+  # Property tests (medium)
+  test-property:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run property tests
+        run: cargo test --test property --no-default-features --features $CI_FEATURES -- --test-threads=1
+
+  # Integration tests
+  test-integration:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run integration tests
+        run: cargo test --test integration --no-default-features --features $CI_FEATURES
+
+  # Search tests
+  test-search:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run search tests
+        run: cargo test --test search --no-default-features --features $CI_FEATURES
+
+  # Build system tests
+  test-build:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run build tests
+        run: cargo test --test build --no-default-features --features $CI_FEATURES
+
+  # Library tests (doc tests, inline tests)
+  test-lib:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run library tests
+        run: cargo test --lib --no-default-features --features $CI_FEATURES
+
+  # WASM build verification
+  wasm:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build WASM (single-threaded)
+        run: cargo build --lib --target wasm32-unknown-unknown --no-default-features --features wasm-single-threaded
+
+  # Lean 4 proofs
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: ''
+          lake-package-directory: lean
+      - name: Cache Lake packages
+        uses: actions/cache@v4
+        with:
+          path: lean/.lake
+          key: lean-lake-${{ hashFiles('lean/lakefile.lean', 'lean/lean-toolchain') }}
+          restore-keys: lean-lake-
+      - name: Build Lean proofs
+        run: cd lean && lake build

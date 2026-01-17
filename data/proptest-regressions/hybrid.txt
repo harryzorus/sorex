@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a699ed83a900badefadacc354b2679a522afce015c458d2ddda722ee320f5049 # shrinks to boundaries = [FieldBoundary { doc_id: 2, start: 103, end: 104, field_type: Heading, section_id: None }, FieldBoundary { doc_id: 0, start: 0, end: 1, field_type: Title, section_id: None }]
+cc 568d780167f8d9bcb27ef5fc894bac060c61eb63306351b6aa11b07ebe8e87f9 # shrinks to query = "bo", num_docs = 5
+cc 808d6c1af7281098fb1417eb75452cba3791405a120c7ec56da36275c3e7326b # shrinks to query = "ab", num_docs = 5

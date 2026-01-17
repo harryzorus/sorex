@@ -1,0 +1,11 @@
+[package]
+name = "sorex"
+version = "1.0.0"
+
+# Features to enable for WASM builds
+features = ["wasm", "serde_json"]
+
+[dependencies]
+
+[profile.release]
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

@@ -1,22 +1,24 @@
-//! Procedural macros for generating Lean 4 specifications from Rust code.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Procedural macros that generate Lean 4 specs from Rust code.
 //!
-//! This crate provides macros to automatically generate Lean 4 type definitions
-//! and theorem statements from Rust structs and functions, enabling formal
-//! verification of the search algorithm.
+//! The promise: write your types once in Rust, get Lean structures for free.
+//! Annotate with `#[derive(LeanSpec)]` and the macro emits a corresponding
+//! Lean 4 definition. Add `#[lean_verify]` to a function and you get theorem
+//! statements with `sorry` placeholders. The proofs are your job.
 //!
-//! # Architecture
+//! The real trick is `#[lean_proptest_verify]`. It generates both Lean specs
+//! AND executable property tests from the same annotations. If the Lean proof
+//! compiles and the proptests pass, you have reasonable confidence the Rust
+//! matches its formal spec. Not certainty (that would require full verification)
+//! but a good night's sleep.
 //!
-//! The macro system has three layers:
+//! # How it works
 //!
-//! 1. **Specification Generation** (`LeanSpec`, `lean_verify`):
-//!    Generates Lean 4 code from Rust type definitions and function signatures.
-//!
-//! 2. **Property Testing** (`LeanProptest`, `lean_proptest`):
-//!    Generates proptest strategies and property tests from Lean annotations.
-//!
-//! 3. **Runtime Verification**:
-//!    The generated tests verify that the Rust implementation satisfies
-//!    the formal properties specified in the Lean annotations.
+//! 1. **Spec generation**: `LeanSpec` and `lean_verify` emit Lean 4 code
+//! 2. **Test generation**: `LeanProptest` and `lean_proptest` emit proptest harnesses
+//! 3. **Runtime checks**: Generated tests verify the implementation matches the spec
 //!
 //! # Example
 //!

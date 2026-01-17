@@ -1,3 +1,6 @@
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
+
 import Mathlib.Data.List.Lex
 import Mathlib.Data.List.Basic
 import Mathlib.Data.List.Dedup
@@ -77,6 +80,97 @@ inductive FieldType where
   deriving Repr, DecidableEq, Inhabited
 
 /-!
+## MatchType - Fine-grained Match Location Classification
+
+MatchType provides a finer-grained classification than FieldType,
+distinguishing between different heading levels for bucketed ranking.
+
+### Hierarchy (highest to lowest priority)
+- **title**: Document title (heading_level = 0)
+- **section**: Top-level sections (heading_level = 1-2)
+- **subsection**: Mid-level sections (heading_level = 3)
+- **subsubsection**: Deep sections (heading_level = 4)
+- **content**: Body text (heading_level = 5+)
+
+### Bucketed Ranking
+
+Results are first sorted by MatchType, then by score within each bucket.
+This ensures structural hierarchy is respected in search results:
+- A title match always beats a section match
+- A section match always beats a subsection match
+- etc.
+
+See `Scoring.lean` for formal proofs of hierarchy preservation.
+-/
+inductive MatchType where
+  | title        -- heading_level = 0 (document title)
+  | section      -- heading_level = 1-2 (H1, H2)
+  | subsection   -- heading_level = 3 (H3)
+  | subsubsection -- heading_level = 4 (H4)
+  | content      -- heading_level = 5+ (body text)
+  deriving Repr, DecidableEq, Inhabited
+
+instance : Ord MatchType where
+  compare a b := match a, b with
+    | .title, .title => .eq
+    | .title, _ => .lt
+    | _, .title => .gt
+    | .section, .section => .eq
+    | .section, _ => .lt
+    | _, .section => .gt
+    | .subsection, .subsection => .eq
+    | .subsection, _ => .lt
+    | _, .subsection => .gt
+    | .subsubsection, .subsubsection => .eq
+    | .subsubsection, _ => .lt
+    | _, .subsubsection => .gt
+    | .content, .content => .eq
+
+instance : LT MatchType where
+  lt a b := Ord.compare a b == .lt
+
+instance : LE MatchType where
+  le a b := Ord.compare a b != .gt
+
+/--
+Convert heading level to MatchType.
+
+Maps the 0-6 heading level scale to the 5 MatchType variants:
+- Level 0 → title
+- Level 1-2 → section
+- Level 3 → subsection
+- Level 4 → subsubsection
+- Level 5+ → content
+-/
+def MatchType.fromHeadingLevel (level : Nat) : MatchType :=
+  if level == 0 then .title
+  else if level ≤ 2 then .section
+  else if level == 3 then .subsection
+  else if level == 4 then .subsubsection
+  else .content
+
+/-- Lower heading levels map to better (lower) MatchType values.
+    heading_level 0 → Title (best)
+    heading_level 5+ → Content (worst)
+
+    This ensures structural hierarchy is preserved in search ranking.
+
+    Proven by case analysis on heading level buckets:
+    - Level 0 → .title (best)
+    - Level 1-2 → .section
+    - Level 3 → .subsection
+    - Level 4 → .subsubsection
+    - Level 5+ → .content (worst) -/
+theorem MatchType.fromHeadingLevel_monotone (l1 l2 : Nat) (h : l1 ≤ l2) :
+    fromHeadingLevel l1 ≤ fromHeadingLevel l2 := by
+  unfold fromHeadingLevel LE.le instLEMatchType
+  simp only [bne_iff_ne, ne_eq, beq_iff_eq, instLENat]
+  -- Split all if-then-else conditions exhaustively
+  repeat' split
+  -- Handle each resulting goal: simp to clean up, omega for contradictions, decide for concrete
+  all_goals (simp_all <;> first | omega | decide)
+
+/-!
 ## FieldBoundary - Text Region Marker
 
 Marks the start and end of a field type region within a document.
@@ -102,6 +196,8 @@ structure FieldBoundary where
   field_type : FieldType
   /-- Section ID for deep linking (None for title, Some for heading/content) -/
   section_id : Option String := none
+  /-- Heading level for hierarchical ranking (0=title, 1-4=H1-H4, 5+=content) -/
+  heading_level : Nat := 0
   deriving Repr, DecidableEq
 
 /--
@@ -217,5 +313,32 @@ def SearchIndex.WellFormed (idx : SearchIndex) : Prop :=
   idx.lcp.size = idx.suffix_array.size ∧
   (∀ i : Fin idx.suffix_array.size,
     SuffixEntry.WellFormed idx.suffix_array[i] idx.texts)
+
+/-!
+## Field Boundary Ordering
+
+Field boundaries are sorted by (doc_id, start) to enable O(log n) lookup
+via binary search. This is an optimization added in v0.3.
+
+### Sort Order
+For boundaries b1 and b2:
+- If b1.doc_id < b2.doc_id, then b1 comes first
+- If b1.doc_id = b2.doc_id, then the one with smaller start comes first
+
+This ordering enables binary search to find the first boundary for any doc_id.
+-/
+
+/-- Ordering comparison for field boundaries: (doc_id, start) lexicographic -/
+def FieldBoundary.lt (b1 b2 : FieldBoundary) : Prop :=
+  b1.doc_id < b2.doc_id ∨ (b1.doc_id = b2.doc_id ∧ b1.start < b2.start)
+
+/-- Field boundaries are sorted by (doc_id, start) -/
+def FieldBoundary.Sorted (boundaries : Array FieldBoundary) : Prop :=
+  ∀ i j : Nat, (hi : i < boundaries.size) → (hj : j < boundaries.size) → i < j →
+    FieldBoundary.lt boundaries[i] boundaries[j] ∨ boundaries[i] = boundaries[j]
+
+/-- An offset falls within a boundary -/
+def FieldBoundary.containsOffset (b : FieldBoundary) (doc_id offset : Nat) : Prop :=
+  b.doc_id = doc_id ∧ b.start ≤ offset ∧ offset < b.«end»
 
 end SearchVerified

@@ -2,12 +2,11 @@
 /target/
 Cargo.lock
 
-# WASM build output (generated, not committed)
+# WASM build output
 /pkg/
 
 # Lean build artifacts
-/lean/.lake/build/
-/lean/.lake/packages/
+/lean/.lake/
 /lean/.elan/
 
 # IDE and editor files
@@ -18,18 +17,19 @@ Cargo.lock
 *~
 .DS_Store
 
-# Test and fuzzing artifacts
+# Test artifacts
 /proptest-regressions/
 /fuzz/target/
 /fuzz/corpus/
 /fuzz/artifacts/
 
-# Benchmark node_modules
-/benches/node_modules/
-bun.lock
+# Mutation testing output (should go to target/, but ignore root just in case)
+/mutants.out/
+/mutants.out.old/
 
-# Generated example data (regenerate with examples/generate-eu-data.sh)
-/examples/eu-countries/*.json
+# Node modules
+node_modules/
+bun.lock
 
 # Coverage reports
 *.profraw
@@ -38,3 +38,18 @@ bun.lock
 
 # Debug files
 *.pdb
+
+# Generated index files (rebuild with `sorex index`)
+**/*.sorex
+**/sorex.js
+**/sorex.js.map
+
+# Playwright
+/tools/test-results/
+/tools/playwright-report/
+
+# Benchmark output (should go to target/, but ignore root just in case)
+/benchmark-results.json
+
+# Claude Code review outputs (inherited from parent project's slash commands)
+.svelte-kit/

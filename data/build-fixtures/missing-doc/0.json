@@ -1,0 +1,14 @@
+{
+  "id": 0,
+  "slug": "existing-doc",
+  "title": "Existing Document",
+  "excerpt": "This document exists",
+  "href": "/docs/existing",
+  "type": "doc",
+  "category": "engineering",
+  "text": "Existing Document This is a document that exists.",
+  "fieldBoundaries": [
+    { "docId": 0, "start": 0, "end": 17, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 0, "start": 18, "end": 50, "fieldType": "content", "sectionId": "main", "headingLevel": 2 }
+  ]
+}

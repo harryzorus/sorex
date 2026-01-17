@@ -1,8 +1,13 @@
-/-
-  SuffixArray.lean - Suffix array correctness specifications.
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
 
-  The key invariant: suffix_array is sorted lexicographically by suffix text.
-  This enables O(log n) binary search for any query string.
+/-
+  Suffix array sortedness.
+
+  The suffix array must be sorted lexicographically. If it's not, binary
+  search lands in the wrong place and misses matches. The Rust implementation
+  uses a radix-based O(n) construction; this module specifies what "sorted"
+  means and proves transitivity of the ordering.
 -/
 
 import SearchVerified.Types

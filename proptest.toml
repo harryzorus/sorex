@@ -1,0 +1,11 @@
+# Proptest configuration
+# Store regression files in data/ folder to keep root clean
+
+[output]
+failure_persistence = "data/proptest-regressions"
+
+[profile]
+# Increased from default 256 to 1000 for better coverage
+cases = 1000
+# Max shrinking iterations for failures
+max_shrink_iters = 10000

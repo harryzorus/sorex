@@ -1,0 +1,18 @@
+[package]
+name = "sorex-kani-proofs"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Exclude from parent workspace
+[workspace]
+
+# This is a standalone crate for Kani model checking proofs.
+# It extracts the critical encoding functions and proves them
+# without pulling in the complex dependencies from the main crate.
+
+[dependencies]
+# No dependencies - just the pure algorithms
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

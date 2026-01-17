@@ -1,214 +1,223 @@
 ---
 title: TypeScript API
-description: WASM bindings for browser-based search with SorexSearcher and SorexProgressiveIndex
-order: 4
+description: WASM bindings for browser-based search
+order: 20
 ---
 
 # TypeScript API
 
-Sorex provides WebAssembly bindings for browser-based search. Two classes are exported:
+This is the complete reference for Sorex's browser API. The surface is intentionally small: one loader function, one searcher class with four methods. Everything else is handled internally.
 
-- **`SorexSearcher`**: Load a `.sorex` file and search immediately (recommended)
-- **`SorexProgressiveIndex`**: Progressive layer loading for faster initial results
+The key design choice is callback-based progressive search. Instead of awaiting a single result, you receive updates after each search tier completes. This lets you show fast exact matches immediately while slower fuzzy matches continue in the background. The `SearchResult` type includes tier information so you can style results differently by match quality.
+
+For how the loader works internally (streaming compilation, thread pool setup), see [Runtime](runtime.md). For framework patterns and race condition handling, see [Integration](integration.md).
+
+---
 
 ## Installation
 
-The WASM module is embedded in `.sorex` files built with `sorex index`. The generated `sorex-loader.js` handles initialization:
+The WASM module is embedded in `.sorex` files built with `sorex index`. The generated `sorex.js` handles initialization:
 
 ```typescript
-import { loadSorex } from './sorex-loader.js';
+import { loadSorex } from './sorex.js';
 
-const searcher = await loadSorex('/search/index-868342ec.sorex');
-const results = searcher.search('query');
+const searcher = await loadSorex('/search/index.sorex');
+
+// Search with callbacks for progressive updates
+searcher.search('query', 10, {
+  onUpdate: (results) => renderResults(results),  // Called after each tier
+  onFinish: (results) => renderResults(results)   // Called when complete
+});
 ```
+
+---
+
+## Public API
+
+The loader exports only what you need:
+
+```typescript
+export { loadSorex, type SorexSearcher, type SearchResult };
+```
+
+---
+
+## loadSorex
+
+Loads a `.sorex` file and returns a ready-to-use searcher.
+
+```typescript
+async function loadSorex(url: string): Promise<SorexSearcher>
+```
+
+**Features:**
+- Extracts embedded WASM from `.sorex` file
+- Compiles WASM during download (streaming compilation)
+- Initializes thread pool for parallel search (when available)
+- Falls back gracefully to single-threaded mode in Safari
+
+**Example:**
+
+```typescript
+const searcher = await loadSorex('/search/index.sorex');
+```
+
+---
 
 ## SorexSearcher
 
-The main search interface. Load a `.sorex` file and search immediately.
+The main search interface.
 
-### Constructor
+### search
 
-```typescript
-new SorexSearcher(bytes: Uint8Array): SorexSearcher
-```
-
-Creates a searcher from binary `.sorex` format. Document metadata is embedded in v5+ files.
-
-### Methods
-
-#### `search(query: string, limit?: number): SearchResult[]`
-
-Three-tier search: exact → prefix → fuzzy.
+Three-tier progressive search: exact -> prefix -> fuzzy.
 
 ```typescript
-const results = searcher.search('auto-tuning', 10);
+search(
+  query: string,
+  limit: number,
+  callback?: {
+    onUpdate?: (results: SearchResult[]) => void,
+    onFinish?: (results: SearchResult[]) => void
+  }
+): void
 ```
 
-**Returns:** Array of `SearchResult` objects:
+**Parameters:**
+- `query` - Search query string
+- `limit` - Maximum number of results
+- `callback.onUpdate` - Called after each tier completes with accumulated results
+- `callback.onFinish` - Called when all tiers complete with final sorted results
+
+**Example:**
 
 ```typescript
-interface SearchResult {
-  href: string;      // URL path (e.g., "/posts/2024/01/my-post")
-  title: string;     // Document title
-  excerpt: string;   // Short description
-  sectionId: string | null;  // Section ID for deep linking (e.g., "introduction")
-  tier: 1 | 2 | 3;   // Match tier (1=exact, 2=prefix, 3=fuzzy)
-  score: number;     // Ranking score (higher = better)
-}
+// Basic usage - just get final results
+searcher.search('auto-tuning', 10, {
+  onFinish: (results) => console.log(results)
+});
+
+// Progressive UI updates
+searcher.search('kernel', 10, {
+  onUpdate: (results) => {
+    // Called after T1, T2, T3 with accumulated results
+    renderResults(results);
+  },
+  onFinish: (results) => {
+    // Final sorted results
+    renderResults(results);
+  }
+});
 ```
 
-**Multi-token queries:**
-- `"Auto-tuning"` tokenizes to `["auto", "tuning"]`
-- Documents matching all tokens rank higher (2x bonus)
-- Scores sum across matching tokens
-
-#### `search_tier1_exact(query: string, limit?: number): SearchResult[]`
-
-Exact word matches only (O(1) inverted index lookup). Use for streaming search first phase.
-
-```typescript
-const exactResults = searcher.search_tier1_exact('rust', 10);
-```
-
-#### `search_tier2_prefix(query: string, excludeIds: number[], limit?: number): SearchResult[]`
-
-Prefix matches only (O(log k) binary search). Pass doc IDs from tier 1 to avoid duplicates.
-
-```typescript
-const tier1Ids = exactResults.map(r => r.docId);
-const prefixResults = searcher.search_tier2_prefix('rust', tier1Ids, 10);
-```
-
-#### `search_tier3_fuzzy(query: string, excludeIds: number[], limit?: number): SearchResult[]`
-
-Fuzzy matches only (O(vocabulary) via Levenshtein DFA). Pass doc IDs from tiers 1+2.
-
-```typescript
-const allIds = [...tier1Ids, ...prefixResults.map(r => r.docId)];
-const fuzzyResults = searcher.search_tier3_fuzzy('rust', allIds, 10);
-```
-
-#### `doc_count(): number`
+### docCount
 
 Returns the number of indexed documents.
 
-#### `vocab_size(): number`
+```typescript
+docCount(): number
+```
+
+### vocabSize
 
 Returns the number of unique terms in the vocabulary.
 
-#### `has_docs(): boolean`
-
-Returns `true` if document metadata is loaded.
-
-#### `has_vocabulary(): boolean`
-
-Returns `true` if vocabulary is available for fuzzy search.
-
-#### `free(): void`
-
-Releases WASM memory. Also available via `Symbol.dispose` for `using` syntax.
-
-## SorexProgressiveIndex
-
-Progressive layer loading for faster initial results. Load titles first (~5KB), then headings (~20KB), then content (~200KB).
-
-### Constructor
-
 ```typescript
-new SorexProgressiveIndex(manifest: DocManifest[]): SorexProgressiveIndex
+vocabSize(): number
 ```
 
-Creates an index with document metadata only. Layers must be loaded separately.
+### free
 
-### Methods
-
-#### `load_layer_binary(layerName: string, bytes: Uint8Array): void`
-
-Load a search layer from binary format. Valid layer names: `"titles"`, `"headings"`, `"content"`.
+Releases WASM memory. Call when done with the searcher (important in SPAs).
 
 ```typescript
-const titlesBytes = await fetch('/search/titles.bin').then(r => r.arrayBuffer());
-index.load_layer_binary('titles', new Uint8Array(titlesBytes));
+free(): void
 ```
 
-#### `search(query: string, options?: SearchOptions): SearchResult[]`
+---
 
-Search across all loaded layers.
-
-```typescript
-interface SearchOptions {
-  limit?: number;     // Max results (default: 10)
-  fuzzy?: boolean;    // Enable fuzzy matching (default: true)
-  prefix?: boolean;   // Enable prefix matching (default: true)
-  boost?: {           // Custom field boosts
-    title?: number;   // Default: 100
-    heading?: number; // Default: 10
-    content?: number; // Default: 1
-  };
-}
-
-const results = index.search('query', { limit: 5, boost: { title: 200 } });
-```
-
-#### `search_exact(query: string, options?: SearchOptions): SearchResult[]`
-
-Exact matches only via inverted index (O(1)). Use for streaming search first phase.
-
-#### `search_expanded(query: string, excludeIds: number[], options?: SearchOptions): SearchResult[]`
-
-Prefix/fuzzy matches via suffix array (O(log k)). Pass doc IDs from `search_exact()`.
-
-#### `suggest(partial: string, limit?: number): string[]`
-
-Get autocomplete suggestions for a partial query.
+## SearchResult
 
 ```typescript
-const suggestions = index.suggest('aut', 5);
-// Returns: ["auto", "automatic", "automate", ...]
-```
-
-#### `has_layer(layerName: string): boolean`
-
-Check if a specific layer is loaded.
-
-#### `loaded_layers(): string[]`
-
-Get list of loaded layer names.
-
-#### `is_fully_loaded(): boolean`
-
-Returns `true` if all three layers are loaded.
-
-#### `doc_count(): number`
-
-Returns the number of indexed documents.
-
-## Streaming Search Pattern
-
-For progressive UX, show exact matches immediately, then expand:
-
-```typescript
-async function* streamingSearch(searcher: SorexSearcher, query: string) {
-  // Phase 1: Exact matches (instant)
-  const exact = searcher.search_tier1_exact(query, 10);
-  if (exact.length > 0) yield { tier: 1, results: exact };
-
-  // Phase 2: Prefix matches
-  const exactIds = exact.map(r => r.docId);
-  const prefix = searcher.search_tier2_prefix(query, exactIds, 10);
-  if (prefix.length > 0) yield { tier: 2, results: prefix };
-
-  // Phase 3: Fuzzy matches
-  const allIds = [...exactIds, ...prefix.map(r => r.docId)];
-  const fuzzy = searcher.search_tier3_fuzzy(query, allIds, 10);
-  if (fuzzy.length > 0) yield { tier: 3, results: fuzzy };
+interface SearchResult {
+  href: string;              // URL path (e.g., "/posts/2024/01/my-post")
+  title: string;             // Document title
+  excerpt: string;           // Short description
+  sectionId: string | null;  // Section ID for deep linking
+  tier: 1 | 2 | 3;           // Match tier (1=exact, 2=prefix, 3=fuzzy)
+  matchType: number;         // Match type (0=title, 1=section, 2+=content)
 }
 ```
+
+---
+
+## Complete Example
+
+```typescript
+import { loadSorex } from './sorex.js';
+
+class SearchController {
+  private searcher: SorexSearcher | null = null;
+  private currentSearchId = 0;
+
+  async init(indexUrl: string) {
+    this.searcher = await loadSorex(indexUrl);
+    console.log(`Loaded ${this.searcher.docCount()} documents`);
+  }
+
+  search(query: string) {
+    if (!this.searcher || query.length < 2) {
+      this.renderResults([]);
+      return;
+    }
+
+    // Increment search ID to handle race conditions
+    const searchId = ++this.currentSearchId;
+
+    this.searcher.search(query, 10, {
+      onUpdate: (results) => {
+        if (searchId !== this.currentSearchId) return;
+        this.renderResults(results);
+      },
+      onFinish: (results) => {
+        if (searchId !== this.currentSearchId) return;
+        this.renderResults(results);
+      }
+    });
+  }
+
+  private renderResults(results: SearchResult[]) {
+    const html = results.map(r => {
+      const url = r.sectionId ? `${r.href}#${r.sectionId}` : r.href;
+      return `<a href="${url}"><h3>${r.title}</h3><p>${r.excerpt}</p></a>`;
+    }).join('');
+    document.getElementById('results')!.innerHTML = html;
+  }
+
+  destroy() {
+    this.searcher?.free();
+    this.searcher = null;
+  }
+}
+```
+
+---
+
+## API Summary
+
+| Method | Description |
+|--------|-------------|
+| `loadSorex(url)` | Load .sorex file, returns Promise<SorexSearcher> |
+| `search(query, limit, callback?)` | Progressive search with callbacks |
+| `docCount()` | Number of indexed documents |
+| `vocabSize()` | Number of vocabulary terms |
+| `free()` | Release WASM memory |
+
+---
 
 ## See Also
 
-- [Integration Guide](./integration.md) - Full integration examples with React, Svelte, vanilla JS
-- [CLI Reference](./cli.md) - Building indexes with `sorex index`
-- [Rust API](./rust.md) - Library API for building indexes programmatically
-- [Architecture](./architecture.md) - Index format internals
-- [Algorithms](./algorithms.md) - How three-tier search works
+- [Runtime](runtime.md) - Streaming compilation, threading, progressive search internals
+- [Integration](integration.md) - React, Svelte, vanilla JS examples
+- [CLI Reference](cli.md) - Building indexes with `sorex index`
+- [Troubleshooting](troubleshooting.md) - Common issues

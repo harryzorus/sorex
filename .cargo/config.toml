@@ -1,2 +1,25 @@
 [alias]
 xtask = "run --package xtask --"
+
+# Enable WASM features for parallel search and SIMD
+# - simd128: SIMD operations (used by portable_simd for fast string matching)
+# - atomics: Atomic operations (required for SharedArrayBuffer/threading)
+# - bulk-memory: Bulk memory operations (required for rayon parallel iteration)
+# - shared-memory: Required for SharedArrayBuffer (must be passed to linker)
+# - max-memory: Shared memory requires explicit max (1GB here)
+# - import-memory: Import memory from JS host for sharing between threads
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-Ctarget-feature=+simd128,+atomics,+bulk-memory",
+  "-Clink-arg=--shared-memory",
+  "-Clink-arg=--max-memory=1073741824",
+  "-Clink-arg=--import-memory",
+  "-Clink-arg=--export=__wasm_init_tls",
+  "-Clink-arg=--export=__tls_size",
+  "-Clink-arg=--export=__tls_align",
+  "-Clink-arg=--export=__tls_base",
+]
+
+# Use nightly features for unstable WASM threading
+[unstable]
+build-std = ["panic_abort", "std"]

@@ -1,31 +1,80 @@
-# Sorex Documentation
+# Overview
 
-A formally verified search engine for static sites. Substring matching, typo tolerance, and streaming results.
+Sorex is an attempt to bring database-class search to the browser, with a formal verification twist.
 
-## Reading Order
+Most client-side search libraries make tradeoffs that hurt relevance. They tokenize aggressively, losing substring matches. They skip fuzzy matching for speed. They rank by term frequency alone, ignoring document structure. The result: users search for "auth" and don't find "authentication."
 
-**Getting started?** Begin with [Integration](integration.md) for setup, then [Architecture](architecture.md) for how it works.
+The project started from a personal frustration: searching "auth" and not finding "authentication", or making a typo and getting zero results. As a non-native English speaker, I wanted search that tolerates the mistakes I actually make.
 
-**Contributing?** Read [Verification](verification.md) first, then [Contributing](contributing.md).
+Database search engines like Elasticsearch and Meilisearch solve these problems with suffix arrays, inverted indexes, and sophisticated ranking. But they require servers. Sorex asks: what if we brought those techniques to a 153KB WASM binary that runs entirely in the browser?
+
+The formal verification twist: search ranking is notoriously hard to get right. Sorex encodes its ranking invariants in Lean 4 and proves them mathematically correct. When we say "title matches rank above content matches," that's not just tested. It's proven.
+
+---
+
+## Reading Paths
+
+**New to Sorex?** Start here:
+1. [Quick Start](quickstart.md) - Get search running in 5 minutes
+2. [Integration](integration.md) - Framework examples (React, vanilla JS)
+3. [Troubleshooting](troubleshooting.md) - When things go wrong
+
+**Building an API?**
+- [TypeScript API](typescript.md) - Browser WASM bindings
+- [Rust API](rust.md) - Library for index building
+- [CLI Reference](cli.md) - Command-line tools
+
+**Understanding the internals?**
+- [Runtime](runtime.md) - Browser execution model
+- [Architecture](architecture.md) - System design
+- [Binary Format](binary-format.md) - .sorex file specification
+- [Algorithms](algorithms.md) - Suffix arrays, Levenshtein DFA
+
+**Evaluating performance?**
+- [Benchmarks](benchmarks.md) - Comparisons with other libraries
+
+**Contributing?**
+- [Verification](verification.md) - Formal verification rules
+- [Contributing](contributing.md) - Development workflow
+
+---
 
 ## Documentation
 
+### Getting Started
+
 | Guide | Description |
 |-------|-------------|
-| [Integration](integration.md) | WebAssembly setup, browser integration, and Web Worker usage. Get search running in 5 minutes. |
-| [Architecture](architecture.md) | Three-tier search pipeline (exact → prefix → fuzzy), binary format, and design decisions. |
-| [Benchmarks](benchmarks.md) | Why Sorex finds "auth" in "authentication" when lunr.js, FlexSearch, and Fuse.js can't. |
-| [Algorithms](algorithms.md) | Suffix arrays, Levenshtein automata, and vocabulary-based indexing. For the curious. |
-| [Verification](verification.md) | How Lean 4 proofs guarantee ranking correctness. What we prove, what we trust. |
-| [Contributing](contributing.md) | Development workflow, Lean/Rust synchronization, and the verification checklist. |
+| [Quick Start](quickstart.md) | Get search running in 5 minutes |
+| [Integration](integration.md) | Framework examples for React, Svelte, vanilla JS |
+| [Troubleshooting](troubleshooting.md) | Solutions to common issues |
 
 ### API Reference
 
 | Reference | Description |
 |-----------|-------------|
-| [CLI](cli.md) | Build indexes with `sorex index`, inspect with `sorex inspect`. |
-| [TypeScript](typescript.md) | Browser API: `SorexSearcher`, `SorexProgressiveIndex`, streaming search. |
-| [Rust](rust.md) | Library API: `build_index`, `search_hybrid`, verification types. |
+| [TypeScript API](typescript.md) | Browser WASM bindings: `loadSorex`, `SorexSearcher` |
+| [Rust API](rust.md) | Library API: `build_index`, verification types |
+| [CLI Reference](cli.md) | Build with `sorex index`, inspect with `sorex inspect` |
+
+### Internals
+
+| Guide | Description |
+|-------|-------------|
+| [Runtime](runtime.md) | Streaming compilation, threading, progressive search |
+| [Architecture](architecture.md) | System design, three-tier search, formal verification |
+| [Binary Format](binary-format.md) | .sorex v12 wire format specification |
+| [Algorithms](algorithms.md) | Suffix arrays, Levenshtein automata, Block PFOR |
+
+### Evidence & Contributing
+
+| Guide | Description |
+|-------|-------------|
+| [Benchmarks](benchmarks.md) | Performance comparisons with other search libraries |
+| [Verification](verification.md) | How Lean 4 proofs guarantee ranking correctness |
+| [Contributing](contributing.md) | Development workflow, verification checklist |
+
+---
 
 ## Quick Start
 
@@ -44,8 +93,42 @@ sorex index --input ./docs --output ./search
 ### 3. Search in the browser
 
 ```typescript
-import { loadSorex } from './sorex-loader.js';
+import { loadSorex } from './sorex.js';
 
 const searcher = await loadSorex('./index.sorex');
-const results = searcher.search('query', 10);
+searcher.search('query', 10, {
+  onUpdate: (results) => console.log(results),  // Progressive updates
+  onFinish: (results) => console.log(results)   // Final results
+});
+```
+
+---
+
+## Project Structure
+
+```
+sorex/
+├── src/
+│   ├── lib.rs              # Library entry point
+│   ├── main.rs             # CLI entry point
+│   ├── types.rs            # Core data structures
+│   ├── binary/             # .sorex format encoding/decoding
+│   ├── build/              # Index construction pipeline
+│   ├── cli/                # CLI display and output
+│   ├── fuzzy/              # Levenshtein DFA, edit distance
+│   ├── index/              # Suffix arrays, inverted index
+│   ├── runtime/            # WASM bindings, Deno runtime
+│   ├── scoring/            # Ranking (Lean-verified)
+│   ├── search/             # Three-tier search
+│   ├── util/               # SIMD, compression
+│   └── verify/             # Runtime contracts
+├── lean/                   # Lean 4 formal specifications
+│   └── SearchVerified/     # Proofs for ranking, binary search
+├── data/
+│   ├── datasets/           # Benchmark datasets (CUTLASS, PyTorch)
+│   └── e2e/                # End-to-end tests
+├── benches/                # Criterion benchmarks
+├── tests/                  # Integration and property tests
+├── fuzz/                   # Fuzz testing targets
+└── docs/                   # This documentation
 ```

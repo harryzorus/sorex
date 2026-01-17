@@ -1,3 +1,13 @@
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Document input format for the build pipeline.
+//!
+//! Each document is a JSON file with normalized searchable text and field
+//! boundaries that tell us what's a title, what's a heading, and what's content.
+//! The `field_boundaries` array is the key innovation: it lets us score matches
+//! differently based on where they appear without duplicating text.
+
 use crate::FieldBoundary;
 use serde::{Deserialize, Serialize};
 

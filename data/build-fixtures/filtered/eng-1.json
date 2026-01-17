@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "slug": "wasm-guide",
+  "title": "WebAssembly Guide",
+  "excerpt": "Building for the web",
+  "href": "/docs/wasm-guide",
+  "type": "doc",
+  "category": "engineering",
+  "text": "WebAssembly Guide Building fast web applications with WASM.",
+  "fieldBoundaries": [
+    { "docId": 1, "start": 0, "end": 17, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 1, "start": 18, "end": 61, "fieldType": "content", "sectionId": "intro", "headingLevel": 2 }
+  ]
+}

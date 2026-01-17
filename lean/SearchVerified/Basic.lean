@@ -1,7 +1,11 @@
-/-
-  Basic.lean - Common utilities and lemmas for search verification.
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
 
-  This module provides shared infrastructure used across all proof modules.
+/-
+  Common utilities and lemmas.
+
+  The boring stuff that everything else depends on: arithmetic properties,
+  array bounds, the lemmas you prove once and import everywhere.
 -/
 
 import SearchVerified.Types
@@ -23,7 +27,7 @@ theorem Nat.sub_le_sub_of_le {a b c : Nat} (h : a ≤ b) : a - c ≤ b - c := by
 /-- Array element at valid index is in the list representation -/
 theorem Array.getElem_mem_toList {α : Type _} (a : Array α) (i : Nat) (h : i < a.size) :
     a[i] ∈ a.toList := by
-  simp only [Array.toList, Array.getElem_eq_toList_getElem]
+  simp only [Array.toList, Array.getElem_eq_getElem_toList]
   exact List.getElem_mem h
 
 /-- Array size equals list length -/

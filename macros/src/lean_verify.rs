@@ -1,7 +1,13 @@
-//! Implementation of the `#[lean_verify]` attribute macro.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! The `#[lean_verify]` attribute macro.
 //!
-//! This macro generates Lean 4 function specifications and theorem statements
-//! from Rust functions, including preconditions, postconditions, and properties.
+//! Add `requires` and `ensures` clauses to a function, get a Lean theorem
+//! statement with `sorry` where the proof should go. The mechanical part
+//! is automated. The proof is your problem.
+//!
+//! This is the seam between "I think this is correct" and "I can prove it."
 
 use proc_macro::TokenStream;
 use quote::quote;

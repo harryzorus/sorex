@@ -1,3 +1,6 @@
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
+
 /-
   InvertedIndex.lean - Inverted index correctness specifications.
 
@@ -14,7 +17,7 @@
 import SearchVerified.Types
 import SearchVerified.Basic
 
-namespace SearchVerified.InvertedIndex
+namespace SearchVerified.Inverted
 
 open SearchVerified
 
@@ -27,6 +30,12 @@ structure Posting where
   doc_id : Nat
   offset : Nat
   field_type : FieldType
+  /-- Section ID for deep linking -/
+  section_id : Option String := none
+  /-- Heading level for hierarchical ranking (0=title, 1-4=H1-H4, 5+=content) -/
+  heading_level : Nat := 0
+  /-- Pre-computed score (scaled by 10 for Nat) -/
+  score : Nat := 0
   deriving DecidableEq, Repr, Inhabited
 
 /-- A posting is well-formed if it points to a valid location -/
@@ -216,4 +225,4 @@ axiom hybrid_search_consistent
       entry.doc_id = doc_id ∧
       ((idx.suffix_index.texts[entry.doc_id]!).drop entry.offset |>.take word.length) = word
 
-end SearchVerified.InvertedIndex
+end SearchVerified.Inverted

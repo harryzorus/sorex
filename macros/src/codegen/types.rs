@@ -1,7 +1,13 @@
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
 //! Type translation from Rust to Lean 4.
 //!
-//! This module provides utilities for converting Rust type syntax
-//! into equivalent Lean 4 type expressions.
+//! `usize` → `Nat`, `Vec<T>` → `Array T`, references stripped. Tuples become
+//! products. A field named `end` becomes `«end»` (guillemets escape keywords).
+//!
+//! The mapping is mechanical and predictable. If something doesn't translate,
+//! the macro fails. No silent type mismatches sneaking through.
 
 use syn::Type;
 

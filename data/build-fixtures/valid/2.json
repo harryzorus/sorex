@@ -1,0 +1,14 @@
+{
+  "id": 2,
+  "slug": "travel-europe",
+  "title": "Traveling in Europe",
+  "excerpt": "Adventures abroad",
+  "href": "/posts/travel-europe",
+  "type": "post",
+  "category": "adventures",
+  "text": "Traveling in Europe My adventures across the continent.",
+  "fieldBoundaries": [
+    { "docId": 2, "start": 0, "end": 19, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 2, "start": 20, "end": 55, "fieldType": "content", "sectionId": "intro", "headingLevel": 2 }
+  ]
+}

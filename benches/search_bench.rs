@@ -178,6 +178,9 @@ fn make_doc(id: usize) -> SearchDoc {
         excerpt: format!("This is excerpt for document {}", id),
         href: format!("/posts/2024/{:02}/post-{}", (id % 12) + 1, id),
         kind: "post".to_string(),
+        category: None,
+        author: None,
+        tags: vec![],
     }
 }
 
@@ -220,18 +223,24 @@ fn generate_blog_corpus(size: &BlogSize) -> (Vec<SearchDoc>, Vec<String>, Vec<Fi
             start: 0,
             end: title_end,
             field_type: FieldType::Title,
+            section_id: None,
+            heading_level: 0,
         });
         boundaries.push(FieldBoundary {
             doc_id: i,
             start: title_end + 1,
             end: excerpt_end,
             field_type: FieldType::Heading, // Treat excerpt as heading for scoring
+            section_id: None,
+            heading_level: 2,
         });
         boundaries.push(FieldBoundary {
             doc_id: i,
             start: excerpt_end + 1,
             end: full_text.len(),
             field_type: FieldType::Content,
+            section_id: None,
+            heading_level: 0,
         });
 
         texts.push(full_text);

@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "slug": "rust-advanced",
+  "title": "Advanced Rust Patterns",
+  "excerpt": "Deep dive into ownership",
+  "href": "/docs/rust-advanced",
+  "type": "doc",
+  "category": "engineering",
+  "text": "Advanced Rust Patterns Deep dive into ownership and lifetimes.",
+  "fieldBoundaries": [
+    { "docId": 1, "start": 0, "end": 22, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 1, "start": 23, "end": 62, "fieldType": "content", "sectionId": "ownership", "headingLevel": 2 }
+  ]
+}

@@ -1,4 +1,7 @@
-//! Code generation utilities for translating Rust to Lean 4.
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Code generation utilities for Rust→Lean 4 translation.
 
 pub mod types;
 

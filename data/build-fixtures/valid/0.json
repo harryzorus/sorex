@@ -1,0 +1,14 @@
+{
+  "id": 0,
+  "slug": "rust-intro",
+  "title": "Introduction to Rust",
+  "excerpt": "Learn Rust basics",
+  "href": "/docs/rust-intro",
+  "type": "doc",
+  "category": "engineering",
+  "text": "Introduction to Rust Learn the basics of Rust programming language.",
+  "fieldBoundaries": [
+    { "docId": 0, "start": 0, "end": 20, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 0, "start": 21, "end": 68, "fieldType": "content", "sectionId": "intro", "headingLevel": 2 }
+  ]
+}

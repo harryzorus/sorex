@@ -1,0 +1,14 @@
+{
+  "id": 2,
+  "slug": "hiking-trip",
+  "title": "Mountain Hiking Trip",
+  "excerpt": "Adventures in the alps",
+  "href": "/posts/hiking-trip",
+  "type": "post",
+  "category": "adventures",
+  "text": "Mountain Hiking Trip A journey through the alpine trails.",
+  "fieldBoundaries": [
+    { "docId": 2, "start": 0, "end": 20, "fieldType": "title", "sectionId": null, "headingLevel": 0 },
+    { "docId": 2, "start": 21, "end": 58, "fieldType": "content", "sectionId": "intro", "headingLevel": 2 }
+  ]
+}

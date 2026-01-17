@@ -1,291 +1,150 @@
 # Sorex
 
-A full-text search engine with fuzzy and substring search, built to power search on [harryzorus.xyz](https://harryzorus.xyz). Fast enough for real-time search, small enough for browsers, correct enough to prove it.
-
-## What This Is
-
-Sorex builds compact binary search indices (`.sorex` format) that load instantly in WebAssembly. The algorithms are formally verified in Lean 4—not "we wrote some tests" verified, but mathematically proven correct.
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                                                                          │
-│   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐            │
-│   │ Content │ ──► │  Index  │ ──► │  WASM   │ ──► │ Browser │            │
-│   │  .json  │     │  .sorex │     │  153KB  │     │  <1ms   │            │
-│   └─────────┘     └─────────┘     └─────────┘     └─────────┘            │
-│                                                                          │
-│   Your docs       Binary index    Loads anywhere  Instant search         │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
----
+Full-text search that runs in the browser. Handles typos, finds substrings, proves its ranking correct.
 
 ## Why This Exists
 
-The client-side search space is crowded—FlexSearch, Lunr.js, Fuse.js, MiniSearch, and others all solve this problem. Sorex makes a deliberate tradeoff: **search capability and correctness over payload size and query syntax**.
+The JavaScript ecosystem has excellent search libraries. [Lunr](https://lunrjs.com/) pioneered client-side search with a clean API and tiny footprint. [Fuse.js](https://fusejs.io/) handles fuzzy matching elegantly. [FlexSearch](https://github.com/nextapps-de/flexsearch) is remarkably fast for its size. [MiniSearch](https://lucaong.github.io/minisearch/) balances features and bundle weight thoughtfully. [Pagefind](https://pagefind.app/) solves the static site case beautifully.
 
-Most libraries use inverted indexes that can't find "script" inside "typescript". They're small and fast, but users expect substring matching. Sorex uses suffix arrays and Levenshtein automata to deliver true fuzzy and substring search—at the cost of a larger WASM bundle (153KB gzipped vs 6-25KB for pure JS alternatives).
+These libraries make smart tradeoffs. They prioritize small bundles, zero build steps, broad compatibility, and simple APIs. Bundle size matters, build complexity has costs, and most sites don't need substring search.
 
-The other bet: formal verification. Instead of hoping the ranking logic is correct, Sorex proves it in Lean 4.
+I wanted something different for my static site. Two things kept bothering me. First, I wanted "auth" to find "authentication": substring matching, not just word boundaries. Second, I mistype words constantly. English isn't my first language, and I'm forever writing "optimzer" instead of "optimizer" or "asyncronous" instead of "asynchronous". One or two characters off, and search returns nothing, even when the answer is right there.
 
-- **Suffix array** for O(log n) prefix search—find "auth" in "authentication" instantly
-- **Levenshtein automata** (Schulz-Mihov 2002) for typo-tolerant fuzzy matching without per-query DFA construction
-- **Block PFOR compression** for posting lists—smaller than JSON, faster to decode
-- **Formal verification** via Lean 4 proofs—binary search actually works, scoring hierarchy is actually correct
+I've used Lean 4 at work for database internals, the kind of code where a bug means corrupted data. It got me thinking: what if I applied the same approach to smaller projects? Write specifications, let AI agents generate implementations, prove the results correct. Move fast and prove things. Sorex is my test case for that idea. The core invariants (ranking, suffix array ordering, binary search bounds, section boundaries) are specified in Lean. When an agent generates code, the proofs constrain what it can produce. If the implementation violates an invariant, it won't compile. The specifications become guardrails.
 
-The result: a ~150KB WASM bundle that handles real-time search on thousands of documents.
+Sorex trades simplicity for capability. It requires a build step. It uses WebAssembly. The index format is custom. In exchange: suffix arrays for true substring search, a Levenshtein DFA that tolerates my typos, and mathematical guarantees that title matches always rank above content matches.
 
----
+Different problems, different tools. If Lunr or MiniSearch solve your problem, use them. They're battle-tested and dependency-free. Sorex exists for the cases where substring search and typo tolerance matter more than simplicity.
 
-## Features
+## What It Does
 
-### Search Capabilities
-
-| Feature | How It Works | Performance |
-|---------|--------------|-------------|
-| **Exact Match** | Inverted index with skip pointers | O(1) term lookup |
-| **Prefix Search** | Binary search on vocabulary suffix array | O(log k) where k = vocabulary size |
-| **Fuzzy Search** | Precomputed Levenshtein DFA traversal | ~2ms for d=1, ~5ms for d=2 |
-| **Field Ranking** | Title > Heading > Content, mathematically proven | Compile-time verified |
-| **Deep Linking** | Section IDs in results for #anchor navigation | Zero overhead |
-
-### Binary Format (`.sorex` v7)
-
-The index format is designed for fast memory-mapped loading. **v7 is self-contained**: a single `.sorex` file includes the search index, document metadata, and the WASM runtime.
-
-- **Vocabulary**: Length-prefixed UTF-8, lexicographically sorted
-- **Suffix Array**: Term index + offset pairs for prefix search
-- **Inverted Index**: Block PFOR-encoded posting lists with delta compression
-- **Levenshtein DFA**: Precomputed automata for d=1 and d=2 (zero runtime cost)
-- **Section Table**: IDs for deep linking into document sections
-- **CRC32 Footer**: Integrity verification
-
-Total overhead: ~15% on top of raw text (vs 2-3x for JSON-based indices).
-
-### Formal Verification
-
-Three layers of defense against bugs:
+Search runs in three tiers:
 
 ```
-LEAN PROOFS          ──► Mathematical truth (5 proven theorems, 18 axioms)
-TYPE-LEVEL WRAPPERS  ──► Compile-time invariants (ValidatedSuffixEntry, etc.)
-RUNTIME CONTRACTS    ──► Debug-mode assertions (zero-cost in release)
+Tier 1: Exact     →  Hash lookup          →  ~2μs
+Tier 2: Prefix    →  Suffix array search  →  ~10μs
+Tier 3: Fuzzy     →  Levenshtein DFA      →  ~50μs
 ```
 
-The field scoring hierarchy is *proven*—Title always beats Heading, Heading always beats Content, regardless of position boosts. Binary search bounds are *proven*—results contain all matches and only matches.
+Results stream as each tier completes. Users see exact matches immediately while fuzzy search runs in the background. The index is a single `.sorex` file (~150KB gzipped) containing the WASM runtime and all the search data. Load it, call `search()`, done.
 
----
+```javascript
+import { loadSorex } from './sorex.js';
+
+const searcher = await loadSorex('./index.sorex');
+searcher.search('authentication', 10, {
+  onUpdate: (results) => renderResults(results),
+  onFinish: (results) => console.log('done:', results.length)
+});
+```
+
+## The Verification Story
+
+Proofs are only as good as their axioms. I learned this the hard way.
+
+- **Lean proofs** for core invariants: ranking, search bounds, section boundaries. If it compiles, it's correct. No amount of clever testing beats that.
+- **Kani proofs** for panic-freedom: the varint parser is proven safe for ANY input, not just tested inputs. Malformed `.sorex` files can't crash the runtime.
+- **Oracle tests** for complex algorithms: SAIS, binary search, and Levenshtein are compared against simple reference implementations. If they disagree, the simple one is right.
+- **Property tests** to check the implementation matches the spec. The proofs assume suffix arrays are sorted; proptest makes sure they actually are.
+- **Mutation testing** to verify tests catch bugs. CI fails if detection rate drops below 60%.
+- **Fuzz tests** for the bugs that would otherwise wake you at 3am: overflows, malformed input, the parser choking on bytes that should never exist.
+
+Each layer catches what the others miss. The combination sleeps better than I do.
 
 ## Installation
-
-### Homebrew (macOS)
-
-```bash
-brew tap harryzorus/sorex
-brew install sorex
-```
-
-### Cargo
 
 ```bash
 cargo install sorex
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/harryzorus/sorex.git
-cd sorex
-cargo build --profile release-native
-```
-
-### Debian/Ubuntu
-
-```bash
-cargo install cargo-deb
-cargo deb --profile release-native --install
-```
-
----
-
 ## Usage
 
-### Build an Index
+Build an index from JSON documents:
 
 ```bash
-# Build index from a directory of JSON documents
-sorex index --input ./docs --output ./search-output
-
-# Inspect an existing index
-sorex inspect ./search-output/index-*.sorex
-
-# Build with demo HTML page
-sorex index --input ./docs --output ./search-output --demo
+sorex index --input ./docs --output ./search
+sorex inspect ./search/index-*.sorex
 ```
 
-### Input Directory Format
+Input format is one JSON file per document:
 
-Sorex reads a directory containing a `manifest.json` and per-document JSON files:
-
-```
-docs/
-├── manifest.json          # Index configuration
-├── getting-started.json   # Document files
-├── installation.json
-└── api-reference.json
-```
-
-**manifest.json:**
-```json
-{
-  "version": 1,
-  "documents": ["getting-started.json", "installation.json", "api-reference.json"]
-}
-```
-
-**Per-document JSON:**
 ```json
 {
   "id": 0,
-  "slug": "getting-started",
   "title": "Getting Started",
-  "excerpt": "Learn how to set up...",
   "href": "/docs/getting-started",
-  "type": "doc",
-  "category": "documentation",
-  "text": "Getting Started Learn how to set up your first project...",
+  "text": "Getting Started This guide covers...",
   "fieldBoundaries": [
-    { "start": 0, "end": 15, "fieldType": "title", "sectionId": null },
+    { "start": 0, "end": 15, "fieldType": "title" },
     { "start": 16, "end": 100, "fieldType": "content", "sectionId": "intro" }
   ]
 }
 ```
 
-### Browser Integration
-
-The `.sorex` file is self-contained with embedded WASM. Use the generated `sorex-loader.js`:
-
-```javascript
-import { loadSorex } from './sorex-loader.js';
-
-// Load index (extracts and initializes WASM automatically)
-const searcher = await loadSorex('./index-a1b2c3d4.sorex');
-
-// Search
-const results = searcher.search('query', 10);
-
-// Results include sectionId for deep linking
-results.forEach(r => {
-  const url = r.sectionId ? `${r.href}#${r.sectionId}` : r.href;
-  console.log(`${r.title}: ${url}`);
-});
-
-// Free when done (optional - uses FinalizationRegistry)
-searcher.free();
-```
-
-The loader is fully self-contained with no external dependencies. Multiple `.sorex` files with different WASM versions can coexist on the same page.
-
----
-
-## Performance
-
-Benchmarks on typical blog content (~50 docs, ~100KB text):
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Index build | ~10ms | Includes suffix array, inverted index, DFA |
-| Index load (WASM) | ~5ms | Memory-mapped, minimal parsing |
-| Exact search | <0.1ms | Inverted index lookup |
-| Prefix search | <0.5ms | Binary search on vocabulary |
-| Fuzzy search (d=1) | ~2ms | DFA traversal, no construction |
-| Fuzzy search (d=2) | ~5ms | Larger automaton |
-
-Comparison with alternatives (100 documents, 500KB text):
-
-| Library | Index Size | Query Time | Bundle Size |
-|---------|------------|------------|-------------|
-| **Sorex** | 85KB | <1ms | 153KB |
-| Lunr.js | 240KB | 15ms | 8KB |
-| FlexSearch | 180KB | 3ms | 22KB |
-| Fuse.js | N/A | 30ms | 24KB |
-
----
+The `fieldBoundaries` tell the ranker where titles, headings, and content live in the text. Section IDs enable deep linking. Search results can point to `#intro` instead of just the page.
 
 ## Architecture
 
-The codebase is organized around what things *do*, not what they *are*:
-
 ```
-sorex/
-├── src/
-│   ├── types.rs          # Core data structures
-│   ├── index.rs          # Suffix array construction
-│   ├── search.rs         # Binary search implementation
-│   ├── scoring.rs        # Field ranking (verified in Lean)
-│   ├── levenshtein.rs    # Edit distance computation
-│   ├── levenshtein_dfa.rs # Parametric automata (Schulz-Mihov)
-│   ├── inverted.rs       # Inverted index + posting lists
-│   ├── binary.rs         # .sorex format encoding/decoding
-│   ├── wasm.rs           # WebAssembly bindings
-│   ├── verified.rs       # Type-level invariant wrappers
-│   └── contracts.rs      # Runtime debug assertions
-│
-├── lean/
-│   └── SearchVerified/   # Lean 4 specifications and proofs
-│       ├── Types.lean
-│       ├── SuffixArray.lean
-│       ├── BinarySearch.lean
-│       ├── Scoring.lean
-│       └── Levenshtein.lean
-│
-├── tests/
-│   ├── invariants.rs     # Lean theorem verification
-│   ├── property.rs       # Property-based tests (proptest)
-│   └── integration.rs    # End-to-end tests
-│
-└── docs/
-    ├── architecture.md   # Binary format, algorithm details
-    ├── algorithms.md     # Deep dive into suffix arrays, DFAs
-    └── integration.md    # WASM integration guide
+src/
+├── binary/         .sorex format (varint, delta encoding, CRC32)
+├── index/          Suffix array (SA-IS), inverted index
+├── search/         Three-tier pipeline, deduplication
+├── scoring/        Field weights, match type ranking
+├── fuzzy/          Levenshtein DFA for typo tolerance
+└── verify/         Runtime contracts, type-level invariants
+
+lean/SearchVerified/
+├── Scoring.lean    Field dominance proofs
+├── TieredSearch.lean
+└── ...
+
+kani-proofs/        Panic-freedom proofs (varint parsing)
+
+tests/property/
+├── oracles.rs      Reference implementations for differential testing
+└── ...
+
+fuzz/fuzz_targets/
+├── search_queries.rs
+├── binary_parsing.rs
+└── ...
 ```
 
----
+The Lean modules mirror the Rust structure. When I change a scoring constant in Rust, the build fails until I update the corresponding Lean definition and verify the proofs still hold. Kani proves the binary parser can't panic on any input. Oracle tests compare optimized algorithms against simple references.
 
-## Verification
+## Performance
 
-Before committing changes, verify everything works:
+On a typical docs site (~300 pages, ~500KB text):
+
+| Operation | Time |
+|-----------|------|
+| Index load | ~5ms |
+| Exact search | ~2μs |
+| Prefix search | ~10μs |
+| Fuzzy search | ~50μs |
+
+The index stays under 200KB gzipped for most sites. WASM adds ~150KB, but that's cached after first load.
+
+## Running the Verification
 
 ```bash
-cargo xtask verify    # Full suite: tests + Lean proofs + constant alignment
-cargo xtask check     # Quick check: tests + clippy (no Lean)
-cargo xtask test      # Just tests
-cargo xtask lean      # Just Lean proofs
-cargo xtask bench     # Benchmarks
+cargo xtask verify    # Full suite: Lean + tests + mutations + E2E (11 steps)
+cargo xtask check     # Quick check: tests + clippy (no Lean/mutations)
+cargo xtask kani      # Kani model checking (~5 min, proves panic-freedom)
+
+# Fuzz testing
+cargo +nightly fuzz run search_queries -- -max_total_time=60
 ```
 
-See [Verification](docs/verification.md) for the formal verification approach and [CLAUDE.md](CLAUDE.md) for AI agent guidelines.
+## Limitations
 
----
+The fuzzy search maxes out at edit distance 2. Three-character typos are on their own. The suffix array is built at index time; no incremental updates, so you rebuild when content changes. Rebuilds are fast though. The indexer parallelizes with map-reduce, so a 300-page site indexes in ~50ms. See [benchmarks](docs/benchmarks.md).
 
-## Documentation
+Index size scales better than you'd expect. Vocabulary grows sublinearly ([Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law)): most new documents reuse existing words, and postings compress well with PFOR and Brotli. A 1,000-page site isn't 10x the size of a 100-page site.
 
-| Document | What's in it |
-|----------|--------------|
-| [Architecture](docs/architecture.md) | Binary format spec, algorithm overview |
-| [Algorithms](docs/algorithms.md) | Suffix arrays, Levenshtein automata, Block PFOR |
-| [Benchmarks](docs/benchmarks.md) | Performance comparisons with FlexSearch, lunr.js, etc. |
-| [Integration](docs/integration.md) | WASM setup, browser integration, TypeScript types |
-| [Verification](docs/verification.md) | Formal verification guide, safe refactoring |
-| [Contributing](docs/contributing.md) | How to contribute without breaking proofs |
-
----
+The Lean proofs cover ranking, not completeness. I haven't proven "every matching document appears in results" - that's a harder theorem, and the property tests haven't found a counterexample yet. Good enough for a blog search. Probably don't use this for medical records.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) for details.
-
----
-
-Built with Rust and verified with Lean 4.
+Apache-2.0

@@ -1,18 +1,26 @@
+// Copyright 2025-present Harīṣh Tummalachērla
+// SPDX-License-Identifier: Apache-2.0
+
+//! Fuzz target for section boundary validation.
+//!
+//! Sections must not overlap, and every offset within a section must map back
+//! to exactly that section. The Lean proofs guarantee non-overlap mathematically;
+//! this fuzz target checks that the Rust implementation honors those guarantees.
+
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use arbitrary::Arbitrary;
-use sift::{Section, validate_sections, find_section_at_offset};
+use sorex::{Section, validate_sections, find_section_at_offset};
 
-/// Fuzz input for section boundary testing
+/// The fuzzer generates arbitrary section configurations.
+///
+/// Fractions scale to doc_length to avoid hardcoding positions.
+/// Most generated configs will be invalid. That's the point.
 #[derive(Debug, Arbitrary)]
 struct SectionInput {
-    /// Document length (capped at 10000 to avoid OOM)
     doc_length: u16,
-    /// Number of sections (capped at 100)
     section_count: u8,
-    /// Section data: (offset_fraction, length_fraction, level)
-    /// Fractions are 0-255, scaled to doc_length
     sections: Vec<(u8, u8, u8)>,
 }
 

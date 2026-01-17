@@ -1,75 +1,16 @@
-# Integration Guide
-
-This guide covers integrating Sorex into your frontend application. Sorex compiles to WebAssembly, so it runs entirely in the browser - no backend required.
-
+---
+title: Integration
+description: Framework examples for React, Svelte, and vanilla JavaScript
+order: 11
 ---
 
-## Quick Start
+# Integration
 
-### 1. Generate a Search Index
+This page covers the practical details of wiring Sorex into a real application. You will learn the input JSON format, how to structure field boundaries for proper ranking, and how section IDs enable deep linking to specific headings. The examples show React and vanilla JavaScript patterns, including race condition handling for live search.
 
-```bash
-# Build index from a directory of JSON documents
-sorex index --input ./docs --output ./search-output
-```
+Most integration issues come from misaligned field boundaries or forgetting to call `free()` in single-page apps. The performance tips section addresses the common mistake of initializing the searcher per query instead of once at startup.
 
-This produces:
-- `index-{hash}.sorex` - Self-contained binary with embedded WASM (~153KB gzipped)
-- `sorex-loader.js` - JavaScript loader module (17KB)
-- `sorex-loader.js.map` - Source map for debugging (optional, 40KB)
-
-### 2. Load and Search
-
-```typescript
-import { loadSorex } from './sorex-loader.js';
-
-// Load index (extracts and initializes WASM automatically)
-const searcher = await loadSorex('./index-a1b2c3d4.sorex');
-
-// Search!
-const results = searcher.search('query', 10);
-
-// Results include section IDs for deep linking
-results.forEach(r => {
-  const url = r.sectionId ? `${r.href}#${r.sectionId}` : r.href;
-  console.log(`${r.title}: ${url}`);
-});
-```
-
-That's it! The loader handles WASM extraction and initialization automatically.
-
----
-
-## Index Formats
-
-Sorex supports two search modes, depending on your needs:
-
-### SorexSearcher (Recommended)
-
-A single `.sorex` binary file containing everything. Best for most use cases.
-
-```typescript
-const searcher = new SorexSearcher(bytes);
-const results = searcher.search('query');
-```
-
-**When to use**: You want simplicity. One file, one load, done.
-
-### SorexProgressiveIndex
-
-Three separate layer files loaded incrementally. Best for very large sites where you want results before the full index loads.
-
-```typescript
-const index = new SorexProgressiveIndex(manifest);
-await index.load_layer_binary('titles', titleBytes);
-// User can start searching now, with title-only results
-
-await index.load_layer_binary('headings', headingBytes);
-await index.load_layer_binary('content', contentBytes);
-// Now all layers are loaded
-```
-
-**When to use**: You have >100 documents and want sub-100ms time to first result.
+For the minimal "just make it work" path, see [Quick Start](quickstart.md). For the full API surface, see [TypeScript API](typescript.md).
 
 ---
 
@@ -77,37 +18,20 @@ await index.load_layer_binary('content', contentBytes);
 
 ### JSON Payload Structure
 
+The `sorex index` command reads per-document JSON files:
+
 ```json
 {
-  "docs": [
-    {
-      "id": 0,
-      "title": "Getting Started",
-      "excerpt": "Learn how to set up your first project...",
-      "href": "/docs/getting-started",
-      "type": "doc"
-    },
-    {
-      "id": 1,
-      "title": "API Reference",
-      "excerpt": "Complete API documentation for all endpoints...",
-      "href": "/docs/api",
-      "type": "doc"
-    }
-  ],
-  "texts": [
-    "Getting Started\n\nLearn how to set up your first project. This guide covers installation, configuration, and your first search query.",
-    "API Reference\n\nComplete API documentation for all endpoints. Covers authentication, rate limits, and error handling."
-  ],
+  "id": 0,
+  "slug": "getting-started",
+  "title": "Getting Started",
+  "excerpt": "Learn how to set up your first project...",
+  "href": "/docs/getting-started",
+  "type": "doc",
+  "text": "Getting Started\n\nLearn how to set up your first project...",
   "fieldBoundaries": [
-    { "docId": 0, "start": 0, "end": 15, "fieldType": "title" },
-    { "docId": 0, "start": 17, "end": 150, "fieldType": "content" },
-    { "docId": 1, "start": 0, "end": 13, "fieldType": "title" },
-    { "docId": 1, "start": 15, "end": 120, "fieldType": "content" }
-  ],
-  "sectionBoundaries": [
-    { "docId": 0, "start": 0, "end": 150, "sectionId": "getting-started" },
-    { "docId": 1, "start": 0, "end": 120, "sectionId": "api-reference" }
+    { "start": 0, "end": 15, "fieldType": "title", "sectionId": null },
+    { "start": 17, "end": 150, "fieldType": "content", "sectionId": "intro" }
   ]
 }
 ```
@@ -120,27 +44,19 @@ await index.load_layer_binary('content', contentBytes);
 | `heading` | 10.0 | Section headings (h2, h3, etc.) |
 | `content` | 1.0 | Body text |
 
-Matches in higher-weighted fields always rank above lower-weighted fields, regardless of position. This is mathematically proven - see [Verification](./verification.md).
+Matches in higher-weighted fields always rank above lower-weighted fields, regardless of position. This is mathematically proven. See [Verification](verification.md).
 
 ### Section IDs for Deep Linking
 
-Section IDs enable linking directly to a heading within a document. When a user clicks a search result, they land at the relevant section, not the top of the page.
+Section IDs enable linking directly to a heading within a document:
 
 ```json
 {
-  "sectionBoundaries": [
-    {
-      "docId": 0,
-      "start": 0,
-      "end": 50,
-      "sectionId": "introduction"
-    },
-    {
-      "docId": 0,
-      "start": 50,
-      "end": 150,
-      "sectionId": "installation"
-    }
+  "fieldBoundaries": [
+    { "start": 0, "end": 50, "fieldType": "heading", "sectionId": "introduction" },
+    { "start": 50, "end": 150, "fieldType": "content", "sectionId": "introduction" },
+    { "start": 150, "end": 200, "fieldType": "heading", "sectionId": "installation" },
+    { "start": 200, "end": 350, "fieldType": "content", "sectionId": "installation" }
   ]
 }
 ```
@@ -148,122 +64,74 @@ Section IDs enable linking directly to a heading within a document. When a user 
 Results include `sectionId` in the response:
 
 ```typescript
-const results = searcher.search('install');
-// results[0].sectionId === "installation"
-
-// Build the deep link URL
-const url = result.sectionId
-  ? `${result.href}#${result.sectionId}`
-  : result.href;
+searcher.search('install', 10, {
+  onFinish: (results) => {
+    // results[0].sectionId === "installation"
+    const url = results[0].sectionId
+      ? `${results[0].href}#${results[0].sectionId}`
+      : results[0].href;
+  }
+});
 ```
 
 ---
 
-## JavaScript API
-
-### SorexSearcher
-
-```typescript
-class SorexSearcher {
-  constructor(bytes: Uint8Array);
-
-  search(query: string, limit?: number): SearchResult[];
-
-  has_docs(): boolean;
-  has_vocabulary(): boolean;
-  vocab_size(): number;
-  doc_count(): number;
-
-  free(): void;  // Release WASM memory
-}
-```
-
-### SorexProgressiveIndex
-
-```typescript
-class SorexProgressiveIndex {
-  constructor(manifest: SearchDoc[]);
-
-  load_layer_binary(name: 'titles' | 'headings' | 'content', bytes: Uint8Array): void;
-
-  has_layer(name: string): boolean;
-  loaded_layers(): string[];
-  is_fully_loaded(): boolean;
-  doc_count(): number;
-
-  search(query: string, options?: SearchOptions): SearchResult[];
-  search_exact(query: string, options?: SearchOptions): SearchResult[];
-  search_expanded(query: string, excludeIds: number[], options?: SearchOptions): SearchResult[];
-
-  suggest(partial: string, limit?: number): string[];
-}
-```
-
-### Types
-
-```typescript
-interface SearchResult {
-  href: string;
-  title: string;
-  excerpt: string;
-  sectionId: string | null;  // For deep linking
-}
-
-interface SearchOptions {
-  limit?: number;    // Max results (default: 10)
-  fuzzy?: boolean;   // Enable fuzzy matching (default: true)
-  prefix?: boolean;  // Enable prefix matching (default: true)
-  boost?: BoostOptions;
-}
-
-interface BoostOptions {
-  title?: number;    // Title field weight (default: 100)
-  heading?: number;  // Heading field weight (default: 10)
-  content?: number;  // Content field weight (default: 1)
-}
-```
-
----
-
-## Framework Integration
+## Framework Examples
 
 ### React
 
-```tsx
-// useSearch.ts
-import { useState, useEffect, useCallback } from 'react';
-import { loadSorex, SorexSearcher, SearchResult } from './sorex-loader.js';
+#### `useSearch.ts`
+
+```typescript
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { loadSorex, type SorexSearcher, type SearchResult } from './sorex.js';
 
 export function useSearch() {
-  const [searcher, setSearcher] = useState<SorexSearcher | null>(null);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const searcherRef = useRef<SorexSearcher | null>(null);
+  const searchIdRef = useRef(0);
 
   useEffect(() => {
     let mounted = true;
     loadSorex('/search/index.sorex').then(s => {
       if (mounted) {
-        setSearcher(s);
+        searcherRef.current = s;
         setIsLoading(false);
       }
     });
     return () => {
       mounted = false;
-      searcher?.free();
+      searcherRef.current?.free();
     };
   }, []);
 
   const search = useCallback((query: string) => {
-    if (!searcher) return;
-    setResults(searcher.search(query, 10));
-  }, [searcher]);
+    if (!searcherRef.current || query.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    // Handle race conditions with search ID
+    const currentSearchId = ++searchIdRef.current;
+
+    searcherRef.current.search(query, 10, {
+      onUpdate: (r) => {
+        if (currentSearchId === searchIdRef.current) setResults(r);
+      },
+      onFinish: (r) => {
+        if (currentSearchId === searchIdRef.current) setResults(r);
+      }
+    });
+  }, []);
 
   return { results, search, isLoading };
 }
 ```
 
-```tsx
-// SearchModal.tsx
+#### `SearchModal.tsx`
+
+```typescript
 import { useSearch } from './useSearch';
 
 function buildResultUrl(result: SearchResult): string {
@@ -298,9 +166,10 @@ export function SearchModal() {
 
 ```html
 <script type="module">
-  import { loadSorex } from './sorex-loader.js';
+  import { loadSorex } from './sorex.js';
 
   let searcher;
+  let currentSearchId = 0;
 
   async function initSearch() {
     searcher = await loadSorex('/search/index.sorex');
@@ -309,8 +178,22 @@ export function SearchModal() {
   }
 
   function handleSearch(e) {
-    const results = searcher.search(e.target.value, 10);
-    renderResults(results);
+    const query = e.target.value;
+    if (query.length < 2) {
+      renderResults([]);
+      return;
+    }
+
+    const searchId = ++currentSearchId;
+
+    searcher.search(query, 10, {
+      onUpdate: (results) => {
+        if (searchId === currentSearchId) renderResults(results);
+      },
+      onFinish: (results) => {
+        if (searchId === currentSearchId) renderResults(results);
+      }
+    });
   }
 
   function buildResultUrl(result) {
@@ -338,75 +221,6 @@ export function SearchModal() {
 
 ---
 
-## Progressive Loading
-
-For large sites, load index layers incrementally to show results faster:
-
-```typescript
-async function initProgressiveSearch() {
-  await init();
-
-  // Load manifest (document metadata only)
-  const manifest = await fetch('/search/manifest.json').then(r => r.json());
-  const index = new SorexProgressiveIndex(manifest);
-
-  // Load titles layer first (~5KB) - enables title-only search
-  const titlesBytes = await fetch('/search/titles.sorex')
-    .then(r => r.arrayBuffer())
-    .then(b => new Uint8Array(b));
-  index.load_layer_binary('titles', titlesBytes);
-
-  // User can start searching now with title results
-  showSearchUI();
-
-  // Load remaining layers in background
-  const [headingsBytes, contentBytes] = await Promise.all([
-    fetch('/search/headings.sorex').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
-    fetch('/search/content.sorex').then(r => r.arrayBuffer()).then(b => new Uint8Array(b))
-  ]);
-
-  index.load_layer_binary('headings', headingsBytes);
-  index.load_layer_binary('content', contentBytes);
-
-  // Now fully loaded
-  return index;
-}
-```
-
-### Streaming Search API
-
-For even faster perceived performance, use the two-phase streaming API:
-
-```typescript
-async function streamingSearch(index: SorexProgressiveIndex, query: string) {
-  // Phase 1: Exact matches (O(1), instant)
-  const exactResults = index.search_exact(query);
-  renderResults(exactResults);  // Show immediately
-
-  // Phase 2: Expanded matches (O(log k), slightly slower)
-  const exactIds = exactResults.map(r => r.doc.id);
-  const expandedResults = index.search_expanded(query, exactIds);
-
-  // Merge and re-render
-  renderResults([...exactResults, ...expandedResults]);
-}
-```
-
----
-
-## Suggestions / Autocomplete
-
-Get term suggestions as the user types:
-
-```typescript
-const suggestions = index.suggest('auth', 5);
-// ["authentication", "authorization", "author", "authenticate", "authored"]
-```
-
-Suggestions are sorted by document frequency (most common terms first).
-
----
-
 ## Performance Tips
 
 <aside class="callout callout-success">
@@ -428,13 +242,13 @@ document.addEventListener('keydown', (e) => {
 // Bad: Initialize per search
 searchButton.onclick = async () => {
   const searcher = await loadSorex('/search/index.sorex');  // Slow!
-  searcher.search(query);
+  searcher.search(query, 10, { onFinish: render });
 };
 ```
 
 ### 2. Debounce Input
 
-For live search, debounce to avoid excessive WASM calls:
+For live search, debounce to avoid excessive calls:
 
 ```typescript
 let debounceTimer: number;
@@ -442,8 +256,7 @@ let debounceTimer: number;
 function handleInput(query: string) {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
-    const results = searcher.search(query, 10);
-    renderResults(results);
+    searcher.search(query, 10, { onFinish: renderResults });
   }, 100);  // 100ms debounce
 }
 ```
@@ -454,10 +267,10 @@ Fetching more results than you display wastes cycles:
 
 ```typescript
 // Good: Request only what you need
-const results = searcher.search(query, 10);
+searcher.search(query, 10, { onFinish: render });
 
-// Bad: Request everything, slice later
-const results = searcher.search(query, 1000).slice(0, 10);
+// Bad: Request everything
+searcher.search(query, 1000, { onFinish: (r) => render(r.slice(0, 10)) });
 ```
 
 ### 4. Preload Index
@@ -477,64 +290,10 @@ async function openSearch() {
 
 ---
 
-## Troubleshooting
-
-<aside class="callout callout-warning">
-<div class="callout-title">Important</div>
-
-Always call `searcher.free()` when done with a searcher in SPAs to prevent memory leaks. See the examples below.
-
-</aside>
-
-### "Failed to parse binary" Error
-
-The index file is corrupted or in the wrong format. Regenerate it:
-
-```bash
-sorex index --input ./docs --output ./search-output
-```
-
-### Empty Results
-
-1. Check that field boundaries are correct (`start < end`)
-2. Verify text offsets match the actual text content
-3. Ensure section IDs are valid (alphanumeric, hyphens, underscores only)
-
-### Search Returns Wrong Section
-
-Section boundaries must cover the entire document without overlapping:
-
-```json
-// Correct: continuous, non-overlapping
-[
-  { "start": 0, "end": 50, "sectionId": "intro" },
-  { "start": 50, "end": 100, "sectionId": "setup" }
-]
-
-// Wrong: gap between 50 and 60
-[
-  { "start": 0, "end": 50, "sectionId": "intro" },
-  { "start": 60, "end": 100, "sectionId": "setup" }
-]
-```
-
-### WASM Memory Leak
-
-Call `free()` when done with a searcher (especially in SPAs):
-
-```typescript
-// On component unmount
-onUnmount(() => {
-  searcher.free();
-});
-```
-
----
-
 ## Related Documentation
 
-- [CLI Reference](./cli.md): Build indexes with `sorex index`
-- [TypeScript API](./typescript.md): Full API reference for WASM bindings
-- [Rust API](./rust.md): Library API for programmatic use
-- [Architecture](./architecture.md): Binary format, algorithm details
-- [Benchmarks](./benchmarks.md): Performance comparisons with other libraries
+- [Quick Start](quickstart.md) - Get running in 5 minutes
+- [TypeScript API](typescript.md) - Full API reference
+- [Runtime](runtime.md) - Threading and streaming internals
+- [Troubleshooting](troubleshooting.md) - Common issues
+- [CLI Reference](cli.md) - Building indexes

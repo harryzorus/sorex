@@ -1,7 +1,10 @@
-/-
-  Section.lean - Formal specifications for section navigation.
+/- Copyright 2025-present Harīṣh Tummalachērla -/
+/- SPDX-License-Identifier: Apache-2.0 -/
 
-  Search results should deep-link to the specific section where the match occurred:
+/-
+  Section navigation for deep linking.
+
+  Search results link to the specific section where the match occurred:
   - Title matches → top of page (`/posts/YYYY/MM/slug`)
   - Heading matches → heading anchor (`/posts/YYYY/MM/slug#heading-id`)
   - Content matches → parent heading anchor
@@ -21,7 +24,7 @@
 
 import SearchVerified.Types
 
-namespace SearchVerified.Section
+namespace SearchVerified.Sections
 
 open SearchVerified
 
@@ -189,4 +192,4 @@ def validSectionList (sections : List Section) (doc_length : Nat) : Prop :=
   sortedByOffset sections ∧
   (sections.length > 0 → Section.CompleteCoverage sections doc_length)
 
-end SearchVerified.Section
+end SearchVerified.Sections

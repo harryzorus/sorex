@@ -1,0 +1,26 @@
+{
+  "imports": {
+    "cheerio": "npm:cheerio@1.0.0",
+    "fuse.js": "npm:fuse.js@7.0.0",
+    "lunr": "npm:lunr@2.3.9",
+    "flexsearch": "npm:flexsearch@0.7.43",
+    "minisearch": "npm:minisearch@7.1.0",
+    "tinybench": "npm:tinybench@2.9.0"
+  },
+  "tasks": {
+    "bench": "deno run --allow-all bench.ts",
+    "bench:cutlass": "deno run --allow-all bench.ts --dataset cutlass",
+    "bench:pytorch": "deno run --allow-all bench.ts --dataset pytorch",
+    "bench:quick": "deno run --allow-all bench.ts --quick",
+    "regression": "deno run --allow-all regression.ts",
+    "crawl:cutlass": "deno run --allow-all crawl.ts --dataset cutlass",
+    "crawl:pytorch": "deno run --allow-all crawl.ts --dataset pytorch",
+    "demo:cutlass": "deno run --allow-all demo.ts --dataset cutlass",
+    "demo:pytorch": "deno run --allow-all demo.ts --dataset pytorch",
+    "build": "deno run --allow-read --allow-write --allow-run build.ts",
+    "test": "deno run --allow-all test.ts",
+    "serve": "deno run --allow-read --allow-net serve.ts",
+    "test:e2e": "bunx playwright test",
+    "test:e2e:ui": "bunx playwright test --ui"
+  }
+}
