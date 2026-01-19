@@ -32,7 +32,7 @@ use cli::display::{
     double_divider, double_footer, double_header, format_size, match_type_label, pad_left,
     pad_right, row, row_double, savings_colored, score_value, section_bot, section_mid,
     section_top, styled, technique_badge, themed, tier_label, timing_ms, timing_us, title,
-    truncate_path, visible_len, BOLD, DIM, BRIGHT_CYAN, BRIGHT_GREEN, CYAN, GRAY, GREEN, RED,
+    truncate_path, visible_len, BOLD, BRIGHT_CYAN, BRIGHT_GREEN, CYAN, DIM, GRAY, GREEN, RED,
     WHITE, YELLOW,
 };
 use cli::{Cli, Commands};
@@ -45,8 +45,16 @@ fn main() {
             input,
             output,
             demo,
+            ranking,
+            ranking_batch_size,
         } => {
-            if let Err(e) = run_build(&input, &output, demo) {
+            // Convert 0 to None (meaning "all at once")
+            let batch_size = if ranking_batch_size == 0 {
+                None
+            } else {
+                Some(ranking_batch_size)
+            };
+            if let Err(e) = run_build(&input, &output, demo, ranking.as_deref(), batch_size) {
                 eprintln!("❌ {}", e);
                 std::process::exit(1);
             }
@@ -218,7 +226,10 @@ fn inspect_sorex_file(path: &str) {
                                                 + d.doc_type.len()
                                                 + d.category.as_ref().map_or(0, |s| s.len())
                                                 + d.author.as_ref().map_or(0, |s| s.len())
-                                                + d.tags.iter().map(|t: &String| t.len()).sum::<usize>()
+                                                + d.tags
+                                                    .iter()
+                                                    .map(|t: &String| t.len())
+                                                    .sum::<usize>()
                                         })
                                         .sum::<usize>()
                                 },
@@ -237,7 +248,8 @@ fn inspect_sorex_file(path: &str) {
             let sa_raw = l.suffix_array.len() * 8;
             let postings_raw = l.postings.iter().map(|pl| pl.len() * 9).sum::<usize>();
             let section_table_raw = l.section_table.iter().map(|s| s.len()).sum::<usize>();
-            let docs_raw = l.docs
+            let docs_raw = l
+                .docs
                 .iter()
                 .map(|d| {
                     d.title.len()
@@ -394,7 +406,11 @@ fn inspect_sorex_file(path: &str) {
 
     // Row 1: Size info with brotli savings
     let savings_label = if compression_ratio > 0.0 {
-        themed(GREEN, &[BOLD], &format!("{:.0}% smaller", compression_ratio))
+        themed(
+            GREEN,
+            &[BOLD],
+            &format!("{:.0}% smaller", compression_ratio),
+        )
     } else {
         themed(RED, &[BOLD], &format!("{:.0}% larger", -compression_ratio))
     };
@@ -752,7 +768,11 @@ fn search_sorex_file(path: &str, query: &str, limit: usize) {
 
             // Pad colored strings to fixed visible width
             let tier_padded = format!("{}{}", tier, " ".repeat(6 - visible_len(&tier)));
-            let match_padded = format!("{}{}", match_type, " ".repeat(12 - visible_len(&match_type)));
+            let match_padded = format!(
+                "{}{}",
+                match_type,
+                " ".repeat(12 - visible_len(&match_type))
+            );
 
             row(&format!(
                 "  {:<3} {} {} {}  {}",
@@ -765,7 +785,8 @@ fn search_sorex_file(path: &str, query: &str, limit: usize) {
 
             // Show section_id if present (resolve from section_idx)
             if r.section_idx > 0 {
-                if let Some(section_id) = searcher.section_table().get((r.section_idx - 1) as usize) {
+                if let Some(section_id) = searcher.section_table().get((r.section_idx - 1) as usize)
+                {
                     row(&format!("      └─ #{}", section_id));
                 }
             }
@@ -791,11 +812,12 @@ fn search_sorex_file_wasm(path: &str, query: &str, limit: usize) {
 
     // Get loader JS from the same directory as the index file
     let loader_js: String = {
-        let index_dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
+        let index_dir = std::path::Path::new(path)
+            .parent()
+            .unwrap_or(std::path::Path::new("."));
         let loader_path = index_dir.join("sorex.js");
         if loader_path.exists() {
-            fs::read_to_string(&loader_path)
-                .expect("failed to read sorex.js from index directory")
+            fs::read_to_string(&loader_path).expect("failed to read sorex.js from index directory")
         } else {
             eprintln!("Error: sorex.js not found in index directory");
             eprintln!("  Expected: {}", loader_path.display());
@@ -831,10 +853,12 @@ fn search_sorex_file_wasm(path: &str, query: &str, limit: usize) {
                 ctx.warmup_turbofan(query, limit);
 
                 // Timed search with per-tier breakdown
-                let timing_result = ctx.search_with_tier_timing(query, limit)
+                let timing_result = ctx
+                    .search_with_tier_timing(query, limit)
                     .expect("search with tier timing failed");
 
-                let total_search_time_us = timing_result.t1_time_us + timing_result.t2_time_us + timing_result.t3_time_us;
+                let total_search_time_us =
+                    timing_result.t1_time_us + timing_result.t2_time_us + timing_result.t3_time_us;
 
                 section_top("PERFORMANCE");
                 row(&format!(
@@ -871,7 +895,11 @@ fn search_sorex_file_wasm(path: &str, query: &str, limit: usize) {
                 ));
                 row(&format!(
                     "  Total:         {} ms",
-                    timing_ms(load_time.as_secs_f64() * 1000.0 + init_time.as_secs_f64() * 1000.0 + total_search_time_us / 1000.0)
+                    timing_ms(
+                        load_time.as_secs_f64() * 1000.0
+                            + init_time.as_secs_f64() * 1000.0
+                            + total_search_time_us / 1000.0
+                    )
                 ));
                 section_bot();
                 println!();
@@ -929,7 +957,11 @@ fn display_wasm_results(results: &[sorex::deno_runtime::WasmSearchResult]) {
 
             // Pad colored strings to fixed visible width
             let tier_padded = format!("{}{}", tier, " ".repeat(6 - visible_len(&tier)));
-            let match_padded = format!("{}{}", match_type, " ".repeat(12 - visible_len(&match_type)));
+            let match_padded = format!(
+                "{}{}",
+                match_type,
+                " ".repeat(12 - visible_len(&match_type))
+            );
 
             row(&format!(
                 "  {:<3} {} {}  {}",
@@ -1148,20 +1180,38 @@ fn benchmark_native(
     row("");
     row(&format!(
         "  {} Exact:    {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-        tier_label(1), timing_us(t1_stats.mean), t1_stats.std_dev, t1_stats.ci_lower, t1_stats.ci_upper, t1_count
+        tier_label(1),
+        timing_us(t1_stats.mean),
+        t1_stats.std_dev,
+        t1_stats.ci_lower,
+        t1_stats.ci_upper,
+        t1_count
     ));
     row(&format!(
         "  {} Prefix:   {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-        tier_label(2), timing_us(t2_stats.mean), t2_stats.std_dev, t2_stats.ci_lower, t2_stats.ci_upper, t2_count
+        tier_label(2),
+        timing_us(t2_stats.mean),
+        t2_stats.std_dev,
+        t2_stats.ci_lower,
+        t2_stats.ci_upper,
+        t2_count
     ));
     row(&format!(
         "  {} Fuzzy:    {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-        tier_label(3), timing_us(t3_stats.mean), t3_stats.std_dev, t3_stats.ci_lower, t3_stats.ci_upper, t3_count
+        tier_label(3),
+        timing_us(t3_stats.mean),
+        t3_stats.std_dev,
+        t3_stats.ci_lower,
+        t3_stats.ci_upper,
+        t3_count
     ));
     row("");
     row(&format!(
         "  Search total:  {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]",
-        timing_us(total_stats.mean), total_stats.std_dev, total_stats.ci_lower, total_stats.ci_upper
+        timing_us(total_stats.mean),
+        total_stats.std_dev,
+        total_stats.ci_lower,
+        total_stats.ci_upper
     ));
     row(&format!("  Samples:       {:>10}", total_stats.n));
     section_bot();
@@ -1212,7 +1262,11 @@ fn display_native_results(results: &[SearchResult], searcher: &TierSearcher) {
 
             // Pad colored strings to fixed visible width
             let tier_padded = format!("{}{}", tier, " ".repeat(6 - visible_len(&tier)));
-            let match_padded = format!("{}{}", match_type, " ".repeat(12 - visible_len(&match_type)));
+            let match_padded = format!(
+                "{}{}",
+                match_type,
+                " ".repeat(12 - visible_len(&match_type))
+            );
 
             row(&format!(
                 "  {:<3} {} {} {}  {}",
@@ -1224,7 +1278,8 @@ fn display_native_results(results: &[SearchResult], searcher: &TierSearcher) {
             ));
 
             if r.section_idx > 0 {
-                if let Some(section_id) = searcher.section_table().get((r.section_idx - 1) as usize) {
+                if let Some(section_id) = searcher.section_table().get((r.section_idx - 1) as usize)
+                {
                     row(&format!("      └─ #{}", section_id));
                 }
             }
@@ -1255,7 +1310,9 @@ fn benchmark_wasm(
 
         // Get loader JS
         let loader_js: String = {
-            let index_dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
+            let index_dir = std::path::Path::new(path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
             let loader_path = index_dir.join("sorex.js");
             if loader_path.exists() {
                 fs::read_to_string(&loader_path)
@@ -1274,7 +1331,10 @@ fn benchmark_wasm(
         match ctx_result {
             Ok(mut ctx) => {
                 // Warm up TurboFan - this forces WASM optimization
-                print!("  Warming up TurboFan ({} iterations)... ", TURBOFAN_WARMUP_ITERATIONS);
+                print!(
+                    "  Warming up TurboFan ({} iterations)... ",
+                    TURBOFAN_WARMUP_ITERATIONS
+                );
                 std::io::stdout().flush().unwrap();
                 ctx.warmup_turbofan(query, limit);
                 println!("done");
@@ -1290,7 +1350,8 @@ fn benchmark_wasm(
 
                 // Collect samples
                 loop {
-                    let timing = ctx.search_with_tier_timing(query, limit)
+                    let timing = ctx
+                        .search_with_tier_timing(query, limit)
                         .expect("search failed");
 
                     t1_samples.push(timing.t1_time_us);
@@ -1339,20 +1400,38 @@ fn benchmark_wasm(
                 row("");
                 row(&format!(
                     "  {} Exact:    {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-                    tier_label(1), timing_us(t1_stats.mean), t1_stats.std_dev, t1_stats.ci_lower, t1_stats.ci_upper, timing.t1_count
+                    tier_label(1),
+                    timing_us(t1_stats.mean),
+                    t1_stats.std_dev,
+                    t1_stats.ci_lower,
+                    t1_stats.ci_upper,
+                    timing.t1_count
                 ));
                 row(&format!(
                     "  {} Prefix:   {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-                    tier_label(2), timing_us(t2_stats.mean), t2_stats.std_dev, t2_stats.ci_lower, t2_stats.ci_upper, timing.t2_count
+                    tier_label(2),
+                    timing_us(t2_stats.mean),
+                    t2_stats.std_dev,
+                    t2_stats.ci_lower,
+                    t2_stats.ci_upper,
+                    timing.t2_count
                 ));
                 row(&format!(
                     "  {} Fuzzy:    {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]  ({:>2} hits)",
-                    tier_label(3), timing_us(t3_stats.mean), t3_stats.std_dev, t3_stats.ci_lower, t3_stats.ci_upper, timing.t3_count
+                    tier_label(3),
+                    timing_us(t3_stats.mean),
+                    t3_stats.std_dev,
+                    t3_stats.ci_lower,
+                    t3_stats.ci_upper,
+                    timing.t3_count
                 ));
                 row("");
                 row(&format!(
                     "  Search total:  {} µs ± {:>6.3} µs  [{:>8.3}, {:>8.3}]",
-                    timing_us(total_stats.mean), total_stats.std_dev, total_stats.ci_lower, total_stats.ci_upper
+                    timing_us(total_stats.mean),
+                    total_stats.std_dev,
+                    total_stats.ci_lower,
+                    total_stats.ci_upper
                 ));
                 row(&format!("  Samples:       {:>10}", total_stats.n));
                 section_bot();

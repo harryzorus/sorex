@@ -51,10 +51,7 @@ fn find_wasm_opt() -> Option<PathBuf> {
     }
 
     // Check common Homebrew locations
-    let homebrew_paths = [
-        "/opt/homebrew/bin/wasm-opt",
-        "/usr/local/bin/wasm-opt",
-    ];
+    let homebrew_paths = ["/opt/homebrew/bin/wasm-opt", "/usr/local/bin/wasm-opt"];
 
     for path in homebrew_paths {
         if Path::new(path).exists() {
@@ -74,7 +71,11 @@ fn optimize_wasm(wasm_path: &Path, wasm_opt_path: &Path) {
     let optimized_path = wasm_path.with_extension("wasm.optimized");
 
     let status = Command::new(wasm_opt_path)
-        .args(["-O4", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"])
+        .args([
+            "-O4",
+            "--enable-bulk-memory",
+            "--enable-nontrapping-float-to-int",
+        ])
         .arg(wasm_path)
         .arg("-o")
         .arg(&optimized_path)
@@ -111,12 +112,14 @@ fn build_wasm(out_dir: &str, wasm_opt_path: Option<&PathBuf>) {
     // Source files that affect WASM output
     let wasm_sources = [
         "src/lib.rs",
-        "src/search.rs",
         "src/types.rs",
-        "src/scoring.rs",
-        "src/levenshtein.rs",
-        "src/levenshtein_dfa.rs",
-        "src/wasm.rs",
+        "src/runtime/wasm.rs",
+        "src/scoring/core.rs",
+        "src/scoring/ranking.rs",
+        "src/search/tiered.rs",
+        "src/search/dedup.rs",
+        "src/fuzzy/levenshtein.rs",
+        "src/fuzzy/dfa.rs",
     ];
 
     // Rerun if source files change
@@ -131,16 +134,17 @@ fn build_wasm(out_dir: &str, wasm_opt_path: Option<&PathBuf>) {
         true
     } else {
         // Check if any source file is newer than the WASM
-        let wasm_mtime = fs::metadata(&wasm_src)
-            .and_then(|m| m.modified())
-            .ok();
+        let wasm_mtime = fs::metadata(&wasm_src).and_then(|m| m.modified()).ok();
 
         let any_source_newer = wasm_sources.iter().any(|src| {
             let src_path = Path::new(&manifest_dir).join(src);
             if let (Some(wasm_time), Ok(src_meta)) = (wasm_mtime, fs::metadata(&src_path)) {
                 if let Ok(src_time) = src_meta.modified() {
                     if src_time > wasm_time {
-                        println!("cargo:warning=Source {} is newer than WASM, rebuilding...", src);
+                        println!(
+                            "cargo:warning=Source {} is newer than WASM, rebuilding...",
+                            src
+                        );
                         return true;
                     }
                 }
@@ -189,8 +193,8 @@ build-std = ["panic_abort", "std"]
         // Create standalone Cargo.toml with cdylib in temp directory
         // Remove workspace references since we're building in isolation
         let cargo_toml_path = Path::new(&manifest_dir).join("Cargo.toml");
-        let original_cargo_toml = fs::read_to_string(&cargo_toml_path)
-            .expect("Failed to read Cargo.toml");
+        let original_cargo_toml =
+            fs::read_to_string(&cargo_toml_path).expect("Failed to read Cargo.toml");
 
         // Remove workspace section and inline workspace dependencies
         let mut temp_cargo_toml = original_cargo_toml.clone();
@@ -261,17 +265,11 @@ build-std = ["panic_abort", "std"]
         // Clear ALL cargo env vars to prevent deadlock/interference
         let mut cmd = Command::new("wasm-pack");
         // Use multi-threaded WASM with atomics for parallel search
-        cmd.args([
-            "build",
-            "--target",
-            "web",
-            "--release",
-            "--out-dir",
-        ])
-        .arg(pkg_dir.to_str().unwrap()) // Output to original pkg location
-        .args(["--no-default-features", "--features", "wasm,serde_json"])
-        .current_dir(&temp_build_dir)
-        .env("CARGO_TARGET_DIR", &wasm_target_dir);
+        cmd.args(["build", "--target", "web", "--release", "--out-dir"])
+            .arg(pkg_dir.to_str().unwrap()) // Output to original pkg location
+            .args(["--no-default-features", "--features", "wasm,serde_json"])
+            .current_dir(&temp_build_dir)
+            .env("CARGO_TARGET_DIR", &wasm_target_dir);
 
         // Remove all CARGO_* env vars that outer cargo sets
         for (key, _) in env::vars() {
@@ -318,23 +316,17 @@ fn build_loader(out_dir: &str) {
         true
     } else {
         // Check if any source is newer than loader output
-        let loader_mtime = fs::metadata(&loader_output)
-            .and_then(|m| m.modified())
-            .ok();
-        let pkg_mtime = fs::metadata(&pkg_js)
-            .and_then(|m| m.modified())
-            .ok();
-        let build_mtime = fs::metadata(&build_script)
-            .and_then(|m| m.modified())
-            .ok();
-        let loader_ts_mtime = fs::metadata(&loader_ts)
-            .and_then(|m| m.modified())
-            .ok();
+        let loader_mtime = fs::metadata(&loader_output).and_then(|m| m.modified()).ok();
+        let pkg_mtime = fs::metadata(&pkg_js).and_then(|m| m.modified()).ok();
+        let build_mtime = fs::metadata(&build_script).and_then(|m| m.modified()).ok();
+        let loader_ts_mtime = fs::metadata(&loader_ts).and_then(|m| m.modified()).ok();
 
         match (loader_mtime, pkg_mtime, build_mtime, loader_ts_mtime) {
             (Some(loader), Some(pkg), Some(build), Some(ts)) => {
                 if pkg > loader {
-                    println!("cargo:warning=target/pkg/sorex.js is newer than loader, rebuilding...");
+                    println!(
+                        "cargo:warning=target/pkg/sorex.js is newer than loader, rebuilding..."
+                    );
                     true
                 } else if build > loader {
                     println!("cargo:warning=tools/build.ts is newer than loader, rebuilding...");

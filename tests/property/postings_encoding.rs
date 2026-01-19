@@ -7,8 +7,8 @@
 //! 4. Robustness against malformed input
 
 use proptest::prelude::*;
-use sorex::binary::{PostingEntry, SkipList, encode_postings, decode_postings};
-use sorex::binary::{BLOCK_SIZE, SKIP_LIST_THRESHOLD, SKIP_INTERVAL};
+use sorex::binary::{decode_postings, encode_postings, PostingEntry, SkipList};
+use sorex::binary::{BLOCK_SIZE, SKIP_INTERVAL, SKIP_LIST_THRESHOLD};
 
 // ============================================================================
 // STRATEGIES
@@ -16,13 +16,14 @@ use sorex::binary::{BLOCK_SIZE, SKIP_LIST_THRESHOLD, SKIP_INTERVAL};
 
 /// Generate a single posting entry.
 fn posting_entry_strategy() -> impl Strategy<Value = PostingEntry> {
-    (0u32..10000, 0u32..100, 0u8..10).prop_map(|(doc_id, section_idx, heading_level)| {
-        PostingEntry {
+    (0u32..10000, 0u32..100, 0u8..10, 1u32..10000).prop_map(
+        |(doc_id, section_idx, heading_level, score)| PostingEntry {
             doc_id,
             section_idx,
             heading_level,
-        }
-    })
+            score,
+        },
+    )
 }
 
 /// Generate a vector of posting entries (unsorted).
@@ -30,23 +31,24 @@ fn postings_strategy() -> impl Strategy<Value = Vec<PostingEntry>> {
     prop::collection::vec(posting_entry_strategy(), 1..100)
 }
 
-/// Generate a sorted vector of posting entries by doc_id.
+/// Generate a sorted vector of posting entries by score descending.
 #[allow(dead_code)]
 fn sorted_postings_strategy() -> impl Strategy<Value = Vec<PostingEntry>> {
     postings_strategy().prop_map(|mut postings: Vec<PostingEntry>| {
-        postings.sort_by_key(|e| e.doc_id);
+        postings.sort_by(|a, b| b.score.cmp(&a.score).then(a.doc_id.cmp(&b.doc_id)));
         postings
     })
 }
 
 /// Generate postings with specific doc_id patterns.
 fn sequential_doc_ids_strategy(count: usize) -> impl Strategy<Value = Vec<PostingEntry>> {
-    (0u32..1000).prop_map(move |start| {
+    (0u32..1000, 100u32..10000).prop_map(move |(start, base_score)| {
         (0..count)
             .map(|i| PostingEntry {
                 doc_id: start + i as u32,
                 section_idx: i as u32 % 10,
                 heading_level: (i % 5) as u8,
+                score: base_score.saturating_sub(i as u32), // Descending scores
             })
             .collect()
     })
@@ -54,23 +56,23 @@ fn sequential_doc_ids_strategy(count: usize) -> impl Strategy<Value = Vec<Postin
 
 /// Generate postings with large gaps between doc_ids.
 fn sparse_doc_ids_strategy() -> impl Strategy<Value = Vec<PostingEntry>> {
-    prop::collection::vec(
-        (1000u32..100000, 0u32..50, 0u8..10),
-        1..20
-    ).prop_map(|tuples| {
-        let mut postings: Vec<PostingEntry> = tuples
-            .into_iter()
-            .map(|(doc_id, section_idx, heading_level)| PostingEntry {
-                doc_id,
-                section_idx,
-                heading_level,
-            })
-            .collect();
-        postings.sort_by_key(|e| e.doc_id);
-        // Remove duplicates
-        postings.dedup_by_key(|e| e.doc_id);
-        postings
-    })
+    prop::collection::vec((1000u32..100000, 0u32..50, 0u8..10, 1u32..10000), 1..20).prop_map(
+        |tuples| {
+            let mut postings: Vec<PostingEntry> = tuples
+                .into_iter()
+                .map(|(doc_id, section_idx, heading_level, score)| PostingEntry {
+                    doc_id,
+                    section_idx,
+                    heading_level,
+                    score,
+                })
+                .collect();
+            postings.sort_by(|a, b| b.score.cmp(&a.score)); // Sort by score descending
+                                                            // Remove duplicates by doc_id
+            postings.dedup_by_key(|e| e.doc_id);
+            postings
+        },
+    )
 }
 
 // ============================================================================
@@ -83,6 +85,7 @@ proptest! {
     /// Property: Encode/decode roundtrip is lossless.
     ///
     /// Encoding and then decoding postings should produce identical entries.
+    /// Postings are sorted by score descending internally.
     #[test]
     fn prop_roundtrip_lossless(postings in postings_strategy()) {
         let mut buf = Vec::new();
@@ -104,14 +107,15 @@ proptest! {
             decoded.len(), postings.len()
         );
 
-        // Sort both for comparison (encode_postings sorts internally)
+        // Sort both for comparison (encode_postings sorts by score desc, then doc_id asc)
         let mut sorted_original: Vec<_> = postings.iter().collect();
-        sorted_original.sort_by_key(|e| e.doc_id);
+        sorted_original.sort_by(|a, b| b.score.cmp(&a.score).then(a.doc_id.cmp(&b.doc_id)));
 
         for (orig, dec) in sorted_original.iter().zip(decoded.iter()) {
             prop_assert_eq!(orig.doc_id, dec.doc_id, "doc_id mismatch");
             prop_assert_eq!(orig.section_idx, dec.section_idx, "section_idx mismatch");
             prop_assert_eq!(orig.heading_level, dec.heading_level, "heading_level mismatch");
+            prop_assert_eq!(orig.score, dec.score, "score mismatch");
         }
     }
 
@@ -143,9 +147,14 @@ proptest! {
 
         let (decoded, _) = decode_postings(&buf).expect("Decode should succeed");
 
-        prop_assert_eq!(decoded.len(), postings.len());
-        for (orig, dec) in postings.iter().zip(decoded.iter()) {
+        // Sort original by score desc for comparison (encode_postings sorts internally)
+        let mut sorted_original = postings.clone();
+        sorted_original.sort_by(|a, b| b.score.cmp(&a.score).then(a.doc_id.cmp(&b.doc_id)));
+
+        prop_assert_eq!(decoded.len(), sorted_original.len());
+        for (orig, dec) in sorted_original.iter().zip(decoded.iter()) {
             prop_assert_eq!(orig.doc_id, dec.doc_id);
+            prop_assert_eq!(orig.score, dec.score);
         }
     }
 }
@@ -157,11 +166,11 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(50))]
 
-    /// Property: Decoded doc_ids are sorted.
+    /// Property: Decoded scores are sorted descending.
     ///
-    /// After decode, doc_ids should be in ascending order (delta encoding).
+    /// After decode, scores should be in descending order (sorted by score).
     #[test]
-    fn prop_decoded_doc_ids_sorted(postings in postings_strategy()) {
+    fn prop_decoded_scores_sorted_descending(postings in postings_strategy()) {
         let mut buf = Vec::new();
         encode_postings(&postings, &mut buf);
 
@@ -169,9 +178,9 @@ proptest! {
 
         for i in 1..decoded.len() {
             prop_assert!(
-                decoded[i].doc_id >= decoded[i - 1].doc_id,
-                "Decoded doc_ids should be sorted: {} >= {}",
-                decoded[i].doc_id, decoded[i - 1].doc_id
+                decoded[i].score <= decoded[i - 1].score,
+                "Decoded scores should be descending: {} <= {}",
+                decoded[i].score, decoded[i - 1].score
             );
         }
     }
@@ -180,11 +189,26 @@ proptest! {
 /// Test: Zero-delta (same doc_id) handled correctly.
 #[test]
 fn test_zero_delta_handled() {
-    // Create postings with same doc_id, different sections
+    // Create postings with same doc_id, different sections, descending scores
     let postings = vec![
-        PostingEntry { doc_id: 100, section_idx: 0, heading_level: 0 },
-        PostingEntry { doc_id: 100, section_idx: 1, heading_level: 1 },
-        PostingEntry { doc_id: 100, section_idx: 2, heading_level: 2 },
+        PostingEntry {
+            doc_id: 100,
+            section_idx: 0,
+            heading_level: 0,
+            score: 1000,
+        },
+        PostingEntry {
+            doc_id: 100,
+            section_idx: 1,
+            heading_level: 1,
+            score: 900,
+        },
+        PostingEntry {
+            doc_id: 100,
+            section_idx: 2,
+            heading_level: 2,
+            score: 800,
+        },
     ];
 
     let mut buf = Vec::new();
@@ -243,16 +267,26 @@ proptest! {
 
 /// Generate posting entry with large doc_id (near u32::MAX).
 fn large_doc_id_strategy() -> impl Strategy<Value = PostingEntry> {
-    (u32::MAX - 1000..=u32::MAX, 0u32..100, 0u8..10).prop_map(|(doc_id, section_idx, heading_level)| {
-        PostingEntry { doc_id, section_idx, heading_level }
-    })
+    (u32::MAX - 1000..=u32::MAX, 0u32..100, 0u8..10, 1u32..10000).prop_map(
+        |(doc_id, section_idx, heading_level, score)| PostingEntry {
+            doc_id,
+            section_idx,
+            heading_level,
+            score,
+        },
+    )
 }
 
 /// Generate posting entry with large section_idx (near u32::MAX).
 fn large_section_idx_strategy() -> impl Strategy<Value = PostingEntry> {
-    (0u32..1000, u32::MAX - 100..=u32::MAX, 0u8..10).prop_map(|(doc_id, section_idx, heading_level)| {
-        PostingEntry { doc_id, section_idx, heading_level }
-    })
+    (0u32..1000, u32::MAX - 100..=u32::MAX, 0u8..10, 1u32..10000).prop_map(
+        |(doc_id, section_idx, heading_level, score)| PostingEntry {
+            doc_id,
+            section_idx,
+            heading_level,
+            score,
+        },
+    )
 }
 
 proptest! {
@@ -461,8 +495,18 @@ proptest! {
 fn test_decode_truncated_postings() {
     // Create valid postings
     let postings = vec![
-        PostingEntry { doc_id: 1, section_idx: 0, heading_level: 0 },
-        PostingEntry { doc_id: 2, section_idx: 1, heading_level: 1 },
+        PostingEntry {
+            doc_id: 1,
+            section_idx: 0,
+            heading_level: 0,
+            score: 1000,
+        },
+        PostingEntry {
+            doc_id: 2,
+            section_idx: 1,
+            heading_level: 1,
+            score: 900,
+        },
     ];
 
     let mut buf = Vec::new();
@@ -517,12 +561,13 @@ fn test_skip_list_decode_truncated() {
 
 #[test]
 fn test_postings_with_all_same_doc_id() {
-    // Regression test: all same doc_id should work (zero deltas)
+    // Regression test: all same doc_id should work (zero deltas for scores)
     let postings: Vec<PostingEntry> = (0..10)
         .map(|i| PostingEntry {
             doc_id: 42,
             section_idx: i,
             heading_level: (i % 5) as u8,
+            score: 1000 - i, // Descending scores
         })
         .collect();
 

@@ -22,17 +22,17 @@
 //! With the `wasm-threads` feature, T3 fuzzy search runs in parallel via Web Workers.
 //! Call `initThreadPool(navigator.hardwareConcurrency)` after loading the module.
 
-use crate::binary::LoadedLayer;
 #[cfg(feature = "rayon")]
 use crate::binary::IncrementalLoader;
+use crate::binary::LoadedLayer;
+use crate::scoring::ranking::compare_results;
 use crate::search::dedup::ResultMerger;
-use crate::search::tiered::{SearchResult, TierSearcher};
 #[cfg(feature = "rayon")]
 use crate::search::tiered::UIMessage;
-use crate::scoring::ranking::compare_results;
+use crate::search::tiered::{SearchOptions, SearchResult, TierSearcher};
 use crate::types::SearchDoc;
 use js_sys::Function;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -53,16 +53,28 @@ struct JsSearchResult {
     section_id: Option<String>,
     tier: u8,
     match_type: u8,
+    score: f64,
+    matched_term: Option<String>,
 }
 
 impl JsSearchResult {
-    fn from_result(r: &SearchResult, doc: &SearchDoc, section_table: &[String]) -> Self {
+    fn from_result(
+        r: &SearchResult,
+        doc: &SearchDoc,
+        section_table: &[String],
+        vocabulary: &[String],
+    ) -> Self {
         // Resolve section_idx to section_id string (lazy resolution at WASM boundary)
         let section_id = if r.section_idx == 0 {
             None
         } else {
             section_table.get((r.section_idx - 1) as usize).cloned()
         };
+
+        // Resolve matched_term index to actual term string
+        let matched_term = r
+            .matched_term
+            .and_then(|idx| vocabulary.get(idx as usize).cloned());
 
         Self {
             href: doc.href.clone(),
@@ -71,6 +83,8 @@ impl JsSearchResult {
             section_id,
             tier: r.tier,
             match_type: r.match_type.to_u8(),
+            score: r.score,
+            matched_term,
         }
     }
 }
@@ -88,12 +102,35 @@ struct TierTimingResult {
     t3_time_us: f64,
 }
 
+/// Search options for JavaScript consumption.
+///
+/// Passed to search methods to configure behavior.
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct JsSearchOptions {
+    /// Whether to deduplicate sections within a document (default: true).
+    /// When false, returns multiple results per document if different sections match.
+    #[serde(default = "default_dedup_sections")]
+    dedup_sections: bool,
+}
+
+fn default_dedup_sections() -> bool {
+    true
+}
+
+impl From<JsSearchOptions> for SearchOptions {
+    fn from(js: JsSearchOptions) -> Self {
+        SearchOptions {
+            dedup_sections: js.dedup_sections,
+        }
+    }
+}
+
 /// WASM searcher - thin wrapper around TierSearcher.
 #[wasm_bindgen]
 pub struct SorexSearcher {
     searcher: Rc<TierSearcher>,
 }
-
 
 #[wasm_bindgen]
 impl SorexSearcher {
@@ -102,9 +139,10 @@ impl SorexSearcher {
     pub fn new(bytes: &[u8]) -> Result<SorexSearcher, JsValue> {
         let layer = LoadedLayer::from_bytes(bytes)
             .map_err(|e| JsValue::from_str(&format!("Failed to parse: {}", e)))?;
-        let searcher = TierSearcher::from_layer(layer)
-            .map_err(|e| JsValue::from_str(&e))?;
-        Ok(SorexSearcher { searcher: Rc::new(searcher) })
+        let searcher = TierSearcher::from_layer(layer).map_err(|e| JsValue::from_str(&e))?;
+        Ok(SorexSearcher {
+            searcher: Rc::new(searcher),
+        })
     }
 
     /// Number of documents.
@@ -163,12 +201,16 @@ impl SorexSearcher {
         self.invoke_callback_from_merger(on_update, &merger, limit)?;
 
         // Tier 2: Prefix matches
-        let t2_results = self.searcher.search_tier2_prefix_no_exclude(&query_lower, fetch_limit);
+        let t2_results = self
+            .searcher
+            .search_tier2_prefix_no_exclude(&query_lower, fetch_limit);
         merger.merge_all(t2_results);
         self.invoke_callback_from_merger(on_update, &merger, limit)?;
 
         // Tier 3: Fuzzy matches (threaded with wasm-threads feature)
-        let t3_results = self.searcher.search_tier3_fuzzy_no_exclude(&query_lower, fetch_limit);
+        let t3_results = self
+            .searcher
+            .search_tier3_fuzzy_no_exclude(&query_lower, fetch_limit);
         merger.merge_all(t3_results);
         self.invoke_callback_from_merger(on_update, &merger, limit)?;
 
@@ -182,12 +224,45 @@ impl SorexSearcher {
     /// For progressive results, use `search()` instead.
     #[wasm_bindgen(js_name = "searchSync")]
     pub fn search_sync(&self, query: &str, limit: Option<usize>) -> Result<JsValue, JsValue> {
+        self.search_sync_with_options(query, limit, JsValue::UNDEFINED)
+    }
+
+    /// Three-tier search with options (blocking).
+    ///
+    /// # Arguments
+    /// * `query` - Search query
+    /// * `limit` - Maximum results (default: 10)
+    /// * `options` - Search options object: `{ dedupSections: boolean }`
+    ///   - `dedupSections`: Whether to deduplicate sections within a document (default: true)
+    ///
+    /// ```js
+    /// // Default behavior (section dedup enabled)
+    /// searcher.searchSyncWithOptions("kernel", 10);
+    ///
+    /// // Return all matching sections per document
+    /// searcher.searchSyncWithOptions("kernel", 10, { dedupSections: false });
+    /// ```
+    #[wasm_bindgen(js_name = "searchSyncWithOptions")]
+    pub fn search_sync_with_options(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+        options: JsValue,
+    ) -> Result<JsValue, JsValue> {
         let limit = limit.unwrap_or(10).min(10000);
         if query.is_empty() {
             return to_value(&Vec::<JsSearchResult>::new()).map_err(|e| e.to_string().into());
         }
 
-        let results = self.searcher.search(query, limit);
+        // Parse options, using defaults if undefined/null
+        let opts: JsSearchOptions = if options.is_undefined() || options.is_null() {
+            JsSearchOptions::default()
+        } else {
+            serde_wasm_bindgen::from_value(options)
+                .map_err(|e| JsValue::from_str(&format!("Invalid options: {}", e)))?
+        };
+
+        let results = self.searcher.search_with_options(query, limit, opts.into());
         let output = self.to_js_results(results);
         to_value(&output).map_err(|e| e.to_string().into())
     }
@@ -203,9 +278,13 @@ impl SorexSearcher {
     /// - `t2TimeUs`: T2 search time in microseconds
     /// - `t3TimeUs`: T3 search time in microseconds
     #[wasm_bindgen(js_name = "searchWithTierTiming")]
-    pub fn search_with_tier_timing(&self, query: &str, limit: Option<usize>) -> Result<JsValue, JsValue> {
-        use std::collections::HashSet;
+    pub fn search_with_tier_timing(
+        &self,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
         use js_sys::Date;
+        use std::collections::HashSet;
 
         let limit = limit.unwrap_or(10).min(10000);
         if query.is_empty() {
@@ -315,9 +394,10 @@ impl SorexSearcher {
                             &result,
                             doc,
                             self.searcher.section_table(),
+                            self.searcher.vocabulary(),
                         );
-                        let js_value = to_value(&js_result)
-                            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                        let js_value =
+                            to_value(&js_result).map_err(|e| JsValue::from_str(&e.to_string()))?;
                         on_result.call1(&JsValue::NULL, &js_value)?;
                     }
                 }
@@ -326,12 +406,17 @@ impl SorexSearcher {
                         .iter()
                         .filter_map(|r| {
                             self.searcher.docs().get(r.doc_id).map(|doc| {
-                                JsSearchResult::from_result(r, doc, self.searcher.section_table())
+                                JsSearchResult::from_result(
+                                    r,
+                                    doc,
+                                    self.searcher.section_table(),
+                                    self.searcher.vocabulary(),
+                                )
                             })
                         })
                         .collect();
-                    let js_array = to_value(&js_results)
-                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                    let js_array =
+                        to_value(&js_results).map_err(|e| JsValue::from_str(&e.to_string()))?;
                     on_finish.call1(&JsValue::NULL, &js_array)?;
                     break;
                 }
@@ -365,10 +450,14 @@ impl SorexSearcher {
         results
             .iter()
             .filter_map(|r| {
-                self.searcher
-                    .docs()
-                    .get(r.doc_id)
-                    .map(|doc| JsSearchResult::from_result(r, doc, self.searcher.section_table()))
+                self.searcher.docs().get(r.doc_id).map(|doc| {
+                    JsSearchResult::from_result(
+                        r,
+                        doc,
+                        self.searcher.section_table(),
+                        self.searcher.vocabulary(),
+                    )
+                })
             })
             .collect()
     }
@@ -464,10 +553,13 @@ impl SorexIncrementalLoader {
     /// This must be called first before loading any sections.
     #[wasm_bindgen(js_name = "loadHeader")]
     pub fn load_header(&mut self, bytes: &[u8]) -> Result<JsValue, JsValue> {
-        let loader = self.loader.as_mut()
+        let loader = self
+            .loader
+            .as_mut()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
 
-        let offsets = loader.load_header(bytes)
+        let offsets = loader
+            .load_header(bytes)
             .map_err(|e| JsValue::from_str(&format!("Failed to parse header: {}", e)))?;
 
         // Store header info for later use
@@ -507,7 +599,9 @@ impl SorexIncrementalLoader {
     /// Decode vocabulary in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadVocabulary")]
     pub fn load_vocabulary(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_vocabulary(bytes.to_vec());
         Ok(())
@@ -516,7 +610,9 @@ impl SorexIncrementalLoader {
     /// Decode dict tables in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadDictTables")]
     pub fn load_dict_tables(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_dict_tables(bytes.to_vec());
         Ok(())
@@ -527,7 +623,9 @@ impl SorexIncrementalLoader {
     /// This is typically the largest section (~30-50% of file size).
     #[wasm_bindgen(js_name = "loadPostings")]
     pub fn load_postings(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_postings(bytes.to_vec(), self.term_count);
         Ok(())
@@ -536,7 +634,9 @@ impl SorexIncrementalLoader {
     /// Decode suffix array in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadSuffixArray")]
     pub fn load_suffix_array(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_suffix_array(bytes.to_vec());
         Ok(())
@@ -545,7 +645,9 @@ impl SorexIncrementalLoader {
     /// Decode docs in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadDocs")]
     pub fn load_docs(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_docs(bytes.to_vec());
         Ok(())
@@ -554,7 +656,9 @@ impl SorexIncrementalLoader {
     /// Decode section table in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadSectionTable")]
     pub fn load_section_table(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_section_table(bytes.to_vec());
         Ok(())
@@ -563,7 +667,9 @@ impl SorexIncrementalLoader {
     /// Decode skip lists in background thread. Non-blocking.
     #[wasm_bindgen(js_name = "loadSkipLists")]
     pub fn load_skip_lists(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
 
         use crate::binary::FormatFlags;
@@ -579,7 +685,9 @@ impl SorexIncrementalLoader {
     /// Store Levenshtein DFA bytes. Non-blocking.
     #[wasm_bindgen(js_name = "loadLevDfa")]
     pub fn load_lev_dfa(&self, bytes: &[u8]) -> Result<(), JsValue> {
-        let loader = self.loader.as_ref()
+        let loader = self
+            .loader
+            .as_ref()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
         loader.load_lev_dfa(bytes.to_vec());
         Ok(())
@@ -588,7 +696,10 @@ impl SorexIncrementalLoader {
     /// Check if all sections are loaded (non-blocking).
     #[wasm_bindgen(js_name = "isComplete")]
     pub fn is_complete(&self) -> bool {
-        self.loader.as_ref().map(|l| l.is_complete()).unwrap_or(true)
+        self.loader
+            .as_ref()
+            .map(|l| l.is_complete())
+            .unwrap_or(true)
     }
 
     /// Get number of sections still pending.
@@ -602,16 +713,20 @@ impl SorexIncrementalLoader {
     /// This blocks until all background decode tasks complete.
     #[wasm_bindgen]
     pub fn finalize(mut self) -> Result<SorexSearcher, JsValue> {
-        let loader = self.loader.take()
+        let loader = self
+            .loader
+            .take()
             .ok_or_else(|| JsValue::from_str("Loader already finalized"))?;
 
-        let layer = loader.finalize()
+        let layer = loader
+            .finalize()
             .map_err(|e| JsValue::from_str(&format!("Failed to finalize: {}", e)))?;
 
-        let searcher = TierSearcher::from_layer(layer)
-            .map_err(|e| JsValue::from_str(&e))?;
+        let searcher = TierSearcher::from_layer(layer).map_err(|e| JsValue::from_str(&e))?;
 
-        Ok(SorexSearcher { searcher: Rc::new(searcher) })
+        Ok(SorexSearcher {
+            searcher: Rc::new(searcher),
+        })
     }
 }
 

@@ -29,7 +29,7 @@
 //! let results = runtime.search(&sorex_bytes, loader_js, "query", 10)?;
 //! ```
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Search result from WASM execution.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -41,6 +41,8 @@ pub struct WasmSearchResult {
     pub section_id: Option<String>,
     pub tier: u8,
     pub match_type: u8,
+    pub score: f64,
+    pub matched_term: Option<String>,
 }
 
 /// Search result with per-tier timing breakdown.
@@ -56,10 +58,49 @@ pub struct WasmTierTimingResult {
     pub t3_time_us: f64,
 }
 
+/// Context passed to the user's scoring function for each (term, doc, match) tuple.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoringContext {
+    /// The vocabulary term being indexed
+    pub term: String,
+    /// Document metadata
+    pub doc: ScoringDocContext,
+    /// Match location within the document
+    #[serde(rename = "match")]
+    pub match_info: ScoringMatchContext,
+}
+
+/// Document metadata for scoring context.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoringDocContext {
+    pub id: usize,
+    pub title: String,
+    pub excerpt: String,
+    pub href: String,
+    #[serde(rename = "type")]
+    pub doc_type: String,
+    pub category: Option<String>,
+    pub author: Option<String>,
+    pub tags: Vec<String>,
+}
+
+/// Match location within the document.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoringMatchContext {
+    pub field_type: String,
+    pub heading_level: u8,
+    pub section_id: Option<String>,
+    pub offset: usize,
+    pub text_length: usize,
+}
+
 #[cfg(feature = "deno-runtime")]
 mod deno_impl {
     use super::WasmSearchResult;
-    use deno_core::{JsRuntime, RuntimeOptions, v8};
+    use deno_core::{v8, JsRuntime, RuntimeOptions};
     use std::sync::Once;
 
     static DENO_INIT: Once = Once::new();
@@ -298,7 +339,11 @@ globalThis.__base64ToBytes__ = function(base64) {
         /// Execute a search using the pre-initialized WASM searcher.
         ///
         /// This only runs the search - no WASM initialization overhead.
-        pub fn search(&mut self, query: &str, limit: usize) -> Result<Vec<WasmSearchResult>, String> {
+        pub fn search(
+            &mut self,
+            query: &str,
+            limit: usize,
+        ) -> Result<Vec<WasmSearchResult>, String> {
             let escaped_query = escape_js_string(query);
             let search_code = format!(
                 r#"JSON.stringify(__sorex_searcher__.searchSync("{}", {}))"#,
@@ -321,9 +366,17 @@ globalThis.__base64ToBytes__ = function(base64) {
                 local.to_rust_string_lossy(scope)
             };
 
+            // Debug: print first 500 chars of JSON
+            #[cfg(test)]
+            eprintln!(
+                "DEBUG JSON (first 500): {}",
+                &json_str[..json_str.len().min(500)]
+            );
+
             // Parse results
-            let results: Vec<WasmSearchResult> = serde_json::from_str(&json_str)
-                .map_err(|e| format!("Failed to parse search results: {} (json: {})", e, json_str))?;
+            let results: Vec<WasmSearchResult> = serde_json::from_str(&json_str).map_err(|e| {
+                format!("Failed to parse search results: {} (json: {})", e, json_str)
+            })?;
 
             Ok(results)
         }
@@ -331,7 +384,11 @@ globalThis.__base64ToBytes__ = function(base64) {
         /// Execute a search with per-tier timing breakdown.
         ///
         /// Returns results along with T1/T2/T3 timing in microseconds.
-        pub fn search_with_tier_timing(&mut self, query: &str, limit: usize) -> Result<super::WasmTierTimingResult, String> {
+        pub fn search_with_tier_timing(
+            &mut self,
+            query: &str,
+            limit: usize,
+        ) -> Result<super::WasmTierTimingResult, String> {
             let escaped_query = escape_js_string(query);
             let search_code = format!(
                 r#"JSON.stringify(__sorex_searcher__.searchWithTierTiming("{}", {}))"#,
@@ -356,7 +413,12 @@ globalThis.__base64ToBytes__ = function(base64) {
 
             // Parse results
             let timing_result: super::WasmTierTimingResult = serde_json::from_str(&json_str)
-                .map_err(|e| format!("Failed to parse tier timing results: {} (json: {})", e, json_str))?;
+                .map_err(|e| {
+                    format!(
+                        "Failed to parse tier timing results: {} (json: {})",
+                        e, json_str
+                    )
+                })?;
 
             Ok(timing_result)
         }
@@ -440,6 +502,11 @@ globalThis.__base64ToBytes__ = function(base64) {
                         if (typeof loadSorexSync === 'function') {{
                             const searcher = loadSorexSync(sorexBuffer);
                             const results = searcher.searchSync("{query}", {limit});
+                            // Debug: log first result structure
+                            if (results.length > 0) {{
+                                console.log("DEBUG first result keys:", Object.keys(results[0]));
+                                console.log("DEBUG first result:", JSON.stringify(results[0]));
+                            }}
                             return JSON.stringify(results);
                         }}
 
@@ -478,6 +545,13 @@ globalThis.__base64ToBytes__ = function(base64) {
                 local.to_rust_string_lossy(scope)
             };
 
+            // Debug: print first 500 chars of JSON
+            #[cfg(test)]
+            eprintln!(
+                "DEBUG DenoRuntime JSON (first 500): {}",
+                &json_str[..json_str.len().min(500)]
+            );
+
             // Check for error response
             if json_str.contains("\"error\"") {
                 #[derive(serde::Deserialize)]
@@ -490,8 +564,9 @@ globalThis.__base64ToBytes__ = function(base64) {
             }
 
             // Parse results
-            let results: Vec<WasmSearchResult> = serde_json::from_str(&json_str)
-                .map_err(|e| format!("Failed to parse search results: {} (json: {})", e, json_str))?;
+            let results: Vec<WasmSearchResult> = serde_json::from_str(&json_str).map_err(|e| {
+                format!("Failed to parse search results: {} (json: {})", e, json_str)
+            })?;
 
             Ok(results)
         }
@@ -516,16 +591,144 @@ globalThis.__base64ToBytes__ = function(base64) {
         result
     }
 
-    /// Strip ES module export statements from the loader JS.
+    /// Strip TypeScript interface/type declarations (they span multiple lines with braces).
+    /// Only matches keywords at the start of a line (with optional whitespace).
+    fn strip_typescript_declarations(code: &str) -> String {
+        let mut final_result = String::new();
+        let mut in_declaration = false;
+        let mut brace_count = 0;
+
+        for line in code.lines() {
+            let trimmed = line.trim_start();
+
+            // Check if this line starts a new declaration
+            if !in_declaration
+                && (trimmed.starts_with("export interface ")
+                    || trimmed.starts_with("interface ")
+                    || trimmed.starts_with("export type ")
+                    || (trimmed.starts_with("type ") && !trimmed.contains("typeof")))
+            {
+                in_declaration = true;
+                brace_count = 0;
+                // Count braces on this line
+                for c in line.chars() {
+                    if c == '{' {
+                        brace_count += 1;
+                    } else if c == '}' {
+                        brace_count -= 1;
+                    }
+                }
+                // Check if declaration ended on the same line
+                if brace_count <= 0 && line.contains('{') {
+                    in_declaration = false;
+                }
+                final_result.push_str("// TS declaration removed\n");
+                continue;
+            }
+
+            if in_declaration {
+                // Count braces to find when we exit the declaration
+                for c in line.chars() {
+                    if c == '{' {
+                        brace_count += 1;
+                    } else if c == '}' {
+                        brace_count -= 1;
+                    }
+                }
+                if brace_count <= 0 {
+                    in_declaration = false;
+                }
+                continue; // Skip this line entirely
+            }
+
+            final_result.push_str(line);
+            final_result.push('\n');
+        }
+
+        final_result
+    }
+
+    /// Strip TypeScript type annotations from function parameters and return types.
+    /// Converts: `function foo(x: number): string` -> `function foo(x)`
+    fn strip_typescript_annotations(code: &str) -> String {
+        let mut result = String::new();
+        let mut chars = code.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c == ':' {
+                // Look ahead to see if this is a type annotation
+                // Skip whitespace after colon
+                let mut lookahead = String::new();
+                while chars.peek() == Some(&' ') || chars.peek() == Some(&'\t') {
+                    lookahead.push(chars.next().unwrap());
+                }
+
+                // Check if next char looks like a type (uppercase, or basic types)
+                if let Some(&next) = chars.peek() {
+                    // Check for common TypeScript type patterns
+                    if next.is_ascii_uppercase()
+                        || matches!(
+                            chars.clone().take(6).collect::<String>().as_str(),
+                            s if s.starts_with("number")
+                                || s.starts_with("string")
+                                || s.starts_with("boolea") // boolean
+                                || s.starts_with("void")
+                                || s.starts_with("null")
+                                || s.starts_with("undefi") // undefined
+                                || s.starts_with("any")
+                                || s.starts_with("never")
+                        )
+                    {
+                        // This looks like a type annotation, skip until we hit:
+                        // - ) for parameter types
+                        // - , for multiple parameters
+                        // - { for function body
+                        // - = for default values
+                        // - ; for type aliases
+                        let mut depth = 0;
+                        while let Some(&nc) = chars.peek() {
+                            if nc == '<' || nc == '(' || nc == '[' {
+                                depth += 1;
+                                chars.next();
+                            } else if nc == '>' || nc == ')' || nc == ']' {
+                                if depth > 0 {
+                                    depth -= 1;
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            } else if depth == 0
+                                && (nc == ',' || nc == '{' || nc == '=' || nc == ';')
+                            {
+                                break;
+                            } else {
+                                chars.next();
+                            }
+                        }
+                        continue;
+                    }
+                }
+
+                // Not a type annotation, restore the colon and lookahead
+                result.push(c);
+                result.push_str(&lookahead);
+            } else {
+                result.push(c);
+            }
+        }
+
+        result
+    }
+
+    /// Strip ES module syntax from JavaScript for global evaluation.
+    /// This is for pure JavaScript files (like sorex.js loader) - no TypeScript stripping.
     ///
-    /// The bundled loader ends with `export { ... }` which doesn't work in
-    /// global evaluation context. We remove it and keep everything as globals.
-    /// Strip ES module syntax from the loader JS for global evaluation.
-    ///
-    /// The bundled loader uses ES module syntax that doesn't work in
-    /// global evaluation context:
-    /// 1. `export { ... }` at the end - removed
-    /// 2. `import.meta.url` - replaced with `undefined` (can't parse in non-module)
+    /// Handles:
+    /// 1. `export { ... }` - removed entirely
+    /// 2. `export default function name` -> `function name`
+    /// 3. `export default` -> removed (keeps the value)
+    /// 4. `export const/let/var` -> `const/let/var`
+    /// 5. `import.meta.url` -> `undefined`
     fn strip_esm_exports(js: &str) -> String {
         let mut result = js.to_string();
 
@@ -535,21 +738,309 @@ globalThis.__base64ToBytes__ = function(base64) {
         result = result.replace("import.meta.url", "undefined");
         result = result.replace("import.meta", "undefined");
 
+        // Strip `export default function` -> `function`
+        result = result.replace("export default function ", "function ");
+
+        // Strip `export default class` -> `class`
+        result = result.replace("export default class ", "class ");
+
+        // Strip `export default ` (for default exports of expressions)
+        result = result.replace("export default ", "const __default_export__ = ");
+
+        // Strip `export const/let/var` -> `const/let/var`
+        result = result.replace("export const ", "const ");
+        result = result.replace("export let ", "let ");
+        result = result.replace("export var ", "var ");
+
+        // Strip `export function` -> `function`
+        result = result.replace("export function ", "function ");
+
+        // Strip `export class` -> `class`
+        result = result.replace("export class ", "class ");
+
         // Strip export block section (marked by "// ES Module exports" comment)
         if let Some(comment_start) = result.find("\n// ES Module exports") {
             result = result[..comment_start].to_string();
-        } else if let Some(export_start) = result.find("\nexport {") {
-            result = result[..export_start].to_string();
-        } else if let Some(export_start) = result.find("export {") {
-            result = result[..export_start].to_string();
+        }
+
+        // Strip remaining `export { ... }` blocks (named exports at end of file)
+        while let Some(export_start) = result.find("export {") {
+            if let Some(export_end) = result[export_start..].find("};") {
+                let before = &result[..export_start];
+                let after = &result[export_start + export_end + 2..];
+                result = format!("{}{}", before.trim_end(), after);
+            } else {
+                // Malformed export, just remove to end
+                result = result[..export_start].to_string();
+                break;
+            }
         }
 
         result
     }
+
+    /// Strip ES module syntax AND TypeScript from ranking function files.
+    /// This is for TypeScript ranking files - includes full TS stripping.
+    fn strip_typescript_for_ranking(ts: &str) -> String {
+        let mut result = ts.to_string();
+
+        // Replace import.meta.url with undefined
+        result = result.replace("import.meta.url", "undefined");
+        result = result.replace("import.meta", "undefined");
+
+        // Strip `export default function` -> `function`
+        result = result.replace("export default function ", "function ");
+
+        // Strip `export default class` -> `class`
+        result = result.replace("export default class ", "class ");
+
+        // Strip `export default ` (for default exports of expressions)
+        result = result.replace("export default ", "const __default_export__ = ");
+
+        // TypeScript interfaces and types need special handling - comment them out entirely
+        // They can span multiple lines with nested braces
+        result = strip_typescript_declarations(&result);
+
+        // Strip TypeScript type annotations from function signatures
+        result = strip_typescript_annotations(&result);
+
+        // Strip `export const/let/var` -> `const/let/var`
+        result = result.replace("export const ", "const ");
+        result = result.replace("export let ", "let ");
+        result = result.replace("export var ", "var ");
+
+        // Strip `export function` -> `function`
+        result = result.replace("export function ", "function ");
+
+        // Strip `export class` -> `class`
+        result = result.replace("export class ", "class ");
+
+        // Strip export block section (marked by "// ES Module exports" comment)
+        if let Some(comment_start) = result.find("\n// ES Module exports") {
+            result = result[..comment_start].to_string();
+        }
+
+        // Strip remaining `export { ... }` blocks (named exports at end of file)
+        while let Some(export_start) = result.find("export {") {
+            if let Some(export_end) = result[export_start..].find("};") {
+                let before = &result[..export_start];
+                let after = &result[export_start + export_end + 2..];
+                result = format!("{}{}", before.trim_end(), after);
+            } else {
+                // Malformed export, just remove to end
+                result = result[..export_start].to_string();
+                break;
+            }
+        }
+
+        result
+    }
+
+    /// Evaluator for user-defined ranking functions at index time.
+    ///
+    /// Loads a TypeScript/JavaScript ranking function and evaluates it for each
+    /// (term, doc, match) tuple during index construction.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// use sorex::deno_runtime::RankingEvaluator;
+    ///
+    /// let evaluator = RankingEvaluator::new("./ranking.ts")?;
+    /// let score = evaluator.evaluate(&context)?;
+    /// ```
+    pub struct ScoringEvaluator {
+        runtime: JsRuntime,
+    }
+
+    /// Default scoring function embedded in the binary.
+    /// Mirrors the Lean-proven constants from src/scoring/core.rs.
+    const DEFAULT_SCORING_CODE: &str = include_str!("../../tools/score.ts");
+
+    impl ScoringEvaluator {
+        /// Create a new scoring evaluator using the default scoring function.
+        ///
+        /// The default function mirrors the Lean-proven constants from
+        /// src/scoring/core.rs, ensuring title > heading > content with
+        /// position-based tie-breaking.
+        pub fn from_default() -> Result<Self, String> {
+            Self::from_code(DEFAULT_SCORING_CODE)
+        }
+
+        /// Create a new scoring evaluator from a TypeScript/JavaScript file.
+        ///
+        /// The file must export a default function with signature:
+        /// `(ctx: ScoringContext) => number`
+        pub fn from_file(path: &std::path::Path) -> Result<Self, String> {
+            let code = std::fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read scoring function: {}", e))?;
+            Self::from_code(&code)
+        }
+
+        /// Create a new scoring evaluator from TypeScript/JavaScript source code.
+        pub fn from_code(code: &str) -> Result<Self, String> {
+            init_deno();
+
+            let mut runtime = JsRuntime::new(RuntimeOptions::default());
+
+            // Add polyfills (needed for TextEncoder/TextDecoder if used in ranking function)
+            runtime
+                .execute_script("<polyfills>", WEB_API_POLYFILLS)
+                .map_err(|e| format!("Failed to run polyfills: {}", e))?;
+
+            // Strip ESM syntax AND TypeScript for ranking files
+            let stripped = strip_typescript_for_ranking(code);
+
+            // The ranking function must be the default export.
+            // We extract it by looking for common patterns.
+            let setup_code = format!(
+                r#"
+                // User's ranking code
+                {code}
+
+                // Extract the default export
+                if (typeof score === 'function') {{
+                    globalThis.__scoring_fn__ = score;
+                }} else if (typeof defaultScore === 'function') {{
+                    globalThis.__scoring_fn__ = defaultScore;
+                }} else {{
+                    // Try to find any exported function
+                    throw new Error("Scoring file must export a 'score' or 'default' function");
+                }}
+                "#,
+                code = stripped
+            );
+
+            runtime
+                .execute_script("<ranking-setup>", setup_code)
+                .map_err(|e| format!("Failed to load scoring function: {}", e))?;
+
+            Ok(Self { runtime })
+        }
+
+        /// Evaluate the scoring function for a given context.
+        ///
+        /// Returns the integer score (higher = better ranking).
+        pub fn evaluate(&mut self, ctx: &super::ScoringContext) -> Result<u32, String> {
+            let ctx_json = serde_json::to_string(ctx)
+                .map_err(|e| format!("Failed to serialize context: {}", e))?;
+
+            let eval_code = format!(
+                r#"
+                (function() {{
+                    const ctx = {ctx_json};
+                    const score = __scoring_fn__(ctx);
+                    // Ensure we return a valid integer score
+                    if (typeof score !== 'number' || !Number.isFinite(score)) {{
+                        throw new Error("Scoring function must return a number, got: " + typeof score);
+                    }}
+                    return Math.floor(Math.max(0, score));
+                }})();
+                "#,
+                ctx_json = ctx_json
+            );
+
+            let result = self
+                .runtime
+                .execute_script("<ranking-eval>", eval_code)
+                .map_err(|e| format!("Ranking evaluation failed: {}", e))?;
+
+            // Convert v8::Global to number
+            let score = {
+                let context = self.runtime.main_context();
+                let isolate = self.runtime.v8_isolate();
+                v8::scope!(scope, isolate);
+                let context_local = v8::Local::new(scope, context);
+                let scope = &mut v8::ContextScope::new(scope, context_local);
+                let local = v8::Local::new(scope, result);
+                local.to_rust_string_lossy(scope)
+            };
+
+            score
+                .parse::<u32>()
+                .map_err(|e| format!("Invalid score value '{}': {}", score, e))
+        }
+
+        /// Evaluate the scoring function for multiple contexts in batch.
+        ///
+        /// More efficient than calling `evaluate` repeatedly because it avoids
+        /// per-call overhead of serialization and JS context switching.
+        pub fn evaluate_batch(
+            &mut self,
+            contexts: &[super::ScoringContext],
+        ) -> Result<Vec<u32>, String> {
+            if contexts.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            let contexts_json = serde_json::to_string(contexts)
+                .map_err(|e| format!("Failed to serialize contexts: {}", e))?;
+
+            let eval_code = format!(
+                r#"
+                (function() {{
+                    const contexts = {contexts_json};
+                    const scores = contexts.map(ctx => {{
+                        const score = __scoring_fn__(ctx);
+                        if (typeof score !== 'number' || !Number.isFinite(score)) {{
+                            throw new Error("Scoring function must return a number");
+                        }}
+                        return Math.floor(Math.max(0, score));
+                    }});
+                    return JSON.stringify(scores);
+                }})();
+                "#,
+                contexts_json = contexts_json
+            );
+
+            let result = self
+                .runtime
+                .execute_script("<ranking-batch>", eval_code)
+                .map_err(|e| format!("Batch ranking evaluation failed: {}", e))?;
+
+            // Convert v8::Global to JSON string
+            let json_str = {
+                let context = self.runtime.main_context();
+                let isolate = self.runtime.v8_isolate();
+                v8::scope!(scope, isolate);
+                let context_local = v8::Local::new(scope, context);
+                let scope = &mut v8::ContextScope::new(scope, context_local);
+                let local = v8::Local::new(scope, result);
+                local.to_rust_string_lossy(scope)
+            };
+
+            serde_json::from_str::<Vec<u32>>(&json_str)
+                .map_err(|e| format!("Failed to parse batch scores: {} (json: {})", e, json_str))
+        }
+
+        /// Evaluate the scoring function with configurable chunk size.
+        ///
+        /// This allows experimenting with different batch sizes to find the optimal
+        /// balance between JS call overhead and V8 JIT optimization.
+        ///
+        /// - `chunk_size = None` → All contexts in one batch (current behavior)
+        /// - `chunk_size = Some(n)` → Process in chunks of n contexts
+        pub fn evaluate_batch_chunked(
+            &mut self,
+            contexts: &[super::ScoringContext],
+            chunk_size: Option<usize>,
+        ) -> Result<Vec<u32>, String> {
+            match chunk_size {
+                None | Some(0) => self.evaluate_batch(contexts),
+                Some(size) => {
+                    let mut all_scores = Vec::with_capacity(contexts.len());
+                    for chunk in contexts.chunks(size) {
+                        let scores = self.evaluate_batch(chunk)?;
+                        all_scores.extend(scores);
+                    }
+                    Ok(all_scores)
+                }
+            }
+        }
+    }
 }
 
 #[cfg(feature = "deno-runtime")]
-pub use deno_impl::{DenoRuntime, DenoSearchContext, TURBOFAN_WARMUP_ITERATIONS};
+pub use deno_impl::{DenoRuntime, DenoSearchContext, ScoringEvaluator, TURBOFAN_WARMUP_ITERATIONS};
 
 /// Legacy function for backwards compatibility.
 #[cfg(feature = "deno-runtime")]
@@ -606,6 +1097,42 @@ impl DenoSearchContext {
     }
 
     pub fn search(&mut self, _query: &str, _limit: usize) -> Result<Vec<WasmSearchResult>, String> {
+        Err("Deno runtime not enabled".to_string())
+    }
+}
+
+/// Placeholder ScoringEvaluator for non-deno builds.
+/// All methods return errors since Deno is required for scoring.
+#[cfg(not(feature = "deno-runtime"))]
+pub struct ScoringEvaluator;
+
+#[cfg(not(feature = "deno-runtime"))]
+impl ScoringEvaluator {
+    pub fn from_default() -> Result<Self, String> {
+        Err("Deno runtime not enabled. Build with --features deno-runtime".to_string())
+    }
+
+    pub fn from_file(_path: &std::path::Path) -> Result<Self, String> {
+        Err("Deno runtime not enabled. Build with --features deno-runtime".to_string())
+    }
+
+    pub fn from_code(_code: &str) -> Result<Self, String> {
+        Err("Deno runtime not enabled. Build with --features deno-runtime".to_string())
+    }
+
+    pub fn evaluate(&mut self, _ctx: &ScoringContext) -> Result<u32, String> {
+        Err("Deno runtime not enabled".to_string())
+    }
+
+    pub fn evaluate_batch(&mut self, _contexts: &[ScoringContext]) -> Result<Vec<u32>, String> {
+        Err("Deno runtime not enabled".to_string())
+    }
+
+    pub fn evaluate_batch_chunked(
+        &mut self,
+        _contexts: &[ScoringContext],
+        _chunk_size: Option<usize>,
+    ) -> Result<Vec<u32>, String> {
         Err("Deno runtime not enabled".to_string())
     }
 }

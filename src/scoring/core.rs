@@ -62,35 +62,11 @@ pub const MAX_POSITION_BONUS: f64 = 0.5;
 // TIERED SEARCH SCORING CONSTANTS
 // =============================================================================
 // These define the base scores for each tier of the three-tier search:
-// - T1 (exact match) → highest score
-// - T2 (prefix match) → medium score
-// - T3 (fuzzy match) → lowest score, further penalized by edit distance
-
-/// Base score for Tier 1 (exact match) results.
-pub const T1_EXACT_SCORE: f64 = 100.0;
-
-/// Base score for Tier 2 (prefix match) results.
-pub const T2_PREFIX_SCORE: f64 = 50.0;
-
-/// Boost multiplier for title matches in T2 (20% boost).
-pub const T2_TITLE_BOOST: f64 = 1.2;
-
-/// Base scores for Tier 3 (fuzzy match) by edit distance.
-/// - Distance 1: 30.0 points
-/// - Distance 2: 15.0 points
-/// - Distance 3+: 5.0 points
-pub const T3_FUZZY_DISTANCE_1_SCORE: f64 = 30.0;
-pub const T3_FUZZY_DISTANCE_2_SCORE: f64 = 15.0;
-pub const T3_FUZZY_DISTANCE_3_SCORE: f64 = 5.0;
-
-/// Penalty per edit distance (20% per edit).
-pub const T3_EDIT_DISTANCE_PENALTY: f64 = 0.2;
-
-/// Length similarity bonus coefficient (30% of score).
-pub const T3_LENGTH_BONUS_COEFFICIENT: f64 = 0.3;
-
-/// Title boost multiplier for fuzzy matches (50% boost).
-pub const T3_TITLE_BOOST: f64 = 1.5;
+// Note: Tier scoring constants have been removed.
+// Scores are now pre-computed at index time and stored in PostingEntry.
+// T2/T3 apply penalties to these stored scores at search time:
+// - T2 (prefix): score * (query.len / term.len)
+// - T3 (fuzzy): score * (1 - edit_distance / MAX_EDIT_DISTANCE)
 
 /// Which field type contains this offset? Title, heading, or content?
 ///

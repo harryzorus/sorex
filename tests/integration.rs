@@ -13,3 +13,6 @@ mod wasm;
 
 #[path = "integration/binary_validation.rs"]
 mod binary_validation;
+
+#[path = "integration/custom_ranking.rs"]
+mod custom_ranking;

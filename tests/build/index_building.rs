@@ -1,4 +1,9 @@
 //! Tests for index construction.
+//!
+//! These tests require the `deno-runtime` feature because index building
+//! uses the Deno-based scoring evaluator.
+
+#![cfg(feature = "deno-runtime")]
 
 use sorex::binary::LoadedLayer;
 use sorex::build::run_build;
@@ -13,8 +18,14 @@ fn build_fixture(fixture: &str) -> (TempDir, std::path::PathBuf) {
     let input_path = format!("{}/{}", BUILD_FIXTURES_DIR, fixture);
     let output_path = temp_dir.path().join("output");
 
-    run_build(&input_path, output_path.to_str().unwrap(), false)
-        .expect("Build should succeed");
+    run_build(
+        &input_path,
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    )
+    .expect("Build should succeed");
 
     (temp_dir, output_path)
 }
@@ -41,7 +52,11 @@ fn test_build_index_produces_valid_sorex() {
 
     // Should be parseable by LoadedLayer
     let layer = LoadedLayer::from_bytes(&bytes);
-    assert!(layer.is_ok(), "Built index should be parseable: {:?}", layer.err());
+    assert!(
+        layer.is_ok(),
+        "Built index should be parseable: {:?}",
+        layer.err()
+    );
 }
 
 #[test]
@@ -79,10 +94,7 @@ fn test_build_index_searchable() {
 
     // Search for "rust" which appears in fixtures
     let results = searcher.search("rust", 10);
-    assert!(
-        !results.is_empty(),
-        "Search for 'rust' should find results"
-    );
+    assert!(!results.is_empty(), "Search for 'rust' should find results");
 }
 
 #[test]

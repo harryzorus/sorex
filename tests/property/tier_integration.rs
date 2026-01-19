@@ -14,8 +14,8 @@
 
 use super::common::load_fixtures_searcher;
 use proptest::prelude::*;
-use std::collections::HashSet;
 use sorex::MatchType;
+use std::collections::HashSet;
 
 // ============================================================================
 // STRATEGIES
@@ -41,11 +41,11 @@ fn multi_section_query_strategy() -> impl Strategy<Value = String> {
 /// Generate two-letter prefixes for prefix search testing.
 fn prefix_query_strategy() -> impl Strategy<Value = String> {
     prop_oneof![
-        Just("ru".to_string()),  // rust, etc.
-        Just("ty".to_string()),  // typescript, typing, etc.
-        Just("ja".to_string()),  // javascript, etc.
-        Just("wa".to_string()),  // wasm, webassembly, etc.
-        Just("pr".to_string()),  // programming, etc.
+        Just("ru".to_string()), // rust, etc.
+        Just("ty".to_string()), // typescript, typing, etc.
+        Just("ja".to_string()), // javascript, etc.
+        Just("wa".to_string()), // wasm, webassembly, etc.
+        Just("pr".to_string()), // programming, etc.
     ]
 }
 
@@ -347,7 +347,8 @@ fn test_lean_in_no_duplicates() {
     let doc_ids: HashSet<usize> = results.iter().map(|r| r.doc_id).collect();
 
     assert_eq!(
-        results.len(), doc_ids.len(),
+        results.len(),
+        doc_ids.len(),
         "Query 'lean in' should not return duplicate documents"
     );
 }
@@ -363,7 +364,8 @@ fn test_single_char_prefix_no_duplicates() {
     let doc_ids: HashSet<usize> = results.iter().map(|r| r.doc_id).collect();
 
     assert_eq!(
-        results.len(), doc_ids.len(),
+        results.len(),
+        doc_ids.len(),
         "Single-char search should not return duplicates"
     );
 }
@@ -374,8 +376,130 @@ fn test_empty_search_returns_empty() {
     let searcher = load_fixtures_searcher();
 
     let results = searcher.search("", 100);
-    assert!(results.is_empty(), "Empty search should return empty results");
+    assert!(
+        results.is_empty(),
+        "Empty search should return empty results"
+    );
 
     let results = searcher.search("   ", 100);
-    assert!(results.is_empty(), "Whitespace search should return empty results");
+    assert!(
+        results.is_empty(),
+        "Whitespace search should return empty results"
+    );
+}
+
+// ============================================================================
+// MATCHED_TERM INVARIANT TESTS
+// ============================================================================
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+
+    /// Property: matched_term index is valid when present.
+    ///
+    /// If a result has matched_term = Some(idx), then idx < vocabulary.len().
+    #[test]
+    fn prop_matched_term_valid_index(
+        query in multi_section_query_strategy(),
+        limit in 10usize..50
+    ) {
+        let searcher = load_fixtures_searcher();
+        let results = searcher.search(&query, limit);
+        let vocab_len = searcher.vocabulary().len();
+
+        for result in &results {
+            if let Some(idx) = result.matched_term {
+                prop_assert!(
+                    (idx as usize) < vocab_len,
+                    "matched_term index {} >= vocabulary length {} for query '{}'",
+                    idx, vocab_len, query
+                );
+            }
+        }
+    }
+
+    /// Property: T1 exact match should have matched_term set.
+    ///
+    /// For exact matches, we always know which vocabulary term matched.
+    #[test]
+    fn prop_t1_exact_has_matched_term(
+        query in multi_section_query_strategy(),
+        limit in 10usize..50
+    ) {
+        let searcher = load_fixtures_searcher();
+        let results = searcher.search_tier1_exact(&query, limit);
+
+        for result in &results {
+            // T1 results should have matched_term (unless query not in vocabulary)
+            if result.tier == 1 {
+                // matched_term can be None if vocabulary lookup failed (u32::MAX case)
+                // but if it's Some, it should be valid
+                if let Some(idx) = result.matched_term {
+                    prop_assert!(
+                        (idx as usize) < searcher.vocabulary().len(),
+                        "T1 matched_term index {} invalid",
+                        idx
+                    );
+                }
+            }
+        }
+    }
+
+    /// Property: T3 fuzzy scores are never zero.
+    ///
+    /// This verifies the T3 penalty formula fix: 1/(1+d) instead of 1-d/max.
+    #[test]
+    fn prop_t3_scores_nonzero(
+        query in multi_section_query_strategy(),
+        limit in 20usize..100
+    ) {
+        let searcher = load_fixtures_searcher();
+        let exclude: HashSet<usize> = HashSet::new();
+        let results = searcher.search_tier3_fuzzy(&query, &exclude, limit);
+
+        for result in &results {
+            prop_assert!(
+                result.score > 0.0,
+                "T3 fuzzy result has zero score for query '{}', doc_id={}",
+                query, result.doc_id
+            );
+        }
+    }
+}
+
+/// Regression test: T3 fuzzy match should not produce zero scores.
+#[test]
+fn test_t3_no_zero_scores() {
+    let searcher = load_fixtures_searcher();
+    let exclude: HashSet<usize> = HashSet::new();
+
+    // Use a query that will likely get fuzzy matches
+    let results = searcher.search_tier3_fuzzy("ruts", &exclude, 50);
+
+    for result in &results {
+        assert!(
+            result.score > 0.0,
+            "T3 result should never have zero score, got {} for doc_id={}",
+            result.score,
+            result.doc_id
+        );
+    }
+}
+
+/// Regression test: matched_term is populated in full search pipeline.
+#[test]
+fn test_matched_term_populated() {
+    let searcher = load_fixtures_searcher();
+    let results = searcher.search("rust", 10);
+
+    // At least some results should have matched_term
+    let with_term = results.iter().filter(|r| r.matched_term.is_some()).count();
+
+    // For a common term like "rust", we expect matched_term to be set
+    if !results.is_empty() {
+        assert!(
+            with_term > 0,
+            "Expected some results to have matched_term for query 'rust'"
+        );
+    }
 }

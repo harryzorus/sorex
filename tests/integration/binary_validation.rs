@@ -43,7 +43,10 @@ fn test_varint_exceeds_max_bytes() {
     // 11 continuation bytes - exceeds the 10-byte limit
     let bytes = vec![0x80; 11];
     let result = decode_varint(&bytes);
-    assert!(result.is_err(), "Varint exceeding max bytes should return error");
+    assert!(
+        result.is_err(),
+        "Varint exceeding max bytes should return error"
+    );
 }
 
 /// Varint that decodes but would overflow u64
@@ -63,10 +66,10 @@ fn test_varint_boundary_values() {
     let test_cases: Vec<u64> = vec![
         0,
         1,
-        127,      // Max single byte
-        128,      // First 2-byte value
-        16383,    // Max 2-byte value
-        16384,    // First 3-byte value
+        127,   // Max single byte
+        128,   // First 2-byte value
+        16383, // Max 2-byte value
+        16384, // First 3-byte value
         u32::MAX as u64,
         u64::MAX / 2,
     ];
@@ -85,7 +88,10 @@ fn test_varint_truncated_multibyte() {
     // Start of a 2-byte varint, truncated
     let bytes = vec![0x80]; // Continuation bit set but no following byte
     let result = decode_varint(&bytes);
-    assert!(result.is_err(), "Truncated multi-byte varint should return error");
+    assert!(
+        result.is_err(),
+        "Truncated multi-byte varint should return error"
+    );
 }
 
 // ============================================================================
@@ -98,10 +104,13 @@ fn test_postings_count_no_data() {
     // Encode count = 5 but provide no actual posting data
     let mut buf = Vec::new();
     encode_varint(5, &mut buf); // Says 5 entries
-    // No entry data follows
+                                // No entry data follows
 
     let result = decode_postings(&buf);
-    assert!(result.is_err(), "Postings with count but no data should error");
+    assert!(
+        result.is_err(),
+        "Postings with count but no data should error"
+    );
 }
 
 /// Postings truncated in middle of entry
@@ -112,6 +121,7 @@ fn test_postings_truncated_mid_entry() {
         doc_id: 100,
         section_idx: 5,
         heading_level: 2,
+        score: 500,
     }];
     let mut buf = Vec::new();
     encode_postings(&entries, &mut buf);
@@ -130,7 +140,10 @@ fn test_postings_count_too_large() {
     encode_varint(20_000_000, &mut buf);
 
     let result = decode_postings(&buf);
-    assert!(result.is_err(), "Posting count exceeding MAX_POSTING_SIZE should error");
+    assert!(
+        result.is_err(),
+        "Posting count exceeding MAX_POSTING_SIZE should error"
+    );
 }
 
 /// Postings with zero count should be valid (empty list)
@@ -152,10 +165,13 @@ fn test_postings_zero_count_valid() {
 fn test_suffix_array_count_no_data() {
     let mut buf = Vec::new();
     encode_varint(10, &mut buf); // Says 10 entries
-    // No entry data follows
+                                 // No entry data follows
 
     let result = decode_suffix_array(&buf);
-    assert!(result.is_err(), "Suffix array with count but no data should error");
+    assert!(
+        result.is_err(),
+        "Suffix array with count but no data should error"
+    );
 }
 
 /// Suffix array with mismatched stream lengths
@@ -226,7 +242,7 @@ mod binary_layer_tests {
         let mut bytes = vec![0u8; 100];
         // Last 4 bytes should be "XROS" but we put something else
         let len = bytes.len();
-        bytes[len-4..].copy_from_slice(b"NOPE");
+        bytes[len - 4..].copy_from_slice(b"NOPE");
         let result = BinaryLayer::from_bytes(&bytes);
         assert!(result.is_err(), "Invalid footer magic should error");
     }
@@ -251,8 +267,18 @@ fn test_postings_must_be_sorted() {
     // If we encode unsorted postings, they should still decode
     // (sorting is a contract, not enforced at decode time)
     let unsorted = vec![
-        sorex::binary::PostingEntry { doc_id: 100, section_idx: 0, heading_level: 0 },
-        sorex::binary::PostingEntry { doc_id: 50, section_idx: 0, heading_level: 0 }, // Out of order!
+        sorex::binary::PostingEntry {
+            doc_id: 100,
+            section_idx: 0,
+            heading_level: 0,
+            score: 500,
+        },
+        sorex::binary::PostingEntry {
+            doc_id: 50,
+            section_idx: 0,
+            heading_level: 0,
+            score: 1000, // Higher score, but different doc_id order
+        },
     ];
 
     let mut buf = Vec::new();
@@ -274,6 +300,7 @@ fn test_max_valid_doc_id() {
         doc_id: u32::MAX,
         section_idx: 0,
         heading_level: 0,
+        score: 100,
     };
 
     let mut buf = Vec::new();
@@ -289,6 +316,7 @@ fn test_max_valid_section_idx() {
         doc_id: 0,
         section_idx: u32::MAX,
         heading_level: 0,
+        score: 100,
     };
 
     let mut buf = Vec::new();
@@ -304,6 +332,7 @@ fn test_max_valid_heading_level() {
         doc_id: 0,
         section_idx: 0,
         heading_level: u8::MAX,
+        score: 100,
     };
 
     let mut buf = Vec::new();

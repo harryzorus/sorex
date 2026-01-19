@@ -46,6 +46,8 @@ pub fn run_build(
     input_dir: &str,
     output_dir: &str,
     emit_demo: bool,
+    ranking_path: Option<&str>,
+    ranking_batch_size: Option<usize>,
 ) -> Result<(), String> {
     let input_path = Path::new(input_dir);
     let output_path = Path::new(output_dir);
@@ -108,6 +110,8 @@ pub fn run_build(
     let built_indexes = parallel::build_indexes_with_progress(
         &documents,
         &index_defs,
+        ranking_path,
+        ranking_batch_size,
         #[cfg(feature = "parallel")]
         &build_pb,
     );
@@ -207,8 +211,7 @@ fn emit_js_loader(output_path: &Path) -> Result<(), String> {
     const LOADER_JS: &str = include_str!(concat!(env!("SOREX_OUT_DIR"), "/sorex.js"));
 
     let loader_path = output_path.join("sorex.js");
-    fs::write(&loader_path, LOADER_JS)
-        .map_err(|e| format!("Failed to write sorex.js: {}", e))?;
+    fs::write(&loader_path, LOADER_JS).map_err(|e| format!("Failed to write sorex.js: {}", e))?;
     eprintln!("  ✓ {}", loader_path.display());
 
     Ok(())
@@ -220,10 +223,8 @@ fn emit_demo_html(output_path: &Path, index_file: &str) -> Result<(), String> {
 
     let demo_html = DEMO_HTML.replace("{{INDEX_FILE}}", index_file);
     let demo_path = output_path.join("demo.html");
-    fs::write(&demo_path, demo_html)
-        .map_err(|e| format!("Failed to write demo.html: {}", e))?;
+    fs::write(&demo_path, demo_html).map_err(|e| format!("Failed to write demo.html: {}", e))?;
     eprintln!("  ✓ {}", demo_path.display());
 
     Ok(())
 }
-

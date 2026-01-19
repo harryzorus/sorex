@@ -41,11 +41,7 @@ use std::cmp::Ordering;
 ///
 /// assert_eq!(compare_results(&title_result, &content_result, &docs), Ordering::Less);
 /// ```
-pub fn compare_results(
-    a: &SearchResult,
-    b: &SearchResult,
-    docs: &[SearchDoc],
-) -> Ordering {
+pub fn compare_results(a: &SearchResult, b: &SearchResult, docs: &[SearchDoc]) -> Ordering {
     // Primary: match_type (smaller enum value = better rank)
     // Enum ordering: Title(0) < Section(1) < Subsection(2) < Subsubsection(3) < Content(4)
     match a.match_type.cmp(&b.match_type) {
@@ -84,14 +80,16 @@ mod tests {
             section_idx: 0, // 0 = no section
             tier: 1,
             match_type: MatchType::Title,
+            matched_term: None,
         };
 
         let section = SearchResult {
             doc_id: 1,
-            score: 100.0,  // Higher score
+            score: 100.0,   // Higher score
             section_idx: 1, // 1 = first section in table
             tier: 1,
             match_type: MatchType::Section,
+            matched_term: None,
         };
 
         let docs = vec![];
@@ -108,6 +106,7 @@ mod tests {
             section_idx: 0,
             tier: 1,
             match_type: MatchType::Section,
+            matched_term: None,
         };
 
         let low_score = SearchResult {
@@ -115,12 +114,16 @@ mod tests {
             score: 50.0,
             section_idx: 1,
             tier: 1,
-            match_type: MatchType::Section,  // Same bucket
+            match_type: MatchType::Section, // Same bucket
+            matched_term: None,
         };
 
         let docs = vec![];
 
         // Same bucket, so score matters
-        assert_eq!(compare_results(&high_score, &low_score, &docs), Ordering::Less);
+        assert_eq!(
+            compare_results(&high_score, &low_score, &docs),
+            Ordering::Less
+        );
     }
 }

@@ -2,9 +2,11 @@
 
 #![allow(dead_code)]
 
-use sorex::{build_index, build_hybrid_index, FieldBoundary, FieldType, HybridIndex, SearchDoc, SearchIndex};
 use sorex::binary::LoadedLayer;
 use sorex::tiered_search::TierSearcher;
+use sorex::{
+    build_hybrid_index, build_index, FieldBoundary, FieldType, HybridIndex, SearchDoc, SearchIndex,
+};
 use std::fs;
 use std::sync::LazyLock;
 
@@ -43,20 +45,17 @@ pub const FIXTURES_INDEX: &str = "target/e2e/output/index.sorex";
 
 /// Lazy-loaded bytes for Cutlass index (avoids repeated disk reads in tests).
 /// Returns empty vec if file doesn't exist (optional fixture).
-static CUTLASS_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    fs::read(CUTLASS_INDEX).unwrap_or_default()
-});
+static CUTLASS_BYTES: LazyLock<Vec<u8>> =
+    LazyLock::new(|| fs::read(CUTLASS_INDEX).unwrap_or_default());
 
 /// Lazy-loaded bytes for PyTorch index.
 /// Returns empty vec if file doesn't exist (optional fixture).
-static PYTORCH_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    fs::read(PYTORCH_INDEX).unwrap_or_default()
-});
+static PYTORCH_BYTES: LazyLock<Vec<u8>> =
+    LazyLock::new(|| fs::read(PYTORCH_INDEX).unwrap_or_default());
 
 /// Lazy-loaded bytes for E2E fixtures index.
-static FIXTURES_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    fs::read(FIXTURES_INDEX).expect("Failed to read fixtures index")
-});
+static FIXTURES_BYTES: LazyLock<Vec<u8>> =
+    LazyLock::new(|| fs::read(FIXTURES_INDEX).expect("Failed to read fixtures index"));
 
 // ============================================================================
 // LAYER LOADERS
@@ -76,7 +75,10 @@ pub fn pytorch_available() -> bool {
 /// Panics with clear message if Cutlass index doesn't exist.
 pub fn load_cutlass_layer() -> LoadedLayer {
     if CUTLASS_BYTES.is_empty() {
-        panic!("Cutlass index not found at {}. Run `cargo xtask bench-e2e` to build it.", CUTLASS_INDEX);
+        panic!(
+            "Cutlass index not found at {}. Run `cargo xtask bench-e2e` to build it.",
+            CUTLASS_INDEX
+        );
     }
     LoadedLayer::from_bytes(&CUTLASS_BYTES).expect("Failed to parse Cutlass index")
 }
@@ -85,7 +87,10 @@ pub fn load_cutlass_layer() -> LoadedLayer {
 /// Panics with clear message if PyTorch index doesn't exist.
 pub fn load_pytorch_layer() -> LoadedLayer {
     if PYTORCH_BYTES.is_empty() {
-        panic!("PyTorch index not found at {}. Run `cargo xtask bench-e2e` to build it.", PYTORCH_INDEX);
+        panic!(
+            "PyTorch index not found at {}. Run `cargo xtask bench-e2e` to build it.",
+            PYTORCH_INDEX
+        );
     }
     LoadedLayer::from_bytes(&PYTORCH_BYTES).expect("Failed to parse PyTorch index")
 }
@@ -221,14 +226,8 @@ pub fn assert_index_well_formed(index: &SearchIndex) {
         let curr = &index.suffix_array[i];
 
         // Use character-based slicing (skip N characters, not N bytes)
-        let prev_suffix: String = index.texts[prev.doc_id]
-            .chars()
-            .skip(prev.offset)
-            .collect();
-        let curr_suffix: String = index.texts[curr.doc_id]
-            .chars()
-            .skip(curr.offset)
-            .collect();
+        let prev_suffix: String = index.texts[prev.doc_id].chars().skip(prev.offset).collect();
+        let curr_suffix: String = index.texts[curr.doc_id].chars().skip(curr.offset).collect();
 
         assert!(
             prev_suffix <= curr_suffix,
@@ -307,8 +306,14 @@ pub fn build_fixture_index(fixture_name: &str) -> (tempfile::TempDir, std::path:
     let input_path = format!("{}/{}", BUILD_FIXTURES_DIR, fixture_name);
     let output_path = temp_dir.path().join("output");
 
-    run_build(&input_path, output_path.to_str().unwrap(), false)
-        .expect("Build should succeed");
+    run_build(
+        &input_path,
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    )
+    .expect("Build should succeed");
 
     (temp_dir, output_path)
 }

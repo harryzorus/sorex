@@ -8,11 +8,11 @@
 //! (exact → prefix → fuzzy) ensures users get results fast while still
 //! catching typos.
 
-mod suffix;
 pub mod dedup;
-pub mod union;
-pub mod tiered;
 pub mod hybrid;
+mod suffix;
+pub mod tiered;
+pub mod union;
 pub mod utils;
 
 pub use suffix::*;

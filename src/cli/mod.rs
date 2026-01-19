@@ -38,6 +38,24 @@ pub enum Commands {
         /// Generate demo HTML page showing integration example
         #[arg(long)]
         demo: bool,
+
+        /// Path to custom ranking function (TypeScript/JavaScript)
+        ///
+        /// The scoring function receives a ScoringContext for each (term, doc, match)
+        /// tuple and returns an integer score (higher = better ranking).
+        ///
+        /// If not specified, uses the built-in default scoring based on field type
+        /// (title=1000, heading=100, content=10) with position bonus.
+        #[arg(long)]
+        ranking: Option<String>,
+
+        /// Batch size for ranking function evaluation (experimental)
+        ///
+        /// Controls how many contexts are evaluated in each JavaScript call.
+        /// Default (0) evaluates all contexts for each term in one batch.
+        /// Smaller values may improve V8 JIT optimization but increase call overhead.
+        #[arg(long, default_value = "0")]
+        ranking_batch_size: usize,
     },
 
     /// Inspect a .sorex file structure

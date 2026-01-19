@@ -22,10 +22,13 @@ use std::sync::Arc;
 use indicatif::ProgressBar;
 
 use crate::binary::{encode_docs_binary, BinaryLayer, DocMetaInput, PostingEntry};
-use crate::util::dict_table::{extract_href_prefix, DictTables};
-use crate::index::fst::build_fst_index;
 use crate::fuzzy::dfa::ParametricDFA;
-use crate::{FieldBoundary, SearchDoc};
+use crate::index::fst::build_fst_index;
+use crate::runtime::deno::{
+    ScoringContext, ScoringDocContext, ScoringEvaluator, ScoringMatchContext,
+};
+use crate::util::dict_table::{extract_href_prefix, DictTables};
+use crate::{FieldBoundary, FieldType, SearchDoc};
 
 use super::{Document, InputManifest, NormalizedIndexDefinition};
 
@@ -152,6 +155,8 @@ pub fn load_documents_with_progress(
 pub fn build_indexes_parallel(
     documents: &[Document],
     index_defs: &[(String, NormalizedIndexDefinition)],
+    ranking_path: Option<&str>,
+    ranking_batch_size: Option<usize>,
 ) -> Vec<BuiltIndex> {
     // Build Levenshtein DFA once (expensive) and share via Arc
     let lev_dfa = ParametricDFA::build(true);
@@ -161,6 +166,9 @@ pub fn build_indexes_parallel(
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
         Arc::new(include_bytes!(concat!(env!("SOREX_OUT_DIR"), "/sorex_bg.wasm")).to_vec());
+
+    // Load ranking function if specified
+    let ranking_path = ranking_path.map(|s| s.to_string());
 
     // Build each index in parallel
     index_defs
@@ -173,6 +181,8 @@ pub fn build_indexes_parallel(
                 Arc::clone(&lev_dfa_bytes),
                 #[cfg(feature = "embed-wasm")]
                 Arc::clone(&wasm_bytes),
+                ranking_path.as_deref(),
+                ranking_batch_size,
             )
         })
         .collect()
@@ -183,6 +193,8 @@ pub fn build_indexes_parallel(
 pub fn build_indexes_with_progress(
     documents: &[Document],
     index_defs: &[(String, NormalizedIndexDefinition)],
+    ranking_path: Option<&str>,
+    ranking_batch_size: Option<usize>,
     progress: &ProgressBar,
 ) -> Vec<BuiltIndex> {
     // Build Levenshtein DFA once (expensive) and share via Arc
@@ -194,6 +206,9 @@ pub fn build_indexes_with_progress(
     #[cfg(feature = "embed-wasm")]
     let wasm_bytes: Arc<Vec<u8>> =
         Arc::new(include_bytes!(concat!(env!("SOREX_OUT_DIR"), "/sorex_bg.wasm")).to_vec());
+
+    // Load ranking function if specified
+    let ranking_path = ranking_path.map(|s| s.to_string());
 
     let counter = AtomicUsize::new(0);
     let _total = index_defs.len();
@@ -209,6 +224,8 @@ pub fn build_indexes_with_progress(
                 Arc::clone(&lev_dfa_bytes),
                 #[cfg(feature = "embed-wasm")]
                 Arc::clone(&wasm_bytes),
+                ranking_path.as_deref(),
+                ranking_batch_size,
             );
 
             // Update progress
@@ -229,8 +246,10 @@ pub fn build_indexes_with_progress(
 pub fn build_indexes_with_progress(
     documents: &[Document],
     index_defs: &[(String, NormalizedIndexDefinition)],
+    ranking_path: Option<&str>,
+    ranking_batch_size: Option<usize>,
 ) -> Vec<BuiltIndex> {
-    build_indexes_parallel(documents, index_defs)
+    build_indexes_parallel(documents, index_defs, ranking_path, ranking_batch_size)
 }
 
 fn build_single_index(
@@ -239,6 +258,8 @@ fn build_single_index(
     documents: &[Document],
     lev_dfa_bytes: Arc<Vec<u8>>,
     #[cfg(feature = "embed-wasm")] wasm_bytes: Arc<Vec<u8>>,
+    ranking_path: Option<&str>,
+    ranking_batch_size: Option<usize>,
 ) -> BuiltIndex {
     // 1. Filter documents by include criteria
     let filtered_docs: Vec<&Document> = documents
@@ -292,7 +313,7 @@ fn build_single_index(
     let fst_index = build_fst_index(search_docs.clone(), texts, all_boundaries.clone());
 
     // 5. Convert to binary format
-    let vocabulary = fst_index.vocabulary;
+    let vocabulary = fst_index.vocabulary.clone();
 
     // Convert vocab_suffix_array to (u32, u32) format
     let suffix_array: Vec<(u32, u32)> = fst_index
@@ -302,7 +323,8 @@ fn build_single_index(
         .collect();
 
     // Build section_id table (deduplicated) and extract heading levels
-    let mut section_id_map_with_levels: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+    let mut section_id_map_with_levels: std::collections::HashMap<String, u8> =
+        std::collections::HashMap::new();
 
     // Extract heading levels from field boundaries for each section_id
     for boundary in &all_boundaries {
@@ -335,34 +357,94 @@ fn build_single_index(
         .collect();
 
     // Convert inverted index to postings array with section_id indices and heading levels
-    let postings: Vec<Vec<PostingEntry>> = vocabulary
-        .iter()
-        .map(|term| {
-            fst_index
-                .inverted_index
-                .terms
-                .get(term)
-                .map(|pl| {
-                    pl.postings
-                        .iter()
-                        .map(|p| {
-                            let section_idx = if let Some(ref section_id) = p.section_id {
-                                section_idx_map.get(section_id.as_str()).copied().unwrap_or(0)
-                            } else {
-                                0 // No section = title
-                            };
+    // Always use the Deno evaluator for scoring (default or custom)
+    let postings: Vec<Vec<PostingEntry>> = {
+        // Load scoring evaluator (custom file or embedded default)
+        let mut evaluator = if let Some(ranking_file) = ranking_path {
+            ScoringEvaluator::from_file(std::path::Path::new(ranking_file))
+                .expect("Failed to load custom scoring function")
+        } else {
+            ScoringEvaluator::from_default().expect("Failed to load default scoring function")
+        };
 
-                            PostingEntry {
-                                doc_id: p.doc_id as u32,
-                                section_idx,
-                                heading_level: p.heading_level,
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default()
-        })
-        .collect();
+        vocabulary
+            .iter()
+            .map(|term| {
+                fst_index
+                    .inverted_index
+                    .terms
+                    .get(term)
+                    .map(|pl| {
+                        // Build scoring contexts for batch evaluation
+                        let contexts: Vec<ScoringContext> = pl
+                            .postings
+                            .iter()
+                            .map(|p| {
+                                let doc = &search_docs[p.doc_id];
+                                // Get text length from the filtered docs' text
+                                let text_length = filtered_docs
+                                    .get(p.doc_id)
+                                    .map(|d| d.text.len())
+                                    .unwrap_or(0);
+                                ScoringContext {
+                                    term: term.clone(),
+                                    doc: ScoringDocContext {
+                                        id: doc.id,
+                                        title: doc.title.clone(),
+                                        excerpt: doc.excerpt.clone(),
+                                        href: doc.href.clone(),
+                                        doc_type: doc.kind.clone(),
+                                        category: doc.category.clone(),
+                                        author: doc.author.clone(),
+                                        tags: doc.tags.clone(),
+                                    },
+                                    match_info: ScoringMatchContext {
+                                        field_type: match p.field_type {
+                                            FieldType::Title => "title".to_string(),
+                                            FieldType::Heading => "heading".to_string(),
+                                            FieldType::Content => "content".to_string(),
+                                        },
+                                        heading_level: p.heading_level,
+                                        section_id: p.section_id.clone(),
+                                        offset: p.offset,
+                                        text_length,
+                                    },
+                                }
+                            })
+                            .collect();
+
+                        // Evaluate scores in batch (with configurable chunk size)
+                        let scores = evaluator
+                            .evaluate_batch_chunked(&contexts, ranking_batch_size)
+                            .expect("Scoring evaluation failed");
+
+                        // Build posting entries with scores from evaluator
+                        pl.postings
+                            .iter()
+                            .zip(scores.iter())
+                            .map(|(p, &score)| {
+                                let section_idx = if let Some(ref section_id) = p.section_id {
+                                    section_idx_map
+                                        .get(section_id.as_str())
+                                        .copied()
+                                        .unwrap_or(0)
+                                } else {
+                                    0
+                                };
+
+                                PostingEntry {
+                                    doc_id: p.doc_id as u32,
+                                    section_idx,
+                                    heading_level: p.heading_level,
+                                    score,
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    };
 
     // Encode docs as binary with section_id support
     let docs_input: Vec<DocMetaInput> = search_docs
@@ -441,8 +523,10 @@ mod tests {
 
     #[test]
     fn test_filter_all() {
-        let docs = [make_doc(0, "a", Some("eng")),
-            make_doc(1, "b", Some("adventures"))];
+        let docs = [
+            make_doc(0, "a", Some("eng")),
+            make_doc(1, "b", Some("adventures")),
+        ];
 
         let def = NormalizedIndexDefinition {
             include: IncludeFilter::All,
@@ -455,9 +539,11 @@ mod tests {
 
     #[test]
     fn test_filter_by_category() {
-        let docs = [make_doc(0, "a", Some("eng")),
+        let docs = [
+            make_doc(0, "a", Some("eng")),
             make_doc(1, "b", Some("adventures")),
-            make_doc(2, "c", Some("eng"))];
+            make_doc(2, "c", Some("eng")),
+        ];
 
         let mut filters = std::collections::HashMap::new();
         filters.insert("category".to_string(), "eng".to_string());

@@ -52,3 +52,9 @@ mod scoring_props;
 
 #[path = "property/binary_props.rs"]
 mod binary_props;
+
+#[path = "property/custom_scoring.rs"]
+mod custom_scoring;
+
+#[path = "property/accumulation.rs"]
+mod accumulation;

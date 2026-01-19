@@ -1,4 +1,9 @@
 //! End-to-end tests for the build workflow.
+//!
+//! These tests require the `deno-runtime` feature because build workflow
+//! uses the Deno-based scoring evaluator.
+
+#![cfg(feature = "deno-runtime")]
 
 use sorex::binary::LoadedLayer;
 use sorex::build::run_build;
@@ -14,7 +19,13 @@ fn test_run_build_e2e_basic() {
     let output_path = temp_dir.path().join("output");
     let input_path = format!("{}/valid", BUILD_FIXTURES_DIR);
 
-    let result = run_build(&input_path, output_path.to_str().unwrap(), false);
+    let result = run_build(
+        &input_path,
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    );
 
     assert!(result.is_ok(), "Build should succeed: {:?}", result.err());
 
@@ -31,7 +42,7 @@ fn test_run_build_e2e_with_demo() {
     let output_path = temp_dir.path().join("output");
     let input_path = format!("{}/valid", BUILD_FIXTURES_DIR);
 
-    let result = run_build(&input_path, output_path.to_str().unwrap(), true);
+    let result = run_build(&input_path, output_path.to_str().unwrap(), true, None, None);
 
     assert!(result.is_ok(), "Build with demo should succeed");
 
@@ -55,7 +66,13 @@ fn test_run_build_e2e_missing_manifest() {
     let output_path = temp_dir.path().join("output");
 
     // Point to a directory without manifest.json
-    let result = run_build(temp_dir.path().to_str().unwrap(), output_path.to_str().unwrap(), false);
+    let result = run_build(
+        temp_dir.path().to_str().unwrap(),
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    );
 
     assert!(result.is_err(), "Build should fail without manifest");
     let err = result.unwrap_err();
@@ -72,7 +89,13 @@ fn test_run_build_e2e_invalid_manifest() {
     let output_path = temp_dir.path().join("output");
     let input_path = format!("{}/invalid-manifest", BUILD_FIXTURES_DIR);
 
-    let result = run_build(&input_path, output_path.to_str().unwrap(), false);
+    let result = run_build(
+        &input_path,
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    );
 
     assert!(result.is_err(), "Build should fail with invalid manifest");
     let err = result.unwrap_err();
@@ -89,7 +112,14 @@ fn test_built_index_roundtrip_search() {
     let output_path = temp_dir.path().join("output");
     let input_path = format!("{}/valid", BUILD_FIXTURES_DIR);
 
-    run_build(&input_path, output_path.to_str().unwrap(), false).unwrap();
+    run_build(
+        &input_path,
+        output_path.to_str().unwrap(),
+        false,
+        None,
+        None,
+    )
+    .unwrap();
 
     // Load the built index
     let bytes = fs::read(output_path.join("index.sorex")).unwrap();

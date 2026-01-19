@@ -28,24 +28,57 @@
 use crate::binary::{LoadedLayer, PostingEntry};
 use crate::fuzzy::dfa::{ParametricDFA, QueryMatcher};
 use crate::scoring::ranking::compare_results;
-use crate::scoring::{
-    T1_EXACT_SCORE, T2_PREFIX_SCORE, T2_TITLE_BOOST,
-    T3_FUZZY_DISTANCE_1_SCORE, T3_FUZZY_DISTANCE_2_SCORE, T3_FUZZY_DISTANCE_3_SCORE,
-    T3_EDIT_DISTANCE_PENALTY, T3_LENGTH_BONUS_COEFFICIENT, T3_TITLE_BOOST,
-};
-use crate::util::simd::{to_lowercase_ascii_simd, starts_with_simd};
-use crate::types::{SearchDoc, MatchType};
+use crate::types::{MatchType, SearchDoc};
+use crate::util::simd::{starts_with_simd, to_lowercase_ascii_simd};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// Options for configuring search behavior.
+///
+/// Used by `TierSearcher::search_with_options()` to customize result handling.
+#[derive(Debug, Clone, Copy)]
+pub struct SearchOptions {
+    /// Whether to deduplicate sections within a document (default: true).
+    ///
+    /// When `true` (default): Returns one result per document, using the
+    /// best section (highest match_type, then highest score) for deep linking.
+    ///
+    /// When `false`: Returns multiple results per document if different sections
+    /// match. Each section appears as a separate result, useful for showing
+    /// all matching locations within a document.
+    pub dedup_sections: bool,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self {
+            dedup_sections: true,
+        } // Section dedup ON by default
+    }
+}
+
+impl SearchOptions {
+    /// Create options with default settings (section dedup enabled).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create options with section dedup disabled.
+    pub fn without_section_dedup() -> Self {
+        Self {
+            dedup_sections: false,
+        }
+    }
+}
+
 #[cfg(feature = "rayon")]
-use std::sync::mpsc::{channel, Sender, Receiver};
-#[cfg(feature = "rayon")]
-use std::collections::BTreeMap;
+use rayon::prelude::*;
 #[cfg(feature = "rayon")]
 use std::cmp::Reverse;
 #[cfg(feature = "rayon")]
-use rayon::prelude::*;
+use std::collections::BTreeMap;
+#[cfg(feature = "rayon")]
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 /// Wrapper for f64 that implements Ord for use in BTreeMap keys.
 #[cfg(feature = "rayon")]
@@ -72,7 +105,9 @@ impl PartialOrd for OrderedFloat {
 #[cfg(feature = "rayon")]
 impl Ord for OrderedFloat {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.partial_cmp(&other.0).unwrap_or(std::cmp::Ordering::Equal)
+        self.0
+            .partial_cmp(&other.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
     }
 }
 
@@ -81,7 +116,7 @@ impl Ord for OrderedFloat {
 #[derive(Debug, Clone)]
 pub struct RawResult {
     pub result: SearchResult,
-    pub tier_done: Option<u8>,  // Some(tier_num) if this tier finished
+    pub tier_done: Option<u8>, // Some(tier_num) if this tier finished
 }
 
 /// Deduped result ready for UI.
@@ -102,9 +137,10 @@ pub enum UIMessage {
 pub struct SearchResult {
     pub doc_id: usize,
     pub score: f64,
-    pub section_idx: u32,  // 0 = no section, >0 = section_table[idx-1]
-    pub tier: u8,           // 1=exact, 2=prefix, 3=fuzzy
-    pub match_type: MatchType, // Primary sort key: Title > Section > ... > Content
+    pub section_idx: u32,          // 0 = no section, >0 = section_table[idx-1]
+    pub tier: u8,                  // 1=exact, 2=prefix, 3=fuzzy
+    pub match_type: MatchType,     // Primary sort key: Title > Section > ... > Content
+    pub matched_term: Option<u32>, // Vocabulary index of matched term (for display)
 }
 
 /// Match found by fuzzy search with edit distance.
@@ -123,6 +159,8 @@ struct MultiTermAccumulator {
     doc_scores: HashMap<(usize, u32), f64>,
     /// Best match_type per (doc_id, section_idx) pair
     doc_match_types: HashMap<(usize, u32), MatchType>,
+    /// Best matched vocabulary term index per (doc_id, section_idx) pair
+    doc_matched_terms: HashMap<(usize, u32), u32>,
     /// Which query term indices hit each doc_id (for AND semantics)
     doc_term_hits: HashMap<usize, HashSet<usize>>,
     /// Total number of query terms (for AND filtering)
@@ -135,6 +173,7 @@ impl MultiTermAccumulator {
         Self {
             doc_scores: HashMap::new(),
             doc_match_types: HashMap::new(),
+            doc_matched_terms: HashMap::new(),
             doc_term_hits: HashMap::new(),
             num_terms,
         }
@@ -148,6 +187,7 @@ impl MultiTermAccumulator {
     /// * `section_idx` - Section index from the posting
     /// * `match_type` - Match type (Title, Heading, Content)
     /// * `score` - Score to add for this match
+    /// * `vocab_idx` - Vocabulary index of the matched term
     #[inline]
     fn add_match(
         &mut self,
@@ -156,6 +196,7 @@ impl MultiTermAccumulator {
         section_idx: u32,
         match_type: MatchType,
         score: f64,
+        vocab_idx: u32,
     ) {
         let key = (doc_id, section_idx);
 
@@ -163,25 +204,45 @@ impl MultiTermAccumulator {
         *self.doc_scores.entry(key).or_insert(0.0) += score;
 
         // Track best match_type (lowest enum value = higher priority)
+        // Also update matched_term when match_type improves
         self.doc_match_types
             .entry(key)
             .and_modify(|mt| {
                 if match_type < *mt {
                     *mt = match_type;
+                    self.doc_matched_terms.insert(key, vocab_idx);
                 }
             })
             .or_insert(match_type);
 
+        // Track matched vocabulary term (first one wins for this key)
+        self.doc_matched_terms.entry(key).or_insert(vocab_idx);
+
         // Track which terms hit this doc
-        self.doc_term_hits.entry(doc_id).or_default().insert(term_idx);
+        self.doc_term_hits
+            .entry(doc_id)
+            .or_default()
+            .insert(term_idx);
     }
 
     /// Build search results from accumulated scores.
     ///
     /// Filters to documents matching ALL query terms (AND semantics),
-    /// then deduplicates by doc_id (keeping best match_type/score per doc),
+    /// optionally deduplicates by doc_id (keeping best match_type/score per doc),
     /// sorts by score descending and truncates to limit.
-    fn into_results(self, tier: u8, limit: usize, docs: &[SearchDoc]) -> Vec<SearchResult> {
+    ///
+    /// # Arguments
+    /// * `tier` - Search tier (1=exact, 2=prefix, 3=fuzzy)
+    /// * `limit` - Maximum results to return
+    /// * `docs` - Document metadata for ranking
+    /// * `dedup_sections` - If true, keep only best section per doc
+    fn into_results(
+        self,
+        tier: u8,
+        limit: usize,
+        docs: &[SearchDoc],
+        dedup_sections: bool,
+    ) -> Vec<SearchResult> {
         // First pass: collect all (doc_id, section_idx) matches
         let section_results: Vec<SearchResult> = self
             .doc_scores
@@ -201,75 +262,67 @@ impl MultiTermAccumulator {
                     .get(&(doc_id, section_idx))
                     .copied()
                     .unwrap_or(MatchType::Content),
+                matched_term: self.doc_matched_terms.get(&(doc_id, section_idx)).copied(),
             })
             .collect();
 
-        // Second pass: deduplicate by doc_id, keeping best (match_type, score)
-        let mut best_per_doc: HashMap<usize, SearchResult> = HashMap::new();
+        if !dedup_sections {
+            // No dedup: return all section matches
+            let mut results = section_results;
+            results.sort_by(|a, b| compare_results(a, b, docs));
+            results.truncate(limit);
+            return results;
+        }
+
+        // Second pass: deduplicate by doc_id
+        // Track: (total_score, best_section_idx, best_section_score, best_match_type, best_matched_term)
+        // - total_score: sum of all section scores (for ranking)
+        // - best_section_*: the section with best match_type, then highest score (for deep linking)
+        let mut best_per_doc: HashMap<usize, (f64, u32, f64, MatchType, Option<u32>)> =
+            HashMap::new();
         for result in section_results {
             best_per_doc
                 .entry(result.doc_id)
-                .and_modify(|existing| {
-                    // Keep best match_type (lowest enum value = higher priority)
-                    if result.match_type < existing.match_type {
-                        *existing = result.clone();
-                    } else if result.match_type == existing.match_type && result.score > existing.score {
-                        // Same match_type: keep higher score
-                        existing.score = result.score;
-                        existing.section_idx = result.section_idx;
+                .and_modify(|(total, best_idx, best_score, best_type, best_term)| {
+                    // Always sum scores for ranking
+                    *total += result.score;
+
+                    // Update best section if this one is better (for deep linking)
+                    // Best = lowest match_type (Title < Section < Content), then highest score
+                    let is_better = result.match_type < *best_type
+                        || (result.match_type == *best_type && result.score > *best_score);
+                    if is_better {
+                        *best_idx = result.section_idx;
+                        *best_score = result.score;
+                        *best_type = result.match_type;
+                        *best_term = result.matched_term;
                     }
                 })
-                .or_insert(result);
+                .or_insert((
+                    result.score,
+                    result.section_idx,
+                    result.score,
+                    result.match_type,
+                    result.matched_term,
+                ));
         }
 
-        let mut results: Vec<SearchResult> = best_per_doc.into_values().collect();
+        let mut results: Vec<SearchResult> = best_per_doc
+            .into_iter()
+            .map(
+                |(doc_id, (total_score, section_idx, _, match_type, matched_term))| SearchResult {
+                    doc_id,
+                    score: total_score, // Use summed score for ranking
+                    section_idx,        // Use best section for deep linking
+                    tier,
+                    match_type,
+                    matched_term,
+                },
+            )
+            .collect();
         results.sort_by(|a, b| compare_results(a, b, docs));
         results.truncate(limit);
         results
-    }
-}
-
-/// Compute fuzzy match score with edit distance penalty.
-///
-/// # Arguments
-/// * `distance` - Edit distance (1, 2, or more)
-/// * `query_len` - Length of the query term
-/// * `matched_len` - Length of the matched vocabulary term
-/// * `is_title` - Whether the match is in the document title
-///
-/// # Returns
-/// Final score with all penalties and bonuses applied.
-///
-/// # Score Constants (defined in scoring/core.rs)
-/// - Distance 1: T3_FUZZY_DISTANCE_1_SCORE (30.0)
-/// - Distance 2: T3_FUZZY_DISTANCE_2_SCORE (15.0)
-/// - Distance 3+: T3_FUZZY_DISTANCE_3_SCORE (5.0)
-/// - Edit penalty: T3_EDIT_DISTANCE_PENALTY (20% per edit)
-/// - Length bonus: T3_LENGTH_BONUS_COEFFICIENT (30% of score)
-/// - Title boost: T3_TITLE_BOOST (50% boost)
-#[inline]
-fn compute_fuzzy_score(distance: u8, query_len: usize, matched_len: usize, is_title: bool) -> f64 {
-    // Base score by distance (constants from scoring/core.rs)
-    let base_score = match distance {
-        1 => T3_FUZZY_DISTANCE_1_SCORE,
-        2 => T3_FUZZY_DISTANCE_2_SCORE,
-        _ => T3_FUZZY_DISTANCE_3_SCORE,
-    };
-
-    // Apply edit distance penalty (20% per edit)
-    let penalty = 1.0 - (distance as f64 * T3_EDIT_DISTANCE_PENALTY);
-    let penalized_score = base_score * penalty;
-
-    // Length similarity bonus: prefer terms with similar length to query term
-    let length_diff = (query_len as i32 - matched_len as i32).abs();
-    let length_bonus = 1.0 / (1.0 + length_diff as f64);
-    let score_with_length = penalized_score * (1.0 + length_bonus * T3_LENGTH_BONUS_COEFFICIENT);
-
-    // Boost score if match is in document title
-    if is_title {
-        score_with_length * T3_TITLE_BOOST
-    } else {
-        score_with_length
     }
 }
 
@@ -446,7 +499,11 @@ impl TierSearcher {
         // Validate postings
         for (term_idx, postings) in self.inner.postings.iter().enumerate() {
             if term_idx >= self.inner.vocabulary.len() {
-                return Some(format!("Postings term_idx {} >= vocabulary len {}", term_idx, self.inner.vocabulary.len()));
+                return Some(format!(
+                    "Postings term_idx {} >= vocabulary len {}",
+                    term_idx,
+                    self.inner.vocabulary.len()
+                ));
             }
 
             for posting in postings {
@@ -473,23 +530,40 @@ impl TierSearcher {
     ///
     /// Note: Searcher is validated at construction time in `from_layer()`.
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
+        self.search_with_options(query, limit, SearchOptions::default())
+    }
+
+    /// Full three-tier search with configurable options.
+    ///
+    /// # Arguments
+    /// * `query` - Search query (whitespace-separated terms use AND semantics)
+    /// * `limit` - Maximum results to return
+    /// * `options` - Search options (section deduplication, etc.)
+    pub fn search_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: SearchOptions,
+    ) -> Vec<SearchResult> {
         // Return empty results for empty queries to prevent edge cases
         if query.is_empty() || limit == 0 {
             return Vec::new();
         }
 
+        let dedup = options.dedup_sections;
+
         // Tier 1: Exact match (handles multi-term with AND semantics)
-        let t1_results = self.search_tier1_exact(query, limit);
+        let t1_results = self.search_tier1_exact_with_options(query, limit, dedup);
         let t1_ids: HashSet<usize> = t1_results.iter().map(|r| r.doc_id).collect();
 
         // Tier 2: Prefix match (exclude T1 results)
-        let t2_results = self.search_tier2_prefix(query, &t1_ids, limit);
+        let t2_results = self.search_tier2_prefix_with_options(query, &t1_ids, limit, dedup);
         let t2_ids: HashSet<usize> = t2_results.iter().map(|r| r.doc_id).collect();
 
         // Tier 3: Fuzzy match (exclude T1 and T2 results)
         let mut exclude_ids = t1_ids;
         exclude_ids.extend(t2_ids);
-        let t3_results = self.search_tier3_fuzzy(query, &exclude_ids, limit);
+        let t3_results = self.search_tier3_fuzzy_with_options(query, &exclude_ids, limit, dedup);
 
         // Merge and sort results
         let mut results: Vec<_> = t1_results
@@ -515,6 +589,16 @@ impl TierSearcher {
     /// For single-term queries, the first posting for each unique doc_id is the
     /// highest-scoring one, so we can early-exit after finding `limit` unique docs.
     pub fn search_tier1_exact(&self, query: &str, limit: usize) -> Vec<SearchResult> {
+        self.search_tier1_exact_with_options(query, limit, true)
+    }
+
+    /// Tier 1 with configurable section deduplication.
+    pub fn search_tier1_exact_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        dedup_sections: bool,
+    ) -> Vec<SearchResult> {
         let query_lower = to_lowercase_ascii_simd(query);
 
         // Fast path: single word (no whitespace) - skip split/collect
@@ -522,7 +606,10 @@ impl TierSearcher {
             return self.search_tier1_single_term(&query_lower, limit);
         }
 
-        let parts: Vec<&str> = query_lower.split_whitespace().filter(|p| !p.is_empty()).collect();
+        let parts: Vec<&str> = query_lower
+            .split_whitespace()
+            .filter(|p| !p.is_empty())
+            .collect();
 
         // Single-term optimization: leverage presorted posting list
         if parts.len() == 1 {
@@ -530,9 +617,18 @@ impl TierSearcher {
         }
 
         // Multi-term: sum scores across matching terms (AND semantics)
+        // Uses pre-computed scores from posting entries
         let mut acc = MultiTermAccumulator::new(parts.len());
 
         for (term_idx, part) in parts.iter().enumerate() {
+            // Find vocabulary index for this term (for matched_term tracking)
+            let vocab_idx = self
+                .inner
+                .vocabulary
+                .iter()
+                .position(|t| t == *part)
+                .map(|i| i as u32);
+
             if let Some(postings) = self.inner.inverted_index.get(*part) {
                 for entry in postings {
                     let doc_id = entry.doc_id as usize;
@@ -541,12 +637,20 @@ impl TierSearcher {
                     }
 
                     let match_type = MatchType::from_heading_level(entry.heading_level);
-                    acc.add_match(term_idx, doc_id, entry.section_idx, match_type, T1_EXACT_SCORE);
+                    // Use pre-computed score from posting entry
+                    acc.add_match(
+                        term_idx,
+                        doc_id,
+                        entry.section_idx,
+                        match_type,
+                        entry.score as f64,
+                        vocab_idx.unwrap_or(u32::MAX),
+                    );
                 }
             }
         }
 
-        acc.into_results(1, limit, &self.inner.docs)
+        acc.into_results(1, limit, &self.inner.docs, dedup_sections)
     }
 
     /// Single-term T1 search with early-exit optimization.
@@ -555,12 +659,20 @@ impl TierSearcher {
     /// through and take the first `limit` unique doc_ids. The first posting for
     /// each doc is guaranteed to be the highest-scoring one.
     ///
-    /// No sorting needed: posting list order = correct ranking order because
-    /// score dominates match_type (Title=100 > Heading=10 > Content=1).
+    /// Uses pre-computed scores from posting entries (set at index time by
+    /// user-defined ranking function or default scoring).
     #[inline]
     fn search_tier1_single_term(&self, term: &str, limit: usize) -> Vec<SearchResult> {
         let mut results = Vec::with_capacity(limit);
         let mut seen_docs = HashSet::with_capacity(limit);
+
+        // Find vocabulary index for this term (for matched_term tracking)
+        let vocab_idx = self
+            .inner
+            .vocabulary
+            .iter()
+            .position(|t| t == term)
+            .map(|i| i as u32);
 
         if let Some(postings) = self.inner.inverted_index.get(term) {
             for entry in postings {
@@ -572,12 +684,14 @@ impl TierSearcher {
                 // First occurrence is best (presorted by score DESC)
                 if seen_docs.insert(doc_id) {
                     let match_type = MatchType::from_heading_level(entry.heading_level);
+                    // Use pre-computed score from posting entry
                     results.push(SearchResult {
                         doc_id,
-                        score: T1_EXACT_SCORE,
+                        score: entry.score as f64,
                         section_idx: entry.section_idx,
                         tier: 1,
                         match_type,
+                        matched_term: vocab_idx,
                     });
 
                     // Early exit: we have enough unique docs
@@ -600,6 +714,17 @@ impl TierSearcher {
         query: &str,
         exclude_ids: &HashSet<usize>,
         limit: usize,
+    ) -> Vec<SearchResult> {
+        self.search_tier2_prefix_with_options(query, exclude_ids, limit, true)
+    }
+
+    /// Tier 2 with configurable section deduplication.
+    pub fn search_tier2_prefix_with_options(
+        &self,
+        query: &str,
+        exclude_ids: &HashSet<usize>,
+        limit: usize,
+        dedup_sections: bool,
     ) -> Vec<SearchResult> {
         let query_lower = to_lowercase_ascii_simd(query);
 
@@ -626,6 +751,14 @@ impl TierSearcher {
                 prefix_search_vocabulary(&self.inner.suffix_array, &self.inner.vocabulary, part);
 
             for vocab_idx in prefix_matches {
+                // Get the matched vocabulary term for penalty calculation
+                let matched_term_len = self
+                    .inner
+                    .vocabulary
+                    .get(vocab_idx)
+                    .map(|t| t.len())
+                    .unwrap_or(1);
+
                 if let Some(postings) = self.inner.postings.get(vocab_idx) {
                     for entry in postings {
                         let doc_id = entry.doc_id as usize;
@@ -635,23 +768,30 @@ impl TierSearcher {
 
                         let match_type = MatchType::from_heading_level(entry.heading_level);
 
-                        // Boost score if match is in document title (section_idx == 0)
-                        let base_score = if entry.section_idx == 0 {
-                            T2_PREFIX_SCORE * T2_TITLE_BOOST
-                        } else {
-                            T2_PREFIX_SCORE
-                        };
+                        // Apply T2 penalty: score * (query.len / term.len)
+                        // Longer terms that match a short prefix get penalized
+                        let penalty = part.len() as f64 / matched_term_len.max(1) as f64;
+                        let penalized_score = entry.score as f64 * penalty;
 
-                        acc.add_match(term_idx, doc_id, entry.section_idx, match_type, base_score);
+                        acc.add_match(
+                            term_idx,
+                            doc_id,
+                            entry.section_idx,
+                            match_type,
+                            penalized_score,
+                            vocab_idx as u32,
+                        );
                     }
                 }
             }
         }
 
-        acc.into_results(2, limit, &self.inner.docs)
+        acc.into_results(2, limit, &self.inner.docs, dedup_sections)
     }
 
     /// Single-term T2 search optimized for single prefix query.
+    ///
+    /// Uses pre-computed scores with T2 penalty: score * (query.len / term.len)
     #[inline]
     fn search_tier2_single_term(
         &self,
@@ -665,6 +805,14 @@ impl TierSearcher {
             prefix_search_vocabulary(&self.inner.suffix_array, &self.inner.vocabulary, prefix);
 
         for vocab_idx in prefix_matches {
+            // Get the matched vocabulary term for penalty calculation
+            let matched_term_len = self
+                .inner
+                .vocabulary
+                .get(vocab_idx)
+                .map(|t| t.len())
+                .unwrap_or(1);
+
             if let Some(postings) = self.inner.postings.get(vocab_idx) {
                 for entry in postings {
                     let doc_id = entry.doc_id as usize;
@@ -672,12 +820,9 @@ impl TierSearcher {
                         continue;
                     }
 
-                    // Boost score if match is in document title (section_idx == 0)
-                    let score = if entry.section_idx == 0 {
-                        T2_PREFIX_SCORE * T2_TITLE_BOOST
-                    } else {
-                        T2_PREFIX_SCORE
-                    };
+                    // Apply T2 penalty: score * (query.len / term.len)
+                    let penalty = prefix.len() as f64 / matched_term_len.max(1) as f64;
+                    let score = entry.score as f64 * penalty;
                     let match_type = MatchType::from_heading_level(entry.heading_level);
 
                     // Keep best match_type and score for each document
@@ -689,6 +834,7 @@ impl TierSearcher {
                                 r.match_type = match_type;
                                 r.section_idx = entry.section_idx;
                                 r.score = score;
+                                r.matched_term = Some(vocab_idx as u32);
                             } else if score > r.score {
                                 r.score = score;
                             }
@@ -699,6 +845,7 @@ impl TierSearcher {
                             section_idx: entry.section_idx,
                             tier: 2,
                             match_type,
+                            matched_term: Some(vocab_idx as u32),
                         });
                 }
             }
@@ -723,6 +870,17 @@ impl TierSearcher {
         exclude_ids: &HashSet<usize>,
         limit: usize,
     ) -> Vec<SearchResult> {
+        self.search_tier3_fuzzy_with_options(query, exclude_ids, limit, true)
+    }
+
+    /// Tier 3 with configurable section deduplication.
+    pub fn search_tier3_fuzzy_with_options(
+        &self,
+        query: &str,
+        exclude_ids: &HashSet<usize>,
+        limit: usize,
+        dedup_sections: bool,
+    ) -> Vec<SearchResult> {
         let query_lower = to_lowercase_ascii_simd(query);
 
         // Split query into parts for multi-term handling
@@ -743,21 +901,26 @@ impl TierSearcher {
         // Multi-term: sum scores across matching fuzzy terms (AND semantics)
         let mut acc = MultiTermAccumulator::new(parts.len());
 
-        for (term_idx, part) in parts.iter().enumerate() {
-            let fuzzy_matches =
-                fuzzy_search_vocabulary(&self.inner.vocabulary, self.inner.lev_dfa.as_ref(), part, 2);
+        // Maximum edit distance for T3 fuzzy search
+        const MAX_EDIT_DISTANCE: u8 = 2;
 
-            for FuzzyMatch { term_idx: vocab_idx, distance } in fuzzy_matches {
+        for (term_idx, part) in parts.iter().enumerate() {
+            let fuzzy_matches = fuzzy_search_vocabulary(
+                &self.inner.vocabulary,
+                self.inner.lev_dfa.as_ref(),
+                part,
+                MAX_EDIT_DISTANCE,
+            );
+
+            for FuzzyMatch {
+                term_idx: vocab_idx,
+                distance,
+            } in fuzzy_matches
+            {
                 // Skip exact matches (distance 0) - those are T1's responsibility
                 if distance == 0 {
                     continue;
                 }
-
-                // Get the matched term to compute length similarity bonus
-                let matched_term = self.inner.vocabulary
-                    .get(vocab_idx)
-                    .map(|s| s.as_str())
-                    .unwrap_or("");
 
                 if let Some(postings) = self.inner.postings.get(vocab_idx) {
                     for entry in postings {
@@ -768,19 +931,30 @@ impl TierSearcher {
 
                         let match_type = MatchType::from_heading_level(entry.heading_level);
 
-                        // Compute fuzzy score with edit distance penalty
-                        let final_score = compute_fuzzy_score(distance, part.len(), matched_term.len(), entry.section_idx == 0);
+                        // Apply T3 penalty: score * (1 - edit_dist / max_dist)
+                        // Closer matches (lower edit distance) get higher scores
+                        let penalty = 1.0 / (1.0 + distance as f64);
+                        let penalized_score = entry.score as f64 * penalty;
 
-                        acc.add_match(term_idx, doc_id, entry.section_idx, match_type, final_score);
+                        acc.add_match(
+                            term_idx,
+                            doc_id,
+                            entry.section_idx,
+                            match_type,
+                            penalized_score,
+                            vocab_idx as u32,
+                        );
                     }
                 }
             }
         }
 
-        acc.into_results(3, limit, &self.inner.docs)
+        acc.into_results(3, limit, &self.inner.docs, dedup_sections)
     }
 
     /// Single-term T3 search optimized for single fuzzy query.
+    ///
+    /// Uses pre-computed scores with T3 penalty: score * (1 - edit_dist / max_dist)
     #[inline]
     fn search_tier3_single_term(
         &self,
@@ -791,21 +965,27 @@ impl TierSearcher {
         let mut doc_scores: HashMap<usize, f64> = HashMap::new();
         let mut doc_section_idxs: HashMap<usize, u32> = HashMap::new();
         let mut doc_match_types: HashMap<usize, MatchType> = HashMap::new();
+        let mut doc_matched_terms: HashMap<usize, u32> = HashMap::new();
 
-        let fuzzy_matches =
-            fuzzy_search_vocabulary(&self.inner.vocabulary, self.inner.lev_dfa.as_ref(), term, 2);
+        // Maximum edit distance for T3 fuzzy search
+        const MAX_EDIT_DISTANCE: u8 = 2;
 
-        for FuzzyMatch { term_idx: vocab_idx, distance } in fuzzy_matches {
+        let fuzzy_matches = fuzzy_search_vocabulary(
+            &self.inner.vocabulary,
+            self.inner.lev_dfa.as_ref(),
+            term,
+            MAX_EDIT_DISTANCE,
+        );
+
+        for FuzzyMatch {
+            term_idx: vocab_idx,
+            distance,
+        } in fuzzy_matches
+        {
             // Skip exact matches (distance 0) - those are T1's responsibility
             if distance == 0 {
                 continue;
             }
-
-            // Get the matched term to compute length similarity bonus
-            let matched_term = self.inner.vocabulary
-                .get(vocab_idx)
-                .map(|s| s.as_str())
-                .unwrap_or("");
 
             if let Some(postings) = self.inner.postings.get(vocab_idx) {
                 for entry in postings {
@@ -816,8 +996,9 @@ impl TierSearcher {
 
                     let match_type = MatchType::from_heading_level(entry.heading_level);
 
-                    // Compute fuzzy score with edit distance penalty
-                    let final_score = compute_fuzzy_score(distance, term.len(), matched_term.len(), entry.section_idx == 0);
+                    // Apply T3 penalty: score * (1 - edit_dist / max_dist)
+                    let penalty = 1.0 / (1.0 + distance as f64);
+                    let final_score = entry.score as f64 * penalty;
 
                     // Keep best score and match_type per doc
                     match (doc_scores.get(&doc_id), doc_match_types.get(&doc_id)) {
@@ -825,17 +1006,20 @@ impl TierSearcher {
                             doc_scores.insert(doc_id, final_score);
                             doc_match_types.insert(doc_id, match_type);
                             doc_section_idxs.insert(doc_id, entry.section_idx);
+                            doc_matched_terms.insert(doc_id, vocab_idx as u32);
                         }
                         (_, Some(&prev_match_type)) if match_type < prev_match_type => {
                             doc_scores.insert(doc_id, final_score);
                             doc_match_types.insert(doc_id, match_type);
                             doc_section_idxs.insert(doc_id, entry.section_idx);
+                            doc_matched_terms.insert(doc_id, vocab_idx as u32);
                         }
                         (Some(&prev_score), Some(&prev_match_type))
                             if match_type == prev_match_type && final_score > prev_score =>
                         {
                             doc_scores.insert(doc_id, final_score);
                             doc_section_idxs.insert(doc_id, entry.section_idx);
+                            doc_matched_terms.insert(doc_id, vocab_idx as u32);
                         }
                         _ => {}
                     }
@@ -851,6 +1035,7 @@ impl TierSearcher {
                 section_idx: doc_section_idxs[&doc_id],
                 tier: 3,
                 match_type: doc_match_types[&doc_id],
+                matched_term: doc_matched_terms.get(&doc_id).copied(),
             })
             .collect();
 
@@ -942,8 +1127,18 @@ impl TierSearcher {
     }
 
     /// Stream T1 exact matches to channel.
+    ///
+    /// Uses pre-computed scores from posting entries.
     #[cfg(feature = "rayon")]
     fn stream_tier1(&self, query: &str, limit: usize, tx: Sender<RawResult>) {
+        // Find vocabulary index for this term
+        let vocab_idx = self
+            .inner
+            .vocabulary
+            .iter()
+            .position(|t| t == query)
+            .map(|i| i as u32);
+
         if let Some(postings) = self.inner.inverted_index.get(query) {
             let mut count = 0;
             for entry in postings {
@@ -955,12 +1150,19 @@ impl TierSearcher {
                 }
                 let result = SearchResult {
                     doc_id: entry.doc_id as usize,
-                    score: T1_EXACT_SCORE,
+                    score: entry.score as f64,
                     section_idx: entry.section_idx,
                     tier: 1,
                     match_type: MatchType::from_heading_level(entry.heading_level),
+                    matched_term: vocab_idx,
                 };
-                if tx.send(RawResult { result, tier_done: None }).is_err() {
+                if tx
+                    .send(RawResult {
+                        result,
+                        tier_done: None,
+                    })
+                    .is_err()
+                {
                     return;
                 }
                 count += 1;
@@ -974,25 +1176,34 @@ impl TierSearcher {
                 section_idx: 0,
                 tier: 1,
                 match_type: MatchType::Content,
+                matched_term: None,
             },
             tier_done: Some(1),
         });
     }
 
     /// Stream T2 prefix matches to channel.
+    ///
+    /// Uses pre-computed scores with T2 penalty: score * (query.len / term.len)
     #[cfg(feature = "rayon")]
     fn stream_tier2(&self, query: &str, limit: usize, tx: Sender<RawResult>) {
-        let prefix_matches = prefix_search_vocabulary(
-            &self.inner.suffix_array,
-            &self.inner.vocabulary,
-            query,
-        );
+        let prefix_matches =
+            prefix_search_vocabulary(&self.inner.suffix_array, &self.inner.vocabulary, query);
 
         let mut count = 0;
         for vocab_idx in prefix_matches {
             if count >= limit {
                 break;
             }
+
+            // Get the matched vocabulary term for penalty calculation
+            let matched_term_len = self
+                .inner
+                .vocabulary
+                .get(vocab_idx)
+                .map(|t| t.len())
+                .unwrap_or(1);
+
             if let Some(postings) = self.inner.postings.get(vocab_idx) {
                 for entry in postings {
                     if count >= limit {
@@ -1001,14 +1212,26 @@ impl TierSearcher {
                     if self.inner.docs.get(entry.doc_id as usize).is_none() {
                         continue;
                     }
+
+                    // Apply T2 penalty: score * (query.len / term.len)
+                    let penalty = query.len() as f64 / matched_term_len.max(1) as f64;
+                    let score = entry.score as f64 * penalty;
+
                     let result = SearchResult {
                         doc_id: entry.doc_id as usize,
-                        score: T2_PREFIX_SCORE,
+                        score,
                         section_idx: entry.section_idx,
                         tier: 2,
                         match_type: MatchType::from_heading_level(entry.heading_level),
+                        matched_term: Some(vocab_idx as u32),
                     };
-                    if tx.send(RawResult { result, tier_done: None }).is_err() {
+                    if tx
+                        .send(RawResult {
+                            result,
+                            tier_done: None,
+                        })
+                        .is_err()
+                    {
                         return;
                     }
                     count += 1;
@@ -1023,14 +1246,20 @@ impl TierSearcher {
                 section_idx: 0,
                 tier: 2,
                 match_type: MatchType::Content,
+                matched_term: None,
             },
             tier_done: Some(2),
         });
     }
 
     /// Stream T3 fuzzy matches to channel.
+    ///
+    /// Uses pre-computed scores with T3 penalty: score * (1 - edit_dist / max_dist)
     #[cfg(feature = "rayon")]
     fn stream_tier3(&self, query: &str, limit: usize, tx: Sender<RawResult>) {
+        // Maximum edit distance for T3 fuzzy search
+        const MAX_EDIT_DISTANCE: u8 = 2;
+
         let dfa = match &self.inner.lev_dfa {
             Some(dfa) => dfa,
             None => {
@@ -1042,6 +1271,7 @@ impl TierSearcher {
                         section_idx: 0,
                         tier: 3,
                         match_type: MatchType::Content,
+                        matched_term: None,
                     },
                     tier_done: Some(3),
                 });
@@ -1052,13 +1282,15 @@ impl TierSearcher {
         let matcher = QueryMatcher::new(dfa, query);
 
         // Parallel vocabulary scan using rayon
-        let fuzzy_matches: Vec<FuzzyMatch> = self.inner.vocabulary
+        let fuzzy_matches: Vec<FuzzyMatch> = self
+            .inner
+            .vocabulary
             .par_iter()
             .enumerate()
             .filter_map(|(term_idx, term)| {
                 matcher.matches(term).and_then(|distance| {
                     // Only include fuzzy matches (distance > 0), not exact (T1's job)
-                    if distance <= 2 && distance > 0 {
+                    if distance <= MAX_EDIT_DISTANCE && distance > 0 {
                         Some(FuzzyMatch { term_idx, distance })
                     } else {
                         None
@@ -1080,19 +1312,26 @@ impl TierSearcher {
                     if self.inner.docs.get(entry.doc_id as usize).is_none() {
                         continue;
                     }
-                    let score = match distance {
-                        1 => T3_FUZZY_DISTANCE_1_SCORE,
-                        2 => T3_FUZZY_DISTANCE_2_SCORE,
-                        _ => T3_FUZZY_DISTANCE_3_SCORE,
-                    };
+
+                    // Apply T3 penalty: score * (1 - edit_dist / max_dist)
+                    let penalty = 1.0 / (1.0 + distance as f64);
+                    let score = entry.score as f64 * penalty;
+
                     let result = SearchResult {
                         doc_id: entry.doc_id as usize,
                         score,
                         section_idx: entry.section_idx,
                         tier: 3,
                         match_type: MatchType::from_heading_level(entry.heading_level),
+                        matched_term: Some(term_idx as u32),
                     };
-                    if tx.send(RawResult { result, tier_done: None }).is_err() {
+                    if tx
+                        .send(RawResult {
+                            result,
+                            tier_done: None,
+                        })
+                        .is_err()
+                    {
                         return;
                     }
                     count += 1;
@@ -1107,6 +1346,7 @@ impl TierSearcher {
                 section_idx: 0,
                 tier: 3,
                 match_type: MatchType::Content,
+                matched_term: None,
             },
             tier_done: Some(3),
         });
@@ -1178,7 +1418,12 @@ impl TierSearcher {
             match seen.entry(doc_id) {
                 std::collections::hash_map::Entry::Vacant(e) => {
                     e.insert((score, result.tier, result.section_idx));
-                    let heap_key = (Reverse(score), result.tier, result.doc_id, result.section_idx);
+                    let heap_key = (
+                        Reverse(score),
+                        result.tier,
+                        result.doc_id,
+                        result.section_idx,
+                    );
                     heap.insert(heap_key, result);
                 }
                 std::collections::hash_map::Entry::Occupied(mut e) => {
@@ -1190,7 +1435,12 @@ impl TierSearcher {
                         heap.remove(&old_key);
                         // Insert new
                         e.insert((score, result.tier, result.section_idx));
-                        let heap_key = (Reverse(score), result.tier, result.doc_id, result.section_idx);
+                        let heap_key = (
+                            Reverse(score),
+                            result.tier,
+                            result.doc_id,
+                            result.section_idx,
+                        );
                         heap.insert(heap_key, result);
                     }
                 }
@@ -1461,11 +1711,13 @@ mod multi_term_tests {
                     doc_id: 0,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
                 PostingEntry {
                     doc_id: 2,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
             ],
         );
@@ -1478,11 +1730,13 @@ mod multi_term_tests {
                     doc_id: 0,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
                 PostingEntry {
                     doc_id: 3,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
             ],
         );
@@ -1495,11 +1749,13 @@ mod multi_term_tests {
                     doc_id: 1,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
                 PostingEntry {
                     doc_id: 2,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
             ],
         );
@@ -1512,11 +1768,13 @@ mod multi_term_tests {
                     doc_id: 0,
                     section_idx: 0,
                     heading_level: 0,
+                    score: 1000,
                 },
                 PostingEntry {
                     doc_id: 2,
                     section_idx: 0, // Same section as rust/optimization for multi-term summing
                     heading_level: 0,
+                    score: 1000,
                 },
             ],
         );
@@ -1528,6 +1786,7 @@ mod multi_term_tests {
                 doc_id: 3,
                 section_idx: 0,
                 heading_level: 0,
+                score: 1000,
             }],
         );
 
@@ -1538,7 +1797,8 @@ mod multi_term_tests {
             .enumerate()
             .map(|(i, _)| (i as u32, 0))
             .collect();
-        suffix_array.sort_by(|&(a, _), &(b, _)| vocabulary[a as usize].cmp(&vocabulary[b as usize]));
+        suffix_array
+            .sort_by(|&(a, _), &(b, _)| vocabulary[a as usize].cmp(&vocabulary[b as usize]));
 
         // Build postings indexed by vocabulary position
         let postings: Vec<Vec<PostingEntry>> = vocabulary
@@ -1570,21 +1830,29 @@ mod multi_term_tests {
 
         // Should find doc2 (has both rust + optimization)
         assert!(!results.is_empty(), "Should find multi-term matches");
-        assert_eq!(results[0].doc_id, 2, "Doc2 should be first (has both terms)");
+        assert_eq!(
+            results[0].doc_id, 2,
+            "Doc2 should be first (has both terms)"
+        );
 
-        // Score should be ~200 (100 per term)
+        // Score should be ~2000 (1000 per term with default title scoring)
+        // Pre-computed scores: title=1000, heading=100, content=10
         assert!(
-            results[0].score >= 180.0,
-            "Multi-term score should be summed (~200), got {}",
+            results[0].score >= 1800.0,
+            "Multi-term score should be summed (~2000), got {}",
             results[0].score
         );
 
         // Single-term "rust" should return doc0 and doc2
         let single_results = searcher.search_tier1_exact("rust", 10);
-        assert!(single_results.len() >= 2, "Single term should match more docs");
         assert!(
-            single_results[0].score < 150.0,
-            "Single-term score should be ~100, got {}",
+            single_results.len() >= 2,
+            "Single term should match more docs"
+        );
+        // Single-term score is pre-computed (1000 for title)
+        assert!(
+            single_results[0].score >= 900.0 && single_results[0].score <= 1100.0,
+            "Single-term score should be ~1000 (pre-computed), got {}",
             single_results[0].score
         );
     }
@@ -1618,10 +1886,13 @@ mod multi_term_tests {
         assert!(!results.is_empty(), "Should find multi-term prefix matches");
         assert_eq!(results[0].doc_id, 2, "Doc2 should match both prefixes");
 
-        // Score should be ~100+ (50 per term, possibly with title boost)
+        // Score with T2 penalty applied:
+        // - "rus" (3 chars) matches "rust" (4 chars): 1000 * 3/4 = 750
+        // - "opt" (3 chars) matches "optimization" (12 chars): 1000 * 3/12 = 250
+        // Total: 750 + 250 = 1000
         assert!(
-            results[0].score >= 90.0,
-            "Multi-term prefix score should be summed (~100+), got {}",
+            results[0].score >= 900.0 && results[0].score <= 1100.0,
+            "Multi-term prefix score should be summed with penalty (~1000), got {}",
             results[0].score
         );
     }
@@ -1644,20 +1915,23 @@ mod multi_term_tests {
         let searcher = create_test_searcher();
 
         // Single-term queries should work as before
+        // Pre-computed scores: title=1000, heading=100, content=10
         let results = searcher.search_tier1_exact("rust", 10);
         assert!(!results.is_empty(), "Single term should work");
         assert!(
-            results[0].score >= 90.0 && results[0].score <= 120.0,
-            "Single-term T1 score should be ~100, got {}",
+            results[0].score >= 900.0 && results[0].score <= 1100.0,
+            "Single-term T1 score should be ~1000 (pre-computed title), got {}",
             results[0].score
         );
 
         let exclude = HashSet::new();
         let results = searcher.search_tier2_prefix("rus", &exclude, 10);
         assert!(!results.is_empty(), "Single prefix should work");
+        // T2 applies penalty: score * (query.len / term.len)
+        // For "rus" (3 chars) matching "rust" (4 chars): 1000 * 3/4 = 750
         assert!(
-            results[0].score >= 45.0 && results[0].score <= 70.0,
-            "Single-term T2 score should be ~50-60, got {}",
+            results[0].score >= 700.0 && results[0].score <= 800.0,
+            "Single-term T2 score should be ~750 (with penalty), got {}",
             results[0].score
         );
     }
@@ -1670,7 +1944,10 @@ mod multi_term_tests {
         assert!(results.is_empty(), "Empty query should return empty");
 
         let results = searcher.search_tier1_exact("   ", 10);
-        assert!(results.is_empty(), "Whitespace-only query should return empty");
+        assert!(
+            results.is_empty(),
+            "Whitespace-only query should return empty"
+        );
 
         let exclude = HashSet::new();
         let results = searcher.search_tier2_prefix("", &exclude, 10);

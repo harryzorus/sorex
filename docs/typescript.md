@@ -83,7 +83,30 @@ search(
 ): void
 ```
 
+### searchSync
+
+Synchronous search returning all results at once. Supports optional `SearchOptions`.
+
+```typescript
+searchSync(query: string, limit: number, options?: SearchOptions): SearchResult[]
+```
+
 **Parameters:**
+- `query` - Search query string
+- `limit` - Maximum number of results
+- `options` - Optional search configuration (see SearchOptions below)
+
+**Example:**
+
+```typescript
+// Default: deduplicate sections (one result per document)
+const results = searcher.searchSync('kernel', 10);
+
+// Show all matching sections within documents
+const allSections = searcher.searchSync('kernel', 10, { dedupSections: false });
+```
+
+**search Parameters:**
 - `query` - Search query string
 - `limit` - Maximum number of results
 - `callback.onUpdate` - Called after each tier completes with accumulated results
@@ -146,8 +169,29 @@ interface SearchResult {
   sectionId: string | null;  // Section ID for deep linking
   tier: 1 | 2 | 3;           // Match tier (1=exact, 2=prefix, 3=fuzzy)
   matchType: number;         // Match type (0=title, 1=section, 2+=content)
+  score: number;             // Relevance score (higher is better)
+  matchedTerm: string | null; // Vocabulary term that matched (for highlighting)
 }
 ```
+
+**`matchedTerm`**: The actual vocabulary term that matched the query. Useful for:
+- Highlighting the matched term in results
+- Showing what the fuzzy search matched against (e.g., query "ruts" → matchedTerm "rust")
+- Prefix expansion display (e.g., query "typ" → matchedTerm "typescript")
+
+---
+
+## SearchOptions
+
+```typescript
+interface SearchOptions {
+  dedupSections?: boolean;   // Whether to deduplicate sections (default: true)
+}
+```
+
+**`dedupSections`** (default: `true`):
+- When `true`: Returns one result per document. The best matching section (by match type, then score) is used for deep linking via `sectionId`.
+- When `false`: Returns multiple results per document if different sections match. Useful for showing all matching locations within a document.
 
 ---
 
@@ -209,6 +253,7 @@ class SearchController {
 |--------|-------------|
 | `loadSorex(url)` | Load .sorex file, returns Promise<SorexSearcher> |
 | `search(query, limit, callback?)` | Progressive search with callbacks |
+| `searchSync(query, limit, options?)` | Synchronous search with optional dedup control |
 | `docCount()` | Number of indexed documents |
 | `vocabSize()` | Number of vocabulary terms |
 | `free()` | Release WASM memory |

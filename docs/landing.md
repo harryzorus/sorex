@@ -15,13 +15,13 @@ features:
     description: "All tiers run in parallel. Results stream as each completes."
     tiers:
       - name: "Exact"
-        time: "~2μs"
+        time: "~5μs"
         description: "Hash lookup, instant results"
       - name: "Prefix"
         time: "~10μs"
         description: "Suffix array binary search"
       - name: "Fuzzy"
-        time: "~50μs"
+        time: "~200μs"
         description: "Levenshtein DFA traversal"
 
   parallel:
@@ -156,7 +156,7 @@ Each library makes different tradeoffs. FlexSearch optimizes for speed and bundl
 
 ### What Sorex Does Differently
 
-1. **Three-tier progressive search**: Exact matches return in 2μs. Prefix matches add more results at 10μs. Fuzzy matches complete the picture at 50μs. Your UI updates after each tier.
+1. **Three-tier progressive search**: Exact matches return in ~5μs. Prefix matches add more results at ~10μs. Fuzzy matches complete the picture at ~200μs. Your UI updates after each tier.
 
 2. **Parallel loading**: The .sorex v12 format puts WASM first, so compilation starts while index data downloads. On Chrome/Firefox, 4 workers compile in parallel.
 

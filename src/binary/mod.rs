@@ -75,8 +75,6 @@ mod incremental;
 mod postings;
 
 // Re-export from submodules for public API
-#[cfg(feature = "rayon")]
-pub use incremental::IncrementalLoader;
 pub use encoding::{
     decode_section_table, decode_suffix_array, decode_varint, decode_vocabulary,
     encode_section_table, encode_suffix_array, encode_varint, encode_vocabulary,
@@ -86,6 +84,8 @@ pub use header::{
     MAX_DOC_COUNT, MAX_FILE_SIZE, MAX_POSTING_SIZE, MAX_SKIP_LEVELS, MAX_TERM_COUNT,
     MAX_VARINT_BYTES, SKIP_INTERVAL, SKIP_LIST_THRESHOLD, VERSION,
 };
+#[cfg(feature = "rayon")]
+pub use incremental::IncrementalLoader;
 pub use postings::{decode_postings, encode_postings, PostingEntry, SkipEntry, SkipList};
 
 use std::collections::HashMap;
@@ -246,6 +246,7 @@ impl BinaryLayer {
                         doc_id,
                         section_idx: 0,
                         heading_level: 0, // Legacy v5 path has no heading levels (use build_v7)
+                        score: 10,        // Default score for legacy format
                     })
                     .collect()
             })
@@ -292,15 +293,15 @@ impl BinaryLayer {
         let mut buf = Vec::with_capacity(total_size);
         self.header.write(&mut buf)?;
         // Optimal decode order based on dependency graph analysis:
-        buf.extend_from_slice(&self.wasm_bytes);        // 1. WASM (async compile)
-        buf.extend_from_slice(&self.vocab_bytes);       // 2. VOCABULARY (needed by SA)
-        buf.extend_from_slice(&self.dict_table_bytes);  // 3. DICT_TABLES (needed by DOCS)
-        buf.extend_from_slice(&self.postings_bytes);    // 4. POSTINGS (independent)
-        buf.extend_from_slice(&self.sa_bytes);          // 5. SUFFIX_ARRAY (after VOCAB)
-        buf.extend_from_slice(&self.docs_bytes);        // 6. DOCS (after DICT_TABLES)
+        buf.extend_from_slice(&self.wasm_bytes); // 1. WASM (async compile)
+        buf.extend_from_slice(&self.vocab_bytes); // 2. VOCABULARY (needed by SA)
+        buf.extend_from_slice(&self.dict_table_bytes); // 3. DICT_TABLES (needed by DOCS)
+        buf.extend_from_slice(&self.postings_bytes); // 4. POSTINGS (independent)
+        buf.extend_from_slice(&self.sa_bytes); // 5. SUFFIX_ARRAY (after VOCAB)
+        buf.extend_from_slice(&self.docs_bytes); // 6. DOCS (after DICT_TABLES)
         buf.extend_from_slice(&self.section_table_bytes); // 7. SECTION_TABLE
-        buf.extend_from_slice(&self.skip_bytes);        // 8. SKIP_LISTS
-        buf.extend_from_slice(&self.lev_dfa_bytes);     // 9. LEV_DFA (only for T3)
+        buf.extend_from_slice(&self.skip_bytes); // 8. SKIP_LISTS
+        buf.extend_from_slice(&self.lev_dfa_bytes); // 9. LEV_DFA (only for T3)
 
         // Compute CRC32 over everything written so far
         let crc32 = SorexFooter::compute_crc32(&buf);
@@ -415,11 +416,14 @@ impl BinaryLayer {
 
         // Helper to extract section with proper error handling
         let extract_section = |section: (usize, usize), name: &str| -> io::Result<Vec<u8>> {
-            bytes.get(section.0..section.1)
-                .ok_or_else(|| io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    format!("{} section truncated", name),
-                ))
+            bytes
+                .get(section.0..section.1)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("{} section truncated", name),
+                    )
+                })
                 .map(|s| s.to_vec())
         };
 
@@ -586,7 +590,10 @@ pub(crate) fn decode_docs_binary(bytes: &[u8]) -> io::Result<Vec<DocMeta>> {
         if version != DOCS_VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Unsupported docs version: {} (expected {})", version, DOCS_VERSION),
+                format!(
+                    "Unsupported docs version: {} (expected {})",
+                    version, DOCS_VERSION
+                ),
             ));
         }
     }
@@ -776,8 +783,8 @@ impl LoadedLayer {
         let mut pos = 0;
         let mut term_idx = 0;
         while pos < layer.postings_bytes.len() {
-            let (posting_list, consumed) = decode_postings(&layer.postings_bytes[pos..])
-                .map_err(|e| {
+            let (posting_list, consumed) =
+                decode_postings(&layer.postings_bytes[pos..]).map_err(|e| {
                     io::Error::new(
                         e.kind(),
                         format!("Error decoding term {} postings: {}", term_idx, e),
@@ -923,12 +930,13 @@ mod tests {
 
     #[test]
     fn test_postings_roundtrip() {
-        // Create PostingEntry with unique doc_ids (delta encoding requires sorted)
+        // Create PostingEntry with unique doc_ids and descending scores
         let entries: Vec<PostingEntry> = (0..500)
             .map(|i| PostingEntry {
                 doc_id: i * 3,
                 section_idx: if i % 10 == 0 { i / 10 } else { 0 },
                 heading_level: (i % 6) as u8,
+                score: 1000 - i, // Descending scores
             })
             .collect();
 
@@ -1048,16 +1056,19 @@ mod tests {
                 doc_id: 0,
                 section_idx: 0,
                 heading_level: 0,
+                score: 1000, // Title
             }, // No section (title)
             PostingEntry {
                 doc_id: 1,
                 section_idx: 1,
                 heading_level: 1,
+                score: 100, // Heading
             }, // "introduction"
             PostingEntry {
                 doc_id: 2,
                 section_idx: 2,
                 heading_level: 2,
+                score: 50, // Lower heading
             }, // "conclusion"
         ]];
 
@@ -1250,6 +1261,7 @@ mod tests {
             doc_id: 0,
             section_idx: 0,
             heading_level: 0,
+            score: 100,
         }]];
         let lev_dfa_bytes = build_lev_dfa_bytes();
         let docs_bytes = encode_docs_binary(&[]);
@@ -1288,12 +1300,32 @@ mod tests {
         let suffix_array = vec![(0, 0), (1, 0)];
         let postings = vec![
             vec![
-                PostingEntry { doc_id: 0, section_idx: 0, heading_level: 0 },
-                PostingEntry { doc_id: 1, section_idx: 0, heading_level: 0 },
+                PostingEntry {
+                    doc_id: 0,
+                    section_idx: 0,
+                    heading_level: 0,
+                    score: 100,
+                },
+                PostingEntry {
+                    doc_id: 1,
+                    section_idx: 0,
+                    heading_level: 0,
+                    score: 90,
+                },
             ],
             vec![
-                PostingEntry { doc_id: 1, section_idx: 0, heading_level: 0 },
-                PostingEntry { doc_id: 2, section_idx: 0, heading_level: 0 },
+                PostingEntry {
+                    doc_id: 1,
+                    section_idx: 0,
+                    heading_level: 0,
+                    score: 100,
+                },
+                PostingEntry {
+                    doc_id: 2,
+                    section_idx: 0,
+                    heading_level: 0,
+                    score: 90,
+                },
             ],
         ];
         let lev_dfa_bytes = build_lev_dfa_bytes();
@@ -1361,6 +1393,7 @@ mod tests {
             doc_id: 0,
             section_idx: 0,
             heading_level: 0,
+            score: 100,
         }]];
         let lev_dfa_bytes = build_lev_dfa_bytes();
 
@@ -1424,6 +1457,7 @@ mod tests {
             doc_id: 0,
             section_idx: 0,
             heading_level: 0,
+            score: 100,
         }]];
         let lev_dfa_bytes = build_lev_dfa_bytes();
 

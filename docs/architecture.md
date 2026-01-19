@@ -208,7 +208,7 @@ All three tiers execute in parallel. Results stream progressively:
 |                   |      |   author          |      |                   |
 +-------------------+      +-------------------+      +-------------------+
           |                          |                          |
-          | ≈2μs                     | ≈10μs                    | ≈50μs
+          | ≈5μs                     | ≈10μs                    | ≈200μs
           |                          |                          |
           +--------------------------+--------------------------+
                                      |
@@ -275,13 +275,20 @@ Position Boost (within field):
 
 Field Type Dominance (mathematically proven):
   Title - MaxBoost > Heading + MaxBoost
-  -> 99.5 > 10.5 check
+  -> 99.5 > 10.5 ✓
 
   Heading - MaxBoost > Content + MaxBoost
-  -> 9.5 > 1.5 check
+  -> 9.5 > 1.5 ✓
 
 This guarantees: ANY title match outranks ANY heading match,
 regardless of position. The hierarchy is absolute, not heuristic.
+
+Fuzzy Match Penalty (T3):
+  penalty = 1.0 / (1.0 + distance)
+  distance=1: 0.5 (50% of base score)
+  distance=2: 0.33 (33% of base score)
+
+  Always positive, monotonically decreasing with distance.
 ```
 
 ---
@@ -441,10 +448,10 @@ Build with `bun tools/build.ts`. Output goes to `target/loader/sorex.js` (and `.
 | Operation | Complexity | Speed | Notes |
 |-----------|------------|-------|-------|
 | Index load | O(n) | <span class="complexity complexity-medium">~50ms</span> | Linear scan, one-time cost |
-| Exact match | O(1) | <span class="complexity complexity-fast">~2us</span> | Hash table lookup |
-| Prefix match | O(log k + m) | <span class="complexity complexity-fast">~10us</span> | k = vocabulary, m = matches |
-| Fuzzy match | O(k x t) | <span class="complexity complexity-medium">~50us</span> | k = vocabulary, t = avg term length |
-| Posting intersection | O(min(n, m)) | <span class="complexity complexity-fast">~5us</span> | Using skip lists for large lists |
+| Exact match | O(1) | <span class="complexity complexity-fast">~5μs</span> | Hash table lookup |
+| Prefix match | O(log k + m) | <span class="complexity complexity-fast">~10μs</span> | k = vocabulary, m = matches |
+| Fuzzy match | O(k x t) | <span class="complexity complexity-medium">~200μs</span> | k = vocabulary, t = avg term length |
+| Posting intersection | O(min(n, m)) | <span class="complexity complexity-fast">~5μs</span> | Using skip lists for large lists |
 
 ### Space Complexity
 

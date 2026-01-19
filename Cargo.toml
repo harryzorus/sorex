@@ -11,7 +11,7 @@ proc-macro2 = "1.0"
 
 [package]
 name = "sorex"
-version = "1.0.7"
+version = "1.0.8"
 edition = "2021"
 description = "Formally verified full-text search with suffix arrays"
 repository = "https://github.com/harryzorus/sorex"

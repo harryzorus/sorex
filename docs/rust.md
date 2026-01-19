@@ -60,13 +60,38 @@ Search result with source attribution:
 
 ```rust
 pub struct SearchResult {
-    pub doc: SearchDoc,
-    pub source: SearchSource,      // Title, Heading, or Content
+    pub doc_id: usize,
     pub score: f64,
-    pub section_id: Option<String>,
+    pub section_idx: u32,          // 0 = no section, >0 = section_table[idx-1]
     pub tier: u8,                  // 1=exact, 2=prefix, 3=fuzzy
+    pub match_type: MatchType,     // Title, Section, Heading, or Content
+    pub matched_term: Option<u32>, // Vocabulary index of matched term
 }
 ```
+
+**`matched_term`**: Index into the vocabulary of the term that matched. Useful for:
+- Highlighting the matched term in results
+- Showing fuzzy match expansions (e.g., query "ruts" matched vocabulary term "rust")
+- Prefix expansion display (e.g., query "typ" matched "typescript")
+
+### SearchOptions
+
+Configuration for search behavior:
+
+```rust
+pub struct SearchOptions {
+    pub dedup_sections: bool,  // Default: true
+}
+
+impl SearchOptions {
+    pub fn new() -> Self;                    // Default settings
+    pub fn without_section_dedup() -> Self;  // Disable section dedup
+}
+```
+
+**`dedup_sections`** (default: `true`):
+- When `true`: Returns one result per document. The best matching section (by match_type, then score) is used for deep linking.
+- When `false`: Returns multiple results per document if different sections match.
 
 ## Building Indexes
 
@@ -245,6 +270,32 @@ let postings: &[Vec<PostingEntry>] = &layer.postings;
 let section_table: &[String] = &layer.section_table;
 ```
 
+## Custom Scoring (Deno Runtime)
+
+With the `deno-runtime` feature, you can use custom JavaScript/TypeScript scoring functions:
+
+```rust
+use sorex::runtime::ScoringEvaluator;
+
+// Load scoring function from file
+let mut evaluator = ScoringEvaluator::from_file(Path::new("scoring.ts"))?;
+
+// Or from inline code
+let mut evaluator = ScoringEvaluator::from_code(r#"
+    export default function score(ctx) {
+        return ctx.match.fieldType === "title" ? 1000 : 100;
+    }
+"#)?;
+
+// Evaluate single context
+let score = evaluator.evaluate(&context)?;
+
+// Batch evaluation (more efficient)
+let scores = evaluator.evaluate_batch(&contexts)?;
+```
+
+See [CLI Reference](./cli.md#custom-scoring-functions) for the `ScoringContext` interface.
+
 ## Feature Flags
 
 ```toml
@@ -257,6 +308,7 @@ sorex = { version = "0.2.5", features = ["wasm", "serde_json"] }
 | `wasm` | WebAssembly bindings (SorexSearcher with callback-based search) |
 | `serde_json` | JSON serialization for build pipeline integration |
 | `embed-wasm` | Embed WASM runtime in CLI binary |
+| `deno-runtime` | Deno V8 runtime for custom ranking functions |
 
 ## See Also
 

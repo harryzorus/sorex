@@ -36,7 +36,10 @@ fn load_sorex_bytes() -> Vec<u8> {
 #[test]
 fn test_deno_runtime_creates_successfully() {
     let runtime = DenoRuntime::new();
-    assert!(runtime.is_ok(), "Deno runtime should initialize successfully");
+    assert!(
+        runtime.is_ok(),
+        "Deno runtime should initialize successfully"
+    );
 }
 
 #[test]
@@ -48,7 +51,10 @@ fn test_deno_wasm_search_basic() {
         .search(&sorex_bytes, &get_loader_js(), "rust", 10)
         .expect("Deno search should succeed");
 
-    assert!(!results.is_empty(), "Search for 'rust' should return results");
+    assert!(
+        !results.is_empty(),
+        "Search for 'rust' should return results"
+    );
 
     // Verify result structure
     for r in &results {
@@ -232,21 +238,33 @@ fn test_deno_context_reuse() {
         .expect("Failed to create DenoSearchContext");
 
     // Execute multiple searches on the same context
+    // Use terms from the e2e fixture (data/e2e/fixtures)
     let results1 = ctx.search("rust", 10).expect("First search should succeed");
-    let results2 = ctx.search("typescript", 10).expect("Second search should succeed");
-    let results3 = ctx.search("webassembly", 10).expect("Third search should succeed");
+    let results2 = ctx
+        .search("typescript", 10)
+        .expect("Second search should succeed");
+    let results3 = ctx
+        .search("webassembly", 10)
+        .expect("Third search should succeed");
 
     // All searches should return results
     assert!(!results1.is_empty(), "First search should return results");
     assert!(!results2.is_empty(), "Second search should return results");
     assert!(!results3.is_empty(), "Third search should return results");
 
-    // Results should be for different topics (check that match positions differ)
-    // Note: Same document might rank highest for multiple queries, so we check
-    // that the context is reused correctly by verifying results have non-empty hrefs
-    assert!(!results1[0].href.is_empty(), "First result should have href");
-    assert!(!results2[0].href.is_empty(), "Second result should have href");
-    assert!(!results3[0].href.is_empty(), "Third result should have href");
+    // Verify context is reused correctly by checking results have non-empty hrefs
+    assert!(
+        !results1[0].href.is_empty(),
+        "First result should have href"
+    );
+    assert!(
+        !results2[0].href.is_empty(),
+        "Second result should have href"
+    );
+    assert!(
+        !results3[0].href.is_empty(),
+        "Third result should have href"
+    );
 }
 
 #[test]
@@ -256,12 +274,12 @@ fn test_deno_special_characters_in_query() {
 
     // Test queries with special characters that need escaping
     let special_queries = [
-        "\"quoted\"",           // Double quotes
-        "back\\slash",          // Backslash
-        "single'quote",         // Single quote
-        "unicode\u{00e9}",      // Unicode (accented e)
-        "multi word query",     // Spaces
-        "<tag>",                // Angle brackets
+        "\"quoted\"",       // Double quotes
+        "back\\slash",      // Backslash
+        "single'quote",     // Single quote
+        "unicode\u{00e9}",  // Unicode (accented e)
+        "multi word query", // Spaces
+        "<tag>",            // Angle brackets
     ];
 
     for query in special_queries {
@@ -273,5 +291,189 @@ fn test_deno_special_characters_in_query() {
             query,
             result.err()
         );
+    }
+}
+
+// ============================================================================
+// MATCHED_TERM AND SCORE PARITY TESTS
+// ============================================================================
+
+#[test]
+fn test_deno_wasm_matched_term_populated() {
+    let runtime = DenoRuntime::new().expect("Failed to create Deno runtime");
+    let sorex_bytes = load_sorex_bytes();
+
+    // Search for a common term
+    let results = runtime
+        .search(&sorex_bytes, &get_loader_js(), "rust", 10)
+        .expect("Deno search should succeed");
+
+    assert!(!results.is_empty(), "Should find results for 'rust'");
+
+    // WASM results should have matched_term populated
+    let with_term = results.iter().filter(|r| r.matched_term.is_some()).count();
+
+    assert!(
+        with_term > 0,
+        "Expected some WASM results to have matched_term for 'rust', got 0/{} results",
+        results.len()
+    );
+
+    // Verify matched_term makes sense
+    for r in &results {
+        if let Some(ref term) = r.matched_term {
+            // For exact match on "rust", matched_term should be "rust"
+            if r.tier == 1 {
+                assert_eq!(
+                    term, "rust",
+                    "T1 exact match should have matched_term='rust', got '{}'",
+                    term
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_deno_wasm_matched_term_matches_native() {
+    let runtime = DenoRuntime::new().expect("Failed to create Deno runtime");
+    let sorex_bytes = load_sorex_bytes();
+    let native_searcher = load_native_searcher();
+
+    let query = "rust";
+    let limit = 10;
+
+    let wasm_results = runtime
+        .search(&sorex_bytes, &get_loader_js(), query, limit)
+        .expect("Deno search should succeed");
+
+    let native_results = native_searcher.search(query, limit);
+    let vocabulary = native_searcher.vocabulary();
+
+    // Compare matched_term between WASM and native
+    for (i, (wasm_r, native_r)) in wasm_results.iter().zip(native_results.iter()).enumerate() {
+        // Resolve native matched_term index to string
+        let native_term = native_r
+            .matched_term
+            .and_then(|idx| vocabulary.get(idx as usize).cloned());
+
+        assert_eq!(
+            wasm_r.matched_term, native_term,
+            "Result {} matched_term mismatch: WASM={:?} vs Native={:?}",
+            i, wasm_r.matched_term, native_term
+        );
+    }
+}
+
+#[test]
+fn test_deno_wasm_scores_match_native() {
+    let runtime = DenoRuntime::new().expect("Failed to create Deno runtime");
+    let sorex_bytes = load_sorex_bytes();
+    let native_searcher = load_native_searcher();
+
+    let query = "rust";
+    let limit = 10;
+
+    let wasm_results = runtime
+        .search(&sorex_bytes, &get_loader_js(), query, limit)
+        .expect("Deno search should succeed");
+
+    let native_results = native_searcher.search(query, limit);
+
+    // Compare scores between WASM and native
+    for (i, (wasm_r, native_r)) in wasm_results.iter().zip(native_results.iter()).enumerate() {
+        // Scores should match within floating point tolerance
+        let score_diff = (wasm_r.score - native_r.score).abs();
+        assert!(
+            score_diff < 0.001,
+            "Result {} score mismatch: WASM={:.4} vs Native={:.4} (diff={:.6})",
+            i,
+            wasm_r.score,
+            native_r.score,
+            score_diff
+        );
+    }
+}
+
+#[test]
+fn test_deno_wasm_t3_scores_nonzero() {
+    let runtime = DenoRuntime::new().expect("Failed to create Deno runtime");
+    let sorex_bytes = load_sorex_bytes();
+    let native_searcher = load_native_searcher();
+
+    // Use a typo query to trigger T3 fuzzy matching
+    let query = "ruts";
+    let limit = 20;
+
+    let wasm_results = runtime
+        .search(&sorex_bytes, &get_loader_js(), query, limit)
+        .expect("Deno search should succeed");
+
+    let native_results = native_searcher.search(query, limit);
+
+    // Debug: print first few results
+    eprintln!(
+        "\nQuery: '{}' - comparing {} WASM vs {} native results",
+        query,
+        wasm_results.len(),
+        native_results.len()
+    );
+    for (i, (w, n)) in wasm_results
+        .iter()
+        .zip(native_results.iter())
+        .enumerate()
+        .take(5)
+    {
+        eprintln!(
+            "  [{}] WASM: tier={} score={:.2} matched_term={:?} title='{}'",
+            i, w.tier, w.score, w.matched_term, w.title
+        );
+        eprintln!("       Native: tier={} score={:.2}", n.tier, n.score);
+    }
+
+    // Compare T3 results between WASM and native
+    for (wasm_r, native_r) in wasm_results.iter().zip(native_results.iter()) {
+        // WASM and native should have matching tiers and scores
+        assert_eq!(
+            wasm_r.tier, native_r.tier,
+            "Tier mismatch for '{}': WASM={} vs Native={}",
+            wasm_r.title, wasm_r.tier, native_r.tier
+        );
+
+        // If native has non-zero score, WASM should too
+        if native_r.score > 0.0 {
+            assert!(
+                wasm_r.score > 0.0,
+                "WASM score should be non-zero when native is non-zero: \
+                 WASM={} vs Native={} for '{}'",
+                wasm_r.score,
+                native_r.score,
+                wasm_r.title
+            );
+        }
+    }
+}
+
+#[test]
+fn test_deno_wasm_prefix_matched_term() {
+    let runtime = DenoRuntime::new().expect("Failed to create Deno runtime");
+    let sorex_bytes = load_sorex_bytes();
+
+    // Use a prefix query
+    let results = runtime
+        .search(&sorex_bytes, &get_loader_js(), "typ", 10)
+        .expect("Deno search should succeed");
+
+    // Check T2 prefix results have valid matched_term
+    for r in &results {
+        if r.tier == 2 {
+            if let Some(ref term) = r.matched_term {
+                assert!(
+                    term.starts_with("typ"),
+                    "T2 prefix matched_term '{}' should start with 'typ'",
+                    term
+                );
+            }
+        }
     }
 }

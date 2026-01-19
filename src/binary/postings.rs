@@ -25,13 +25,15 @@
 use std::io;
 
 use super::encoding::{decode_varint, encode_varint};
-use super::header::{BLOCK_SIZE, MAX_POSTING_SIZE, MAX_SKIP_LEVELS, SKIP_INTERVAL, SKIP_LIST_THRESHOLD};
+use super::header::{
+    BLOCK_SIZE, MAX_POSTING_SIZE, MAX_SKIP_LEVELS, SKIP_INTERVAL, SKIP_LIST_THRESHOLD,
+};
 
 // ============================================================================
 // POSTING ENTRY
 // ============================================================================
 
-/// Posting entry with doc_id, section_id index, and heading level
+/// Posting entry with doc_id, section_id index, heading level, and pre-computed score
 #[derive(Debug, Clone)]
 pub struct PostingEntry {
     pub doc_id: u32,
@@ -39,6 +41,8 @@ pub struct PostingEntry {
     pub section_idx: u32,
     /// Heading level (0=title, 2=h2, 3=h3, 4=h4, etc.) - used for bucketed ranking
     pub heading_level: u8,
+    /// Pre-computed score from user-defined ranking function (higher = better)
+    pub score: u32,
 }
 
 // ============================================================================
@@ -51,14 +55,17 @@ pub struct PostingEntry {
 /// external brotli compression. Decoding fully materializes PostingEntry
 /// vectors for fast in-memory search.
 ///
-/// Format:
+/// Format (v2 with scores):
 /// - doc_freq: varint
-/// - For each entry (sorted by doc_id):
-///   - doc_id_delta: varint (delta from previous doc_id)
+/// - max_score: varint (for delta decoding scores)
+/// - For each entry (sorted by score descending):
+///   - doc_id: varint (not delta-encoded, since sort order changed)
 ///   - section_idx: varint
 ///   - heading_level: u8
+///   - score_delta: varint (max_score - score, produces ascending values)
 ///
-/// This simple format compresses ~45% better with brotli than complex schemes.
+/// Score delta encoding: Since scores are descending, (max_score - score)
+/// produces ascending values which delta-encode well with varint.
 pub fn encode_postings(entries: &[PostingEntry], buf: &mut Vec<u8>) {
     let doc_freq = entries.len();
     encode_varint(doc_freq as u64, buf);
@@ -67,24 +74,34 @@ pub fn encode_postings(entries: &[PostingEntry], buf: &mut Vec<u8>) {
         return;
     }
 
-    // Sort by doc_id for optimal delta encoding (small deltas compress well)
+    // Sort by score descending (primary), then doc_id ascending (secondary for stability)
     let mut sorted: Vec<&PostingEntry> = entries.iter().collect();
-    sorted.sort_by_key(|e| e.doc_id);
+    sorted.sort_by(|a, b| b.score.cmp(&a.score).then(a.doc_id.cmp(&b.doc_id)));
 
-    // Delta-encode doc_ids, varint for section_idx, raw byte for heading_level
-    let mut prev_doc_id = 0u32;
+    // Find max score for delta encoding
+    let max_score = sorted.first().map(|e| e.score).unwrap_or(0);
+    encode_varint(max_score as u64, buf);
+
+    // Encode entries: doc_id, section_idx, heading_level, score_delta
+    // Score delta uses (max_score - score) transformation
+    let mut prev_score_delta = 0u32;
     for entry in sorted {
-        let delta = entry.doc_id - prev_doc_id;
-        prev_doc_id = entry.doc_id;
-        encode_varint(delta as u64, buf);
+        encode_varint(entry.doc_id as u64, buf);
         encode_varint(entry.section_idx as u64, buf);
         buf.push(entry.heading_level);
+
+        // Delta-encode the transformed scores (max_score - score)
+        let score_transformed = max_score - entry.score;
+        let score_delta = score_transformed - prev_score_delta;
+        prev_score_delta = score_transformed;
+        encode_varint(score_delta as u64, buf);
     }
 }
 
 /// Decode posting list with delta+varint compression
 ///
 /// Fully materializes PostingEntry vectors for fast in-memory search.
+/// Entries are returned sorted by score descending.
 pub fn decode_postings(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)> {
     let (doc_freq, mut pos) = decode_varint(bytes)?;
     let doc_freq = doc_freq as usize;
@@ -92,7 +109,10 @@ pub fn decode_postings(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)> {
     if doc_freq > MAX_POSTING_SIZE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Posting list too large: {} (max {})", doc_freq, MAX_POSTING_SIZE),
+            format!(
+                "Posting list too large: {} (max {})",
+                doc_freq, MAX_POSTING_SIZE
+            ),
         ));
     }
 
@@ -100,9 +120,14 @@ pub fn decode_postings(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)> {
         return Ok((Vec::new(), pos));
     }
 
-    // Decode entries: delta doc_id (varint), section_idx (varint), heading_level (u8)
+    // Decode max_score for score reconstruction
+    let (max_score, consumed) = decode_varint(&bytes[pos..])?;
+    pos += consumed;
+    let max_score = max_score as u32;
+
+    // Decode entries: doc_id, section_idx, heading_level, score_delta
     let mut entries = Vec::with_capacity(doc_freq);
-    let mut prev_doc_id = 0u32;
+    let mut prev_score_delta = 0u32;
 
     for _ in 0..doc_freq {
         if pos >= bytes.len() {
@@ -112,10 +137,8 @@ pub fn decode_postings(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)> {
             ));
         }
 
-        let (delta, consumed) = decode_varint(&bytes[pos..])?;
+        let (doc_id, consumed) = decode_varint(&bytes[pos..])?;
         pos += consumed;
-        let doc_id = prev_doc_id + delta as u32;
-        prev_doc_id = doc_id;
 
         let (section_idx, consumed) = decode_varint(&bytes[pos..])?;
         pos += consumed;
@@ -129,10 +152,18 @@ pub fn decode_postings(bytes: &[u8]) -> io::Result<(Vec<PostingEntry>, usize)> {
         let heading_level = bytes[pos];
         pos += 1;
 
+        // Decode score: delta -> transformed -> original
+        let (score_delta, consumed) = decode_varint(&bytes[pos..])?;
+        pos += consumed;
+        let score_transformed = prev_score_delta + score_delta as u32;
+        prev_score_delta = score_transformed;
+        let score = max_score - score_transformed;
+
         entries.push(PostingEntry {
-            doc_id,
+            doc_id: doc_id as u32,
             section_idx: section_idx as u32,
             heading_level,
+            score,
         });
     }
 

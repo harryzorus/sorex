@@ -39,8 +39,8 @@ use parking_lot::RwLock;
 
 use super::header::{FormatFlags, SectionOffsets, SorexHeader, VERSION};
 use super::postings::{decode_postings, PostingEntry, SkipList};
-use super::{decode_section_table, decode_suffix_array, decode_varint, decode_vocabulary};
 use super::{decode_docs_binary, DocMeta, LoadedLayer};
+use super::{decode_section_table, decode_suffix_array, decode_varint, decode_vocabulary};
 use crate::util::dict_table::DictTables;
 
 /// Number of sections that need to be loaded (excluding WASM which is handled separately)
@@ -353,22 +353,20 @@ impl IncrementalLoader {
             std::hint::spin_loop();
         }
 
-        let header = self.header.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Header not loaded")
-        })?;
+        let header = self
+            .header
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Header not loaded"))?;
 
         // Extract all sections (now guaranteed to be Some)
-        let vocabulary = self
-            .vocabulary
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Vocabulary not loaded"))?;
+        let vocabulary =
+            self.vocabulary.write().take().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Vocabulary not loaded")
+            })?;
 
-        let suffix_array = self
-            .suffix_array
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Suffix array not loaded"))?;
+        let suffix_array =
+            self.suffix_array.write().take().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Suffix array not loaded")
+            })?;
 
         let postings = self
             .postings
@@ -376,23 +374,18 @@ impl IncrementalLoader {
             .take()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Postings not loaded"))?;
 
-        let section_table = self
-            .section_table
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Section table not loaded"))?;
+        let section_table = self.section_table.write().take().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Section table not loaded")
+        })?;
 
-        let skip_lists = self
-            .skip_lists
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Skip lists not loaded"))?;
+        let skip_lists =
+            self.skip_lists.write().take().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Skip lists not loaded")
+            })?;
 
-        let lev_dfa_bytes = self
-            .lev_dfa_bytes
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Levenshtein DFA not loaded"))?;
+        let lev_dfa_bytes = self.lev_dfa_bytes.write().take().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Levenshtein DFA not loaded")
+        })?;
 
         let docs = self
             .docs
@@ -400,11 +393,10 @@ impl IncrementalLoader {
             .take()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Docs not loaded"))?;
 
-        let dict_tables = self
-            .dict_tables
-            .write()
-            .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Dict tables not loaded"))?;
+        let dict_tables =
+            self.dict_tables.write().take().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Dict tables not loaded")
+            })?;
 
         // Validate term count
         if postings.len() != header.term_count as usize {
@@ -436,30 +428,38 @@ impl IncrementalLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binary::{BinaryLayer, DocMetaInput, encode_docs_binary};
+    use crate::binary::{encode_docs_binary, BinaryLayer, DocMetaInput};
     use crate::fuzzy::dfa::ParametricDFA;
 
     fn build_test_index() -> Vec<u8> {
         let vocabulary = vec!["apple".to_string(), "banana".to_string()];
         let suffix_array = vec![(0, 0), (1, 0)];
         let postings = vec![
-            vec![PostingEntry { doc_id: 0, section_idx: 0, heading_level: 0 }],
-            vec![PostingEntry { doc_id: 1, section_idx: 0, heading_level: 0 }],
+            vec![PostingEntry {
+                doc_id: 0,
+                section_idx: 0,
+                heading_level: 0,
+                score: 100,
+            }],
+            vec![PostingEntry {
+                doc_id: 1,
+                section_idx: 0,
+                heading_level: 0,
+                score: 100,
+            }],
         ];
         let section_table = vec!["intro".to_string()];
         let lev_dfa_bytes = ParametricDFA::build(true).to_bytes();
-        let docs = vec![
-            DocMetaInput {
-                title: "Test".to_string(),
-                excerpt: "Test excerpt".to_string(),
-                href: "/test".to_string(),
-                doc_type: "page".to_string(),
-                section_id: None,
-                category: None,
-                author: None,
-                tags: vec![],
-            },
-        ];
+        let docs = vec![DocMetaInput {
+            title: "Test".to_string(),
+            excerpt: "Test excerpt".to_string(),
+            href: "/test".to_string(),
+            doc_type: "page".to_string(),
+            section_id: None,
+            category: None,
+            author: None,
+            tags: vec![],
+        }];
         let docs_bytes = encode_docs_binary(&docs);
 
         let layer = BinaryLayer::build_v6(
@@ -500,7 +500,10 @@ mod tests {
         loader.load_suffix_array(bytes[offsets.suffix_array.0..offsets.suffix_array.1].to_vec());
         loader.load_docs(bytes[offsets.docs.0..offsets.docs.1].to_vec());
         loader.load_section_table(bytes[offsets.section_table.0..offsets.section_table.1].to_vec());
-        loader.load_skip_lists(bytes[offsets.skip_lists.0..offsets.skip_lists.1].to_vec(), flags);
+        loader.load_skip_lists(
+            bytes[offsets.skip_lists.0..offsets.skip_lists.1].to_vec(),
+            flags,
+        );
         loader.load_lev_dfa(bytes[offsets.lev_dfa.0..offsets.lev_dfa.1].to_vec());
 
         // Finalize

@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b5440c3c61f196eb77c485b471d9f90ba7940863a1ca13c8afd79eeeca96f6c0 # shrinks to postings = [PostingEntry { doc_id: 0, section_idx: 0, heading_level: 0, score: 1 }, PostingEntry { doc_id: 1, section_idx: 0, heading_level: 0, score: 2 }]
+cc c3dcad28ecfad65fdd830564e22e7ddd1a2e08c47dc595426e86c253c507f12c # shrinks to postings = [PostingEntry { doc_id: 27029, section_idx: 0, heading_level: 0, score: 8317 }, PostingEntry { doc_id: 1000, section_idx: 0, heading_level: 0, score: 8317 }]

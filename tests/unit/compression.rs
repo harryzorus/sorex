@@ -25,6 +25,7 @@ fn test_postings_single() {
         doc_id: 42,
         section_idx: 1,
         heading_level: 2,
+        score: 500,
     }];
 
     let mut buf = Vec::new();
@@ -35,6 +36,7 @@ fn test_postings_single() {
     assert_eq!(decoded[0].doc_id, 42);
     assert_eq!(decoded[0].section_idx, 1);
     assert_eq!(decoded[0].heading_level, 2);
+    assert_eq!(decoded[0].score, 500);
 }
 
 #[test]
@@ -44,21 +46,25 @@ fn test_postings_roundtrip() {
             doc_id: 0,
             section_idx: 0,
             heading_level: 0,
+            score: 1000,
         },
         PostingEntry {
             doc_id: 5,
             section_idx: 1,
             heading_level: 2,
+            score: 800,
         },
         PostingEntry {
             doc_id: 100,
             section_idx: 0,
             heading_level: 3,
+            score: 600,
         },
         PostingEntry {
             doc_id: 200,
             section_idx: 2,
             heading_level: 4,
+            score: 400,
         },
     ];
 
@@ -83,6 +89,7 @@ fn test_postings_large_clustered() {
             doc_id: (i / 100) * 1000 + (i % 100), // clustered: 0-99, 1000-1099, etc.
             section_idx: if i % 10 == 0 { i / 10 } else { 0 },
             heading_level: (i % 6) as u8,
+            score: 10000u32.saturating_sub(i), // Descending scores
         })
         .collect();
 
@@ -161,6 +168,7 @@ fn test_postings_sparse() {
             doc_id: i * 1000, // large gaps
             section_idx: 0,
             heading_level: 0,
+            score: 5000u32.saturating_sub(i), // Descending scores
         })
         .collect();
 
@@ -170,7 +178,10 @@ fn test_postings_sparse() {
     let (decoded, _) = decode_postings(&buf).unwrap();
     assert_eq!(decoded.len(), entries.len());
 
-    println!("Sparse postings (500 entries, gap=1000): {} bytes", buf.len());
+    println!(
+        "Sparse postings (500 entries, gap=1000): {} bytes",
+        buf.len()
+    );
 }
 
 #[test]
@@ -181,6 +192,7 @@ fn test_postings_dense() {
             doc_id: i as u32, // consecutive
             section_idx: if i % 50 == 0 { (i / 50) as u32 } else { 0 },
             heading_level: (i % 4) as u8,
+            score: 10000u32.saturating_sub(i as u32), // Descending scores
         })
         .collect();
 

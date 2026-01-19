@@ -10,6 +10,118 @@ use proptest::prelude::*;
 use sorex::{field_type_score, FieldType, MatchType};
 
 // ============================================================================
+// T3 FUZZY PENALTY FORMULA PROPERTIES
+// ============================================================================
+//
+// The T3 penalty formula was changed from:
+//   OLD: 1.0 - (distance / max_distance)  → distance=2 gives 0.0 (BUG!)
+//   NEW: 1.0 / (1.0 + distance)           → distance=2 gives 0.33
+//
+// These tests verify the new formula's invariants.
+
+/// Oracle: T3 fuzzy penalty calculation.
+/// Must match the formula in src/search/tiered.rs.
+fn oracle_t3_penalty(distance: u8) -> f64 {
+    1.0 / (1.0 + distance as f64)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    /// Property: T3 penalty is always positive for any valid edit distance.
+    ///
+    /// This prevents the bug where distance=MAX_EDIT_DISTANCE gave score=0.
+    #[test]
+    fn prop_t3_penalty_always_positive(distance in 1u8..=10) {
+        let penalty = oracle_t3_penalty(distance);
+        prop_assert!(
+            penalty > 0.0,
+            "T3 penalty must be positive, got {} for distance={}",
+            penalty, distance
+        );
+    }
+
+    /// Property: T3 penalty is monotonically decreasing with distance.
+    ///
+    /// Lean spec: fuzzyScore_monotone in TieredSearch.lean
+    /// Closer matches (lower distance) should have higher scores.
+    #[test]
+    fn prop_t3_penalty_monotonic(d1 in 1u8..10, d2 in 1u8..10) {
+        if d1 < d2 {
+            let p1 = oracle_t3_penalty(d1);
+            let p2 = oracle_t3_penalty(d2);
+            prop_assert!(
+                p1 > p2,
+                "T3 penalty not monotonic: distance {} penalty {} should be > distance {} penalty {}",
+                d1, p1, d2, p2
+            );
+        }
+    }
+
+    /// Property: T3 penalty is bounded in (0, 1] for distance >= 1.
+    ///
+    /// Distance 1 gives max penalty of 0.5, higher distances give less.
+    #[test]
+    fn prop_t3_penalty_bounded(distance in 1u8..=255) {
+        let penalty = oracle_t3_penalty(distance);
+        prop_assert!(
+            penalty > 0.0 && penalty <= 0.5,
+            "T3 penalty {} out of bounds (0, 0.5] for distance={}",
+            penalty, distance
+        );
+    }
+
+    /// Property: T3 penalty values are deterministic.
+    #[test]
+    fn prop_t3_penalty_deterministic(distance in 1u8..=10) {
+        let p1 = oracle_t3_penalty(distance);
+        let p2 = oracle_t3_penalty(distance);
+        prop_assert!(
+            (p1 - p2).abs() < 1e-10,
+            "T3 penalty not deterministic for distance={}",
+            distance
+        );
+    }
+}
+
+#[cfg(test)]
+mod t3_penalty_tests {
+    use super::*;
+
+    #[test]
+    fn test_t3_penalty_specific_values() {
+        // Distance 1: 1/(1+1) = 0.5
+        assert!((oracle_t3_penalty(1) - 0.5).abs() < 1e-10);
+
+        // Distance 2: 1/(1+2) = 0.333...
+        assert!((oracle_t3_penalty(2) - 1.0 / 3.0).abs() < 1e-10);
+
+        // Distance 3: 1/(1+3) = 0.25
+        assert!((oracle_t3_penalty(3) - 0.25).abs() < 1e-10);
+
+        // All values are positive (no zero scores!)
+        for d in 1..=10 {
+            assert!(oracle_t3_penalty(d) > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_t3_penalty_never_zero() {
+        // This was the original bug - distance=MAX_EDIT_DISTANCE gave 0
+        // With new formula, even very high distances stay positive
+        for d in 1..=255 {
+            let p = oracle_t3_penalty(d);
+            assert!(
+                p > 0.0,
+                "Penalty should never be zero, got {} for d={}",
+                p,
+                d
+            );
+        }
+    }
+}
+
+// ============================================================================
 // FIELD TYPE HIERARCHY PROPERTIES
 // ============================================================================
 

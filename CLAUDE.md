@@ -872,10 +872,92 @@ sorex index --input ./search-input --output ./search-output --demo
 sorex inspect ./search-output/index-*.sorex
 ```
 
+## Updating Documentation
+
+**MANDATORY: Documentation updates are part of the implementation, not a follow-up task.**
+
+When you add or modify ANY public-facing type, field, function, or behavior:
+1. Update docs BEFORE marking the task complete
+2. Include doc updates in the SAME commit as the code change
+3. `cargo xtask verify` passing does NOT mean you're done if docs are stale
+
+### API Documentation
+
+**STOP. Before completing ANY change that touches these files, update the corresponding docs:**
+
+| Code Change | Required Doc Update |
+|-------------|---------------------|
+| `src/types.rs` structs | `docs/rust.md` |
+| `src/runtime/wasm.rs` JsSearchResult | `docs/typescript.md` |
+| `src/scoring/` formulas | `docs/algorithms.md` AND `docs/architecture.md` |
+| CLI flags/commands | `docs/cli.md` |
+| Binary format changes | `docs/binary-format.md` |
+
+When adding or modifying public APIs:
+
+1. **Rust API** (`docs/rust.md`) - Document new structs, functions, and their usage
+2. **TypeScript API** (`docs/typescript.md`) - Document WASM-exposed methods and types
+3. **CLI** (`docs/cli.md`) - Document new commands or flags
+
+**Checklist for API changes:**
+- Add type signatures with descriptions
+- Include usage examples
+- Update the API summary tables
+- Document default values and optional parameters
+
+**If you added a field to SearchResult/JsSearchResult and didn't update docs, you fucked up.**
+
+### After Performance Changes
+
+Re-run benchmarks and update documentation.
+
+### Running Benchmarks
+
+```bash
+# Full benchmark with library comparisons (FlexSearch, MiniSearch, lunr.js, fuse.js)
+cd tools && deno task bench
+
+# Skip dataset download (uses cached datasets)
+cd tools && deno task bench --skip-download
+
+# Single dataset only
+cd tools && deno task bench --dataset cutlass
+cd tools && deno task bench --dataset pytorch
+```
+
+**Datasets are hosted on R2:**
+- `https://assets.harryzorus.xyz/datasets/cutlass-dataset.zip`
+- `https://assets.harryzorus.xyz/datasets/pytorch-dataset.zip`
+
+### Updating Documentation
+
+After running benchmarks:
+
+1. **Update `docs/benchmarks.md`** with new latency numbers
+2. **Comparison reports** are auto-generated at `docs/comparisons/{dataset}.md`
+3. **Date the update** at the top of benchmarks.md
+
+### Uploading New Datasets
+
+If crawling new documentation:
+
+```bash
+# Crawl and build dataset (JSON files only, no .sorex)
+cd tools && deno run -A crawl.ts --url <docs-url> --output /tmp/dataset
+
+# Create zip (exclude generated files)
+cd /tmp/dataset && zip -r dataset.zip . -x "*.sorex" -x "sorex.js" -x "demo.html"
+
+# Upload to R2
+aws s3 cp dataset.zip s3://harryzorus-assets/datasets/dataset.zip \
+  --endpoint-url https://<account>.r2.cloudflarestorage.com
+```
+
 ## More Documentation
 
 - **Binary format**: See `docs/architecture.md`
 - **Verification details**: See `docs/verification.md`
 - **Verification issues & fixes**: See `docs/verification-issues.md`
 - **Verification audit findings**: See `docs/verification-findings.md`
+- **Benchmarks**: See `docs/benchmarks.md`
 - **Build system**: See this section above

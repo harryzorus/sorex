@@ -9,9 +9,8 @@
 
 use proptest::prelude::*;
 use sorex::binary::{
-    decode_postings, decode_suffix_array, decode_varint, decode_vocabulary,
-    encode_postings, encode_suffix_array, encode_varint, encode_vocabulary,
-    PostingEntry, MAX_VARINT_BYTES,
+    decode_postings, decode_suffix_array, decode_varint, decode_vocabulary, encode_postings,
+    encode_suffix_array, encode_varint, encode_vocabulary, PostingEntry, MAX_VARINT_BYTES,
 };
 
 // ============================================================================
@@ -138,6 +137,7 @@ proptest! {
                 doc_id,
                 section_idx: (i % 10) as u32,
                 heading_level: (i % 6) as u8,
+                score: 1000u32.saturating_sub(i as u32), // Descending scores
             })
             .collect();
 
@@ -192,13 +192,26 @@ mod edge_case_tests {
         buf.clear();
         encode_varint(128, &mut buf);
         assert_eq!(buf.len(), 2);
-        assert_ne!(buf[0] & 0x80, 0, "First byte of 128 must have continuation bit");
-        assert_eq!(buf[1] & 0x80, 0, "Last byte of 128 must not have continuation bit");
+        assert_ne!(
+            buf[0] & 0x80,
+            0,
+            "First byte of 128 must have continuation bit"
+        );
+        assert_eq!(
+            buf[1] & 0x80,
+            0,
+            "Last byte of 128 must not have continuation bit"
+        );
 
         // Max u64 should be exactly 10 bytes
         buf.clear();
         encode_varint(u64::MAX, &mut buf);
-        assert_eq!(buf.len(), MAX_VARINT_BYTES, "u64::MAX should be exactly {} bytes", MAX_VARINT_BYTES);
+        assert_eq!(
+            buf.len(),
+            MAX_VARINT_BYTES,
+            "u64::MAX should be exactly {} bytes",
+            MAX_VARINT_BYTES
+        );
     }
 
     /// Test: Empty buffer returns error, not panic.
@@ -225,7 +238,8 @@ mod edge_case_tests {
         encode_vocabulary(&vocab, &mut compressed);
 
         // Calculate naive encoding size (no compression)
-        let naive_size: usize = vocab.iter()
+        let naive_size: usize = vocab
+            .iter()
             .map(|s| s.len() + 2) // string bytes + 2 varint bytes (shared=0, len)
             .sum();
 
@@ -234,7 +248,8 @@ mod edge_case_tests {
         assert!(
             compressed.len() < naive_size,
             "Front compression not effective: compressed {} >= naive {}",
-            compressed.len(), naive_size
+            compressed.len(),
+            naive_size
         );
 
         // Verify roundtrip still works
@@ -248,12 +263,12 @@ mod edge_case_tests {
     fn test_suffix_array_roundtrip_exact() {
         // Test with specific values that exercise delta encoding
         let entries = vec![
-            (0u32, 0u32),     // doc 0, offset 0
-            (0, 100),         // same doc, different offset
-            (1, 0),           // new doc
-            (1, 50),          // same doc
-            (100, 0),         // large doc_id jump
-            (100, 1000),      // large offset
+            (0u32, 0u32), // doc 0, offset 0
+            (0, 100),     // same doc, different offset
+            (1, 0),       // new doc
+            (1, 50),      // same doc
+            (100, 0),     // large doc_id jump
+            (100, 1000),  // large offset
         ];
 
         let mut buf = Vec::new();

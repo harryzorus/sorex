@@ -240,7 +240,7 @@ impl QueryMatcher {
 | Build DFA (once) | O(8^k × k^2) | ~1.2KB for k=2 | <span class="complexity complexity-medium">Build-time</span> |
 | Build matcher | O(query_len) | O(query_len) | <span class="complexity complexity-fast">~1μs</span> |
 | Match one term | O(term_len) | O(1) | <span class="complexity complexity-fast">~10ns</span> |
-| Full fuzzy search | O(vocabulary × avg_term_len) | O(1) | <span class="complexity complexity-medium">~50μs</span> |
+| Full fuzzy search | O(vocabulary × avg_term_len) | O(1) | <span class="complexity complexity-medium">~200μs</span> |
 
 The key win: no per-comparison edit distance computation. Just table lookups.
 
@@ -597,6 +597,22 @@ position_boost = max_boost × (1 - position / field_length)
 ```
 
 First word in a title gets +0.5, last word gets +0.
+
+### Fuzzy Match Penalty
+
+T3 (fuzzy) matches apply a penalty based on edit distance:
+
+```
+penalty = 1.0 / (1.0 + distance)
+
+distance=1: penalty = 0.5   (50% of base score)
+distance=2: penalty = 0.33  (33% of base score)
+```
+
+This formula ensures:
+1. **Non-zero scores**: All fuzzy matches have positive scores (important for ranking)
+2. **Monotonic decrease**: Higher edit distance = lower score
+3. **Proven correct**: `fuzzyScore_monotone` theorem in Lean verifies d1 < d2 → penalty(d1) > penalty(d2)
 
 ### Lean Verification
 

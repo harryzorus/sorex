@@ -158,7 +158,7 @@ searcher.search('query', 10, { onFinish: renderResults });
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** Serial mode is still fast (~60μs for typical queries). The difference is only noticeable for very large indexes or complex fuzzy searches.
+**Note:** Serial mode is still fast (~200μs for typical queries). The difference is only noticeable for very large indexes or complex fuzzy searches.
 
 ---
 
@@ -205,7 +205,7 @@ Search returns results progressively as each tier completes, enabling immediate 
                                       │
                                       ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  TIER 1: EXACT MATCH                                         ~2μs    │
+│  TIER 1: EXACT MATCH                                         ~5μs    │
 │  ────────────────────────────────────────────────────────────────    │
 │                                                                      │
 │  Binary search in vocabulary ─▶ Direct postings lookup               │
@@ -229,7 +229,7 @@ Search returns results progressively as each tier completes, enabling immediate 
                                       │
                                       ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  TIER 3: FUZZY MATCH                                        ~50μs    │
+│  TIER 3: FUZZY MATCH                                       ~200μs    │
 │  ────────────────────────────────────────────────────────────────    │
 │                                                                      │
 │  Levenshtein DFA ─▶ Terms within edit distance 2                     │
@@ -252,19 +252,19 @@ JUST onFinish (simple)                 WITH onUpdate (progressive)
   │ (all tiers complete     │          └────────┘
   │  before callback)       │          ┌────────┐
   │                         │          │ T2     │──► onUpdate → UI
-  │         ~60μs           │          └────────┘
+  │        ~215μs           │          └────────┘
   └────────────┬────────────┘          ┌────────┐
                │                       │ T3     │──► onUpdate + onFinish → UI
                ▼                       └────────┘
          ┌───────────┐
-         │ onFinish  │                 Total: ~60μs
-         └───────────┘                 First result: ~2μs ✓
+         │ onFinish  │                 Total: ~215μs
+         └───────────┘                 First result: ~5μs ✓
 
-  User waits ~60μs                     User sees results in ~2μs
-  for any results                      (30x faster perceived latency)
+  User waits ~215μs                    User sees results in ~5μs
+  for any results                      (40x faster perceived latency)
 ```
 
-This gives **30x faster perceived latency** - users see exact matches in ~2μs instead of waiting ~60μs for all tiers.
+This gives **40x faster perceived latency** - users see exact matches in ~5μs instead of waiting ~215μs for all tiers.
 
 ---
 

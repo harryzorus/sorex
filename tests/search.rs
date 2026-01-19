@@ -25,3 +25,6 @@ mod query_refinement;
 
 #[path = "search/tier_exclusion.rs"]
 mod tier_exclusion;
+
+#[path = "search/matched_term.rs"]
+mod matched_term;

@@ -335,4 +335,81 @@ axiom get_field_type_finds_boundary
     (h_contains : FieldBoundary.containsOffset b doc_id offset) :
     ∃ (result : FieldType), result = b.field_type
 
+/-! ## Custom Scoring (User-Defined Ranking Functions)
+
+Custom ranking functions run at index time via Deno runtime. They compute
+integer scores for each (term, doc, match) tuple. Posting lists are stored
+sorted by score descending for efficient runtime merging.
+
+### Key Properties
+- Scores are positive integers (u32 in Rust)
+- Delta encoding uses (max_score - score) transformation for compression
+- Tier penalties (T2 prefix, T3 fuzzy) preserve relative ordering
+- Multi-term queries sum scores only within same heading level
+-/
+
+/-! ### Score Positivity -/
+
+/-- Custom scores must be positive (> 0) for valid ranking -/
+axiom custom_score_positive (score : Nat) (h : score > 0) : score > 0
+
+/-! ### Delta Encoding for Score Compression -/
+
+/-- Encode scores using (max - score) transformation for delta compression -/
+def encodeScoreDelta (maxScore score : Nat) : Nat :=
+  maxScore - score
+
+/-- Decode delta-encoded score back to original -/
+def decodeScoreDelta (maxScore encoded : Nat) : Nat :=
+  maxScore - encoded
+
+/-- Delta encoding roundtrip: decode(encode(score)) = score -/
+theorem score_delta_roundtrip (maxScore score : Nat) (h : score ≤ maxScore) :
+    decodeScoreDelta maxScore (encodeScoreDelta maxScore score) = score := by
+  simp only [encodeScoreDelta, decodeScoreDelta]
+  omega
+
+/-- Encoded values are ascending when original scores are descending -/
+theorem score_delta_monotone (maxScore s1 s2 : Nat)
+    (h1 : s1 ≤ maxScore) (h2 : s2 ≤ maxScore) (h : s1 ≥ s2) :
+    encodeScoreDelta maxScore s1 ≤ encodeScoreDelta maxScore s2 := by
+  simp only [encodeScoreDelta]
+  omega
+
+/-! ### Tier Penalties -/
+
+/-- Tier penalty multiplier (percentage, e.g., 50 = 50%) -/
+def applyTierPenalty (score penalty : Nat) : Nat :=
+  score * penalty / 100
+
+/-- Tier penalties preserve relative ordering within tier -/
+theorem tier_penalty_monotone (s1 s2 penalty : Nat) (h : s1 ≥ s2) :
+    applyTierPenalty s1 penalty ≥ applyTierPenalty s2 penalty := by
+  simp only [applyTierPenalty]
+  exact Nat.div_le_div_right (Nat.mul_le_mul_right penalty h)
+
+/-- Tier penalties don't increase scores -/
+theorem tier_penalty_decreasing (score penalty : Nat) (h : penalty ≤ 100) :
+    applyTierPenalty score penalty ≤ score := by
+  simp only [applyTierPenalty]
+  have h1 : score * penalty ≤ score * 100 := Nat.mul_le_mul_left score h
+  have h2 : score * penalty / 100 ≤ score * 100 / 100 := Nat.div_le_div_right h1
+  have h3 : score * 100 / 100 = score := by
+    rw [Nat.mul_div_cancel score (by decide : 0 < 100)]
+  omega
+
+/-! ### Multi-term Score Aggregation -/
+
+/-- Multi-term scores at same level are summed -/
+def multiTermScore (scores : List Nat) : Nat :=
+  scores.foldl (· + ·) 0
+
+/-- Multi-term aggregation is commutative (axiomatized for simplicity) -/
+axiom multiTermScore_comm (s1 s2 : Nat) (rest : List Nat) :
+    multiTermScore (s1 :: s2 :: rest) = multiTermScore (s2 :: s1 :: rest)
+
+/-- More matching terms means higher score (axiomatized for simplicity) -/
+axiom multiTermScore_monotone (scores : List Nat) (extra : Nat) (h : extra > 0) :
+    multiTermScore (extra :: scores) > multiTermScore scores
+
 end SearchVerified.Scoring

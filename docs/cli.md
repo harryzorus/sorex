@@ -25,7 +25,7 @@ cargo install sorex
 Build a search index from a directory of JSON document files.
 
 ```bash
-sorex index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo]
+sorex index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo] [--ranking <FILE>]
 ```
 
 **Arguments:**
@@ -35,6 +35,8 @@ sorex index --input <INPUT_DIR> --output <OUTPUT_DIR> [--demo]
 | `-i, --input <DIR>` | Input directory containing `manifest.json` and document files |
 | `-o, --output <DIR>` | Output directory for `.sorex` files |
 | `--demo` | Generate a demo HTML page showing integration example |
+| `--ranking <FILE>` | Path to custom scoring function (TypeScript/JavaScript) |
+| `--ranking-batch-size <N>` | Batch size for ranking evaluation (default: 0 = all at once) |
 
 **Input Format:**
 
@@ -84,6 +86,66 @@ sorex index --input .build-input --output dist/search
 
 # With demo page
 sorex index --input .build-input --output dist/search --demo
+
+# With custom scoring function
+sorex index --input .build-input --output dist/search --ranking ./scoring.ts
+```
+
+#### Custom Scoring Functions
+
+You can provide a custom scoring function to control how search results are scored. The function receives a `ScoringContext` for each (term, document, match) tuple and returns an integer score.
+
+**scoring.ts:**
+
+```typescript
+interface ScoringContext {
+  term: string;
+  doc: {
+    id: number;
+    title: string;
+    excerpt: string;
+    href: string;
+    type: string;
+    category: string | null;
+    author: string | null;
+    tags: string[];
+  };
+  match: {
+    fieldType: "title" | "heading" | "content";
+    headingLevel: number;  // 0=title, 2=h2, 3=h3, etc.
+    sectionId: string | null;
+    offset: number;
+    textLength: number;
+  };
+}
+
+export default function score(ctx: ScoringContext): number {
+  // Base score by field type
+  let s = ctx.match.fieldType === "title" ? 1000 
+        : ctx.match.fieldType === "heading" ? 100 
+        : 10;
+  
+  // Boost engineering posts
+  if (ctx.doc.category === "engineering") {
+    s += 50;
+  }
+  
+  // Position bonus (earlier = better)
+  const positionRatio = ctx.match.textLength > 0
+    ? (ctx.match.textLength - ctx.match.offset) / ctx.match.textLength
+    : 1;
+  s += Math.floor(5 * positionRatio);
+  
+  return s;
+}
+```
+
+The default ranking uses field type hierarchy (title=1000, heading=100, content=10) with a small position bonus. Custom functions can add category boosts, author weighting, recency signals, or any domain-specific logic.
+
+**Note:** Custom ranking requires the `deno-runtime` feature:
+
+```bash
+cargo install sorex --features deno-runtime
 ```
 
 ### `sorex search`
@@ -131,8 +193,8 @@ sorex search <FILE> <QUERY> [--limit <N>] [--wasm] [--bench] [--confidence <N>]
 ┌──────────────────────────────────────────────────────────────────────┐
 │  3. TIMED SEARCH                                                     │
 │  ┌─────────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
-│  │  T1 Exact (~2μs)    │─▶│  T2 Prefix (~10μs)  │─▶│ T3 Fuzzy     │  │
-│  │  Binary search      │  │  FST range scan     │  │ (~50μs)      │  │
+│  │  T1 Exact (~5μs)    │─▶│  T2 Prefix (~10μs)  │─▶│ T3 Fuzzy     │  │
+│  │  Binary search      │  │  FST range scan     │  │ (~200μs)     │  │
 │  │  Direct postings    │  │  Exclude T1 results │  │ Lev DFA      │  │
 │  └─────────────────────┘  └─────────────────────┘  └──────────────┘  │
 │                                                                      │
@@ -160,12 +222,12 @@ sorex search dist/search/index.sorex "kernel optimization"
 ┌─ PERFORMANCE ──────────────────────────────────────────────────────┐
 │  Index load:         12.34 ms                                      │
 │                                                                    │
-│  T1 Exact:            2.15 µs  (3 results)                         │
-│  T2 Prefix:           8.42 µs  (5 results)                         │
-│  T3 Fuzzy:           45.21 µs  (2 results)                         │
+│  T1 Exact:            5.21 µs  (3 results)                         │
+│  T2 Prefix:          10.42 µs  (5 results)                         │
+│  T3 Fuzzy:          198.37 µs  (2 results)                         │
 │                                                                    │
-│  Search total:       55.78 µs                                      │
-│  Total:              12.40 ms                                      │
+│  Search total:      214.00 µs                                      │
+│  Total:              12.45 ms                                      │
 └────────────────────────────────────────────────────────────────────┘
 
 ┌─ RESULTS (10) ─────────────────────────────────────────────────────┐
@@ -199,11 +261,11 @@ Use `--wasm` to test that the embedded WASM produces identical results to native
 ┌─────────────────────────┐         ┌─────────────────────────┐
 │  PERFORMANCE            │         │  PERFORMANCE            │
 │  ──────────────         │         │  ──────────────         │
-│  T1:   2.15 µs          │         │  WASM init:  45.00 ms   │
-│  T2:   8.42 µs          │   vs    │  WASM search: 62.34 µs  │
-│  T3:  45.21 µs          │         │  (includes all tiers)   │
+│  T1:   5.21 µs          │         │  WASM init:  45.00 ms   │
+│  T2:  10.42 µs          │   vs    │  WASM search: 220.5 µs  │
+│  T3: 198.37 µs          │         │  (includes all tiers)   │
 │  ─────────────          │         │                         │
-│  Total: 55.78 µs        │         │  (warm, TurboFan opt)   │
+│  Total: 214.00 µs       │         │  (warm, TurboFan opt)   │
 └─────────────────────────┘         └─────────────────────────┘
 ```
 

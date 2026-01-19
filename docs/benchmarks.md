@@ -2,8 +2,8 @@
 
 Performance comparisons between Sorex and popular JavaScript search libraries. Benchmarks use the European Countries dataset (30 full Wikipedia-style articles, ~3,500 words each) and Tinybench with 5-second measurement windows.
 
-**Test environment:** Apple M5, 32GB RAM, macOS 26.2, Bun 1.3.5
-**Last run:** 2026-01-08
+**Test environment:** Apple M5, 32GB RAM, macOS 26.2, Deno 2.6.5
+**Last run:** 2026-01-19
 
 ---
 
@@ -405,148 +405,149 @@ cargo bench
 
 Real-world benchmark on NVIDIA CUTLASS documentation (70 pages of technical GPU programming documentation).
 
-**Dataset:** NVIDIA CUTLASS 4.3.4 documentation
-- 70 pages covering CUDA, tensor cores, matrix multiplication
+**Dataset:** NVIDIA CUTLASS documentation
+- 70 documents, 6,348 terms
+- Index size: 1.1 MB (275.9 KB with Brotli)
 - Technical vocabulary: "gemm", "tensor", "warp", "synchronize", "epilogue"
 - Mix of API reference, tutorials, and architecture docs
 
-### Substring Search: Query "sync"
+**Datasets available:** [cutlass-dataset.zip](https://assets.harryzorus.xyz/datasets/cutlass-dataset.zip) (352 KB)
 
-Finding all mentions of synchronization-related terms.
+### Search Latency: Sorex Three-Tier Architecture
 
-| Library | Results | Notes |
-|---------|---------|-------|
-| **Sorex** | **28** | Finds "synchronize", "async", "__syncthreads", "sync_warp" |
-| FlexSearch | 4 | Only exact "sync" token matches |
-| MiniSearch | 4 | Only exact "sync" token matches |
-| lunr.js | 3 | Only exact "sync" token matches |
-| fuse.js | 1 | Fuzzy matching too imprecise |
+Sorex returns results progressively in three tiers. Users see exact matches instantly while fuzzy search continues in background.
 
-**Key insight:** In technical documentation, substring search is essential. Users searching "sync" expect to find all synchronization primitives, not just documents with "sync" as a standalone word.
+#### Exact Queries (word exists in vocabulary)
 
-### Typo Tolerance: Query "epilouge"
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | T1 Results | T2 Results | T3 Results |
+|-------|----------|-----------|----------|-------|------------|------------|------------|
+| gemm | 6.9 μs | 6.9 μs | 194 μs | 194 μs | 36 | 0 | 19 |
+| kernel | 4.8 μs | 4.8 μs | 244 μs | 244 μs | 42 | 0 | 0 |
+| tensor | 13.1 μs | 13.1 μs | 263 μs | 263 μs | 48 | 0 | 0 |
+| warp | 4.9 μs | 4.9 μs | 201 μs | 201 μs | 24 | 0 | 29 |
+| cuda | 3.2 μs | 3.2 μs | 219 μs | 219 μs | 42 | 0 | 27 |
+| epilogue | 2.4 μs | 2.4 μs | 266 μs | 266 μs | 18 | 0 | 0 |
 
-Common typo for "epilogue" (a CUTLASS concept for post-GEMM operations).
+**Key insight:** T1 completes in 3-13 μs, showing users 18-48 exact matches instantly. Full fuzzy search completes in ~195-265 μs.
 
-| Library | Results | Notes |
-|---------|---------|-------|
-| **Sorex** | **12** | Levenshtein distance 1, finds all epilogue docs |
-| fuse.js | 0 | Fuzzy threshold too strict for this typo |
-| FlexSearch | 0 | No fuzzy support |
-| lunr.js | 0 | No fuzzy support |
-| MiniSearch | 0 | Fuzzy mode doesn't catch this |
+#### Prefix Queries (partial word, finds completions)
 
-**Key insight:** Technical terms like "epilogue" are easy to misspell. Sorex's Levenshtein automata handle this naturally.
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | T1 Results | T2 Results | T3 Results |
+|-------|----------|-----------|----------|-------|------------|------------|------------|
+| ker | 0.0 μs | 9.7 μs | 189 μs | 189 μs | 0 | 45 | 20 |
+| ten | 0.0 μs | 15.2 μs | 209 μs | 209 μs | 0 | 51 | 19 |
+| war | 0.0 μs | 7.1 μs | 180 μs | 180 μs | 0 | 45 | 17 |
+| gem | 0.0 μs | 8.9 μs | 206 μs | 206 μs | 0 | 37 | 30 |
+| mat | 0.0 μs | 7.1 μs | 218 μs | 218 μs | 0 | 45 | 25 |
+| epi | 0.0 μs | 4.2 μs | 183 μs | 183 μs | 0 | 13 | 42 |
+| sync | 3.3 μs | 3.3 μs | 193 μs | 193 μs | 12 | 0 | 18 |
 
-### Search Latency Comparison
+**Key insight:** Prefix search (T2) completes in 4-15 μs, finding 13-51 matches. No exact matches for partial words.
 
-Real measured latencies across common queries:
+#### Fuzzy Queries (typos, edit distance 1-2)
 
-#### Query "gemm" (Common GPU term)
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | Results |
+|-------|----------|-----------|----------|-------|---------|
+| kernal | 0.0 μs | 0.0 μs | 261 μs | 261 μs | 45 |
+| tensr | 0.0 μs | 0.0 μs | 258 μs | 258 μs | 56 |
+| wrp | 0.0 μs | 0.0 μs | 191 μs | 191 μs | 65 |
+| gemn | 0.0 μs | 0.0 μs | 208 μs | 208 μs | 55 |
+| matrx | 0.0 μs | 0.0 μs | 226 μs | 226 μs | 42 |
+| epilouge | 0.0 μs | 0.0 μs | 270 μs | 270 μs | 18 |
+| syncronize | 0.0 μs | 0.0 μs | 257 μs | 257 μs | 0 |
 
-| Library | Latency (μs) | Results |
-|---------|--------------|---------|
-| FlexSearch | 5 | 39 |
-| **Sorex** | Not available | - |
-| lunr.js | 55 | 32 |
-| MiniSearch | 85 | 36 |
-| fuse.js | 2717 | 4 |
+**Key insight:** All results come from T3 fuzzy tier (typos don't match exactly or as prefix). Levenshtein automata find 18-65 matches in ~190-270 μs.
 
-#### Query "tensor" (Very common)
+### Library Comparison
 
-| Library | Latency (μs) | Results |
-|---------|--------------|---------|
-| FlexSearch | 7 | 49 |
-| lunr.js | 39 | 50 |
-| MiniSearch | 77 | 48 |
-| fuse.js | 4163 | 4 |
+How Sorex compares to JavaScript search libraries on the CUTLASS dataset:
 
-#### Query "warp" (Technical term)
+| Query Type | Sorex T1 | Sorex Total | FlexSearch | MiniSearch | lunr.js | fuse.js |
+|------------|----------|-------------|------------|------------|---------|---------|
+| **Exact** (gemm) | **5.8 μs** | 208 μs | 2.6 μs | 84 μs | 41 μs | 12,521 μs |
+| **Prefix** (ker) | 0 μs | 190 μs | 0.5 μs (0 results) | 47 μs | 2.2 μs (0 results) | 9,726 μs |
+| **Fuzzy** (kernal) | 0 μs | 257 μs | 0.6 μs (0 results) | 70 μs | 1.6 μs (0 results) | 20,781 μs |
 
-| Library | Latency (μs) | Results |
-|---------|--------------|---------|
-| FlexSearch | 6 | 25 |
-| MiniSearch | 40 | 24 |
-| lunr.js | 147 | 26 |
-| fuse.js | 1874 | 3 |
+**Key findings:**
+- **FlexSearch** is fastest but returns **0 results** for prefix/fuzzy queries
+- **Sorex** shows first results in 2-10 μs (T1), then completes fuzzy in 180-280 μs
+- **MiniSearch** finds fuzzy matches but is slower (17-145 μs)
+- **fuse.js** is 50-100x slower than Sorex (9,000-36,000 μs)
 
-**Key insight:** FlexSearch leads on simple term queries (5-7μs), but Sorex enables substring and fuzzy search that these libraries cannot provide.
-
-### Fuzzy Match Latency: Query "syncronize" (typo)
-
-Typo for "synchronize" (missing 'h').
-
-| Library | Latency (μs) | Results |
-|---------|--------------|---------|
-| fuse.js | 3151 | 1 |
-| lunr.js | 5 | 0 |
-| MiniSearch | 5 | 0 |
-| FlexSearch | 2 | 0 |
-
-*Sorex not benchmarked yet - integration pending*
+See [full comparison report](./comparisons/cutlass.md) for all queries.
 
 ---
 
 ## PyTorch Documentation Benchmark
 
-Real-world benchmark on PyTorch documentation (300 documents covering neural network modules, optimizers, loss functions).
+Real-world benchmark on PyTorch 2.9 documentation (300 documents covering neural network modules, optimizers, loss functions).
 
-**Dataset:** PyTorch API documentation
-- 300 pages covering PyTorch modules, functions, classes
-- Technical vocabulary: "tensor", "neural", "backward", "optimizer", "Conv2d"
+**Dataset:** PyTorch 2.9 API documentation
+- 300 documents, 10,837 terms
+- Index size: 2.0 MB (Brotli compressed)
+- Technical vocabulary: "tensor", "module", "forward", "backward", "autograd", "optim"
 - Mix of tutorials, API reference, and examples
 
-### Performance Summary
+**Datasets available:** [pytorch-dataset.zip](https://assets.harryzorus.xyz/datasets/pytorch-dataset.zip) (841 KB)
 
-Latency comparisons across representative queries (Sorex T1 exact match only):
+### Search Latency: Sorex Three-Tier Architecture
 
-| Query | Type | FlexSearch | lunr.js | MiniSearch | Sorex T1 | fuse.js |
-|-------|------|-----------|---------|-----------|----------|---------|
-| "tensor" | Common | 0.4 μs | 84.2 μs | 71.1 μs | 719.5 μs | 5372.6 μs |
-| "neural network" | Multi-word | 0.9 μs | 17.1 μs | 98.2 μs | 3.8 μs | 4658.6 μs |
-| "grad" | Substring | 0.4 μs | 16.5 μs | 50.6 μs | 87.6 μs | 6215.3 μs |
-| "backward" | API term | 0.4 μs | 20.5 μs | 208.8 μs | 81.1 μs | 4719.4 μs |
-| "tensro" | Typo (ED=1) | 0.3 μs | 2.2 μs | 36.8 μs | 5.0 μs | 6153.7 μs |
-| "quantization" | Rare | 0.4 μs | 11.0 μs | 185.0 μs | 58.8 μs | 4460.7 μs |
-| "Conv2d" | Specific | 0.4 μs | 7.5 μs | 41.8 μs | 11.2 μs | 4975.4 μs |
-| "optim" | Substring | 0.4 μs | 19.1 μs | 40.3 μs | 102.3 μs | 5513.7 μs |
+#### Exact Queries (word exists in vocabulary)
 
-**Key observations:**
-- **FlexSearch fastest** on simple exact matches (0.3-0.9 μs)
-- **Sorex T1 reasonable** for exact matches (3.8-719 μs range)
-  - Multi-word "neural network": 3.8 μs - no exact match found (only 0 results)
-  - Single words: 80-720 μs depending on result set size
-- **lunr.js and MiniSearch** are competitive on common queries (10-200 μs)
-- **fuse.js** consistently 1000x+ slower due to document-by-document scoring
-- **Sorex strengths**: Typos ("tensro" → 5 μs), substring ("grad" → 87 μs), specific terms ("Conv2d" → 11 μs)
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | T1 Results | T2 Results | T3 Results |
+|-------|----------|-----------|----------|-------|------------|------------|------------|
+| tensor | 55.4 μs | 91.7 μs | 491 μs | 491 μs | 248 | 10 | 0 |
+| module | 29.7 μs | 29.7 μs | 471 μs | 471 μs | 70 | 0 | 31 |
+| forward | 8.5 μs | 8.5 μs | 429 μs | 429 μs | 54 | 0 | 0 |
+| backward | 5.7 μs | 5.7 μs | 436 μs | 436 μs | 51 | 0 | 0 |
+| autograd | 6.0 μs | 6.0 μs | 443 μs | 443 μs | 79 | 0 | 0 |
+| optim | 9.4 μs | 21.1 μs | 394 μs | 394 μs | 21 | 31 | 39 |
 
-### Typo Tolerance (Edit Distance)
+**Key insight:** T1 completes in 6-55 μs, showing users 21-248 exact matches instantly. Larger dataset (300 docs) means longer search times but still sub-millisecond.
 
-Query: "tensro" (typo for "tensor", ED=1)
+#### Prefix Queries (partial word, finds completions)
 
-| Library | Latency | Results | Method |
-|---------|---------|---------|--------|
-| FlexSearch | 0.2 μs | 0 | No fuzzy |
-| lunr.js | 1.8 μs | 0 | No fuzzy |
-| MiniSearch | 30.5 μs | 0 | Fuzzy disabled |
-| **Sorex** | 1717 μs | 10 | Levenshtein DFA |
-| fuse.js | 5303 μs | 21 | Fuzzy scan (over-inclusive) |
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | T1 Results | T2 Results | T3 Results |
+|-------|----------|-----------|----------|-------|------------|------------|------------|
+| ten | 0.0 μs | 68.9 μs | 414 μs | 414 μs | 0 | 259 | 34 |
+| mod | 0.0 μs | 52.6 μs | 405 μs | 405 μs | 0 | 105 | 93 |
+| for | 0.0 μs | 21.2 μs | 381 μs | 381 μs | 0 | 99 | 87 |
+| back | 3.6 μs | 21.5 μs | 362 μs | 362 μs | 31 | 51 | 43 |
+| auto | 3.3 μs | 22.8 μs | 386 μs | 386 μs | 10 | 91 | 113 |
+| opt | 0.0 μs | 40.8 μs | 397 μs | 397 μs | 0 | 186 | 95 |
 
-Only Sorex and fuse.js find the typo. Sorex's results are precise (10 documents), while fuse.js is over-inclusive (21 documents).
+**Key insight:** Prefix search (T2) completes in 21-69 μs, finding 51-259 matches. Users typing "ten" see tensor-related docs immediately.
 
-### Multi-Word Queries
+#### Fuzzy Queries (typos, edit distance 1-2)
 
-Query: "neural network"
+| Query | T1 Exact | T2 Prefix | T3 Fuzzy | Total | Results |
+|-------|----------|-----------|----------|-------|---------|
+| tensro | 0.0 μs | 0.0 μs | 574 μs | 574 μs | 256 |
+| modul | 0.0 μs | 33.8 μs | 440 μs | 440 μs | 106 |
+| forwrd | 0.0 μs | 0.0 μs | 435 μs | 435 μs | 56 |
+| backwrd | 0.0 μs | 0.0 μs | 463 μs | 463 μs | 73 |
+| autogrd | 0.0 μs | 0.0 μs | 458 μs | 458 μs | 79 |
+| optimzer | 0.0 μs | 0.0 μs | 448 μs | 448 μs | 41 |
 
-| Library | Latency | Results |
-|---------|---------|---------|
-| FlexSearch | 0.8 μs | 1 |
-| lunr.js | 18.1 μs | 23 |
-| MiniSearch | 72.1 μs | 23 |
-| Sorex | 599 μs | 0 |
-| fuse.js | 5080 μs | 0 |
+**Key insight:** Typo queries find 41-256 matches via Levenshtein automata in ~435-575 μs. "tensro" (typo for "tensor") finds 256 relevant documents.
 
-FlexSearch is fastest but returns only 1 result. lunr.js and MiniSearch provide balanced precision/recall.
+### Library Comparison
+
+How Sorex compares to JavaScript search libraries on the PyTorch dataset:
+
+| Query Type | Sorex T1 | Sorex Total | FlexSearch | MiniSearch | lunr.js | fuse.js |
+|------------|----------|-------------|------------|------------|---------|---------|
+| **Exact** (tensor) | **50.8 μs** | 518 μs | 3.5 μs | 184 μs | 245 μs | 33,403 μs |
+| **Prefix** (ten) | 0 μs | 417 μs | 0.5 μs (3 results) | 136 μs | 6.2 μs (4 results) | 30,698 μs |
+| **Fuzzy** (tensro) | 0 μs | 563 μs | 0.5 μs (0 results) | 187 μs | 1.4 μs (0 results) | 61,951 μs |
+
+**Key findings:**
+- **FlexSearch** is fastest but returns **0-3 results** for prefix/fuzzy queries (vs 259-256 for Sorex)
+- **Sorex** shows first results in 5-51 μs (T1), then completes fuzzy in 350-560 μs
+- **MiniSearch** finds fuzzy matches and is competitive (35-187 μs)
+- **fuse.js** is 50-100x slower than Sorex (27,000-76,000 μs)
+
+See [full comparison report](./comparisons/pytorch.md) for all queries.
 
 ---
 

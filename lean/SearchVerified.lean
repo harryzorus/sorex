@@ -21,6 +21,7 @@
   - Section: Deep-linking section navigation correctness
   - Binary: Binary format (.sorex) roundtrip correctness
   - Streaming: Dedup worker correctness (no duplicates, ordering)
+  - Accumulation: Multi-term score accumulation + best section selection
 
   ## Three-Tier Search Architecture
 
@@ -65,6 +66,7 @@
                    postings_roundtrip, sorex_roundtrip
   - Streaming dedup: dedup_no_duplicates, dedup_score_ordering, dedup_tier_ordering,
                      dedup_tier_complete, dedup_preserves_best
+  - Accumulation: rust_accumulator_matches_spec, dedup_uses_total_score
 -/
 
 import SearchVerified.Types
@@ -78,3 +80,4 @@ import SearchVerified.Section
 import SearchVerified.Binary
 import SearchVerified.Streaming
 import SearchVerified.Oracle
+import SearchVerified.Accumulation
